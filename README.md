@@ -2,19 +2,19 @@
 
 Local, containerized Retrieval-Augmented Generation for indexing your own files and chatting with grounded, citation-ready answers.
 
-## Step 10 Scope
+## Step A Scope
 
-This repository now includes the Step 10 PRD implementation:
+This repository now includes the learning foundation layer:
 
 - JWT-based authentication with forced password change flow
-- multi-user chat, retrieval log, and settings isolation
-- admin user management UI and API
-- bootstrap provisioning from `users.json`
-- global library protection rules for system files and admin uploads
-- user-owned file defaults: owner-enabled, other-users-disabled
-- library visibility toggle to show or hide other users' files in the table
-- user-scoped personalization stored in preferences and applied to every chat prompt
-- updated docs, tests, and Docker validation for the Step 10 rollout
+- role model: `admin`, `user`, `student`
+- student restrictions for normal chat and GPT usage
+- learning-path domain model with global and user scope
+- ordered module and lesson structure
+- learning-path source scoping through allowed files and tags
+- learning-path CRUD API with role-based authorization
+- web UI learning-path management page and sidebar navigation entry
+- future learning-chat foundation fields (`chat_type`, `learning_path_id`)
 
 ## Quick Start
 

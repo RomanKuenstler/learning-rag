@@ -119,6 +119,10 @@ class ChatSession(Base):
 
     id: Mapped[str] = mapped_column(String(128), primary_key=True, default=lambda: str(uuid.uuid4()))
     user_id: Mapped[int | None] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), nullable=True, index=True)
+    chat_type: Mapped[str] = mapped_column(String(32), nullable=False, default="normal")
+    learning_path_id: Mapped[str | None] = mapped_column(
+        ForeignKey("learning_paths.id", ondelete="SET NULL"), nullable=True, index=True
+    )
     chat_name: Mapped[str] = mapped_column(String(255), nullable=False)
     is_archived: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, server_default=func.now())
@@ -276,3 +280,80 @@ class ChatTagSetting(Base):
     updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), nullable=False, server_default=func.now(), onupdate=func.now()
     )
+
+
+class LearningPath(Base):
+    __tablename__ = "learning_paths"
+
+    id: Mapped[str] = mapped_column(String(128), primary_key=True, default=lambda: str(uuid.uuid4()))
+    scope: Mapped[str] = mapped_column(String(16), nullable=False, default="user")
+    owner_user_id: Mapped[int | None] = mapped_column(ForeignKey("users.id", ondelete="SET NULL"), nullable=True, index=True)
+    title: Mapped[str] = mapped_column(String(255), nullable=False)
+    description: Mapped[str] = mapped_column(Text, nullable=False, default="")
+    subject: Mapped[str] = mapped_column(String(255), nullable=False, default="")
+    difficulty_level: Mapped[str] = mapped_column(String(64), nullable=False, default="")
+    estimated_duration_minutes: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    status: Mapped[str] = mapped_column(String(32), nullable=False, default="draft")
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, server_default=func.now())
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, server_default=func.now(), onupdate=func.now()
+    )
+
+
+class LearningModule(Base):
+    __tablename__ = "learning_modules"
+    __table_args__ = (UniqueConstraint("learning_path_id", "order_index", name="uq_learning_modules_path_order"),)
+
+    id: Mapped[str] = mapped_column(String(128), primary_key=True, default=lambda: str(uuid.uuid4()))
+    learning_path_id: Mapped[str] = mapped_column(
+        ForeignKey("learning_paths.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    order_index: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    title: Mapped[str] = mapped_column(String(255), nullable=False)
+    description: Mapped[str] = mapped_column(Text, nullable=False, default="")
+    learning_objectives: Mapped[list[str]] = mapped_column(JSON, default=list)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, server_default=func.now())
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, server_default=func.now(), onupdate=func.now()
+    )
+
+
+class LearningLesson(Base):
+    __tablename__ = "learning_lessons"
+    __table_args__ = (UniqueConstraint("module_id", "order_index", name="uq_learning_lessons_module_order"),)
+
+    id: Mapped[str] = mapped_column(String(128), primary_key=True, default=lambda: str(uuid.uuid4()))
+    module_id: Mapped[str] = mapped_column(ForeignKey("learning_modules.id", ondelete="CASCADE"), nullable=False, index=True)
+    order_index: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    title: Mapped[str] = mapped_column(String(255), nullable=False)
+    description: Mapped[str] = mapped_column(Text, nullable=False, default="")
+    objectives: Mapped[list[str]] = mapped_column(JSON, default=list)
+    teaching_notes: Mapped[str] = mapped_column(Text, nullable=False, default="")
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, server_default=func.now())
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, server_default=func.now(), onupdate=func.now()
+    )
+
+
+class LearningPathAllowedFile(Base):
+    __tablename__ = "learning_path_allowed_files"
+    __table_args__ = (UniqueConstraint("learning_path_id", "file_id", name="uq_learning_path_allowed_files"),)
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    learning_path_id: Mapped[str] = mapped_column(
+        ForeignKey("learning_paths.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    file_id: Mapped[int] = mapped_column(ForeignKey("files.id", ondelete="CASCADE"), nullable=False, index=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, server_default=func.now())
+
+
+class LearningPathAllowedTag(Base):
+    __tablename__ = "learning_path_allowed_tags"
+    __table_args__ = (UniqueConstraint("learning_path_id", "tag", name="uq_learning_path_allowed_tags"),)
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    learning_path_id: Mapped[str] = mapped_column(
+        ForeignKey("learning_paths.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    tag: Mapped[str] = mapped_column(String(128), nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, server_default=func.now())

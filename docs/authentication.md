@@ -6,7 +6,20 @@ Step 8 adds provisioned authentication to the RAG system.
 
 - Users sign in with `username` and `password`.
 - There is no public signup flow.
-- Provisioned users come from [`users.json`](/Users/rknstlr/Workspace/ai-python/users.json).
+- Provisioned users come from [`users.json`](/Users/rknstlr/Workspace/TEST/learning-rag/users.json).
+
+## Roles
+
+- `admin`: full platform access, user management, global learning-path authoring, and unrestricted library management.
+- `user`: standard app access, user-scoped learning-path authoring, and own-resource management.
+- `student`: restricted role for learning consumption flows.
+
+Student restrictions in Step A:
+
+- cannot create or use normal chats
+- cannot create or use GPTs
+- cannot author learning paths, modules, or lessons
+- can read visible learning paths for future learning-mode consumption
 
 ## Password Handling
 

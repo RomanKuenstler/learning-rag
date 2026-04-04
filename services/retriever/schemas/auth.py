@@ -51,12 +51,12 @@ class PasswordChangeResponse(AuthLoginResponse):
 class AdminUserCreateRequest(BaseModel):
     username: str = Field(min_length=1)
     displayname: str = Field(min_length=1)
-    role: str = Field(pattern="^(user|admin)$")
+    role: str = Field(pattern="^(user|admin|student)$")
 
 
 class AdminUserUpdateRequest(BaseModel):
     displayname: str | None = Field(default=None, min_length=1)
-    role: str | None = Field(default=None, pattern="^(user|admin)$")
+    role: str | None = Field(default=None, pattern="^(user|admin|student)$")
     status: str | None = Field(default=None, pattern="^(active|inactive)$")
     force_password_change: bool | None = None
 

@@ -45,6 +45,20 @@ from services.retriever.schemas.chat import (
     SettingsRead,
     SettingsUpdateRequest,
 )
+from services.retriever.schemas.learning import (
+    LearningLessonCreateRequest,
+    LearningLessonRead,
+    LearningLessonReorderRequest,
+    LearningLessonUpdateRequest,
+    LearningModuleCreateRequest,
+    LearningModuleRead,
+    LearningModuleReorderRequest,
+    LearningModuleUpdateRequest,
+    LearningPathCreateRequest,
+    LearningPathListResponse,
+    LearningPathRead,
+    LearningPathUpdateRequest,
+)
 from services.retriever.services.library_manager import UploadFilePayload
 from services.retriever.services.retriever_service import RetrieverAppService
 
@@ -166,39 +180,51 @@ def create_app() -> FastAPI:
             raise HTTPException(status_code=404, detail="User not found")
         return user
 
-    @app.post("/api/chats", response_model=ChatRead)
+    @app.post("/api/chats", response_model=ChatRead, responses={403: {"model": ErrorResponse}})
     def create_chat(
         auth: AuthContext = Depends(get_app_auth_context),
         service: RetrieverAppService = Depends(get_retriever_service),
     ) -> ChatRead:
-        return service.create_chat(auth.user)
+        try:
+            return service.create_chat(auth.user)
+        except PermissionError as error:
+            raise HTTPException(status_code=403, detail=str(error)) from error
 
-    @app.get("/api/chats", response_model=list[ChatRead])
+    @app.get("/api/chats", response_model=list[ChatRead], responses={403: {"model": ErrorResponse}})
     def list_chats(
         auth: AuthContext = Depends(get_app_auth_context),
         service: RetrieverAppService = Depends(get_retriever_service),
     ) -> list[ChatRead]:
-        return service.list_chats(auth.user)
+        try:
+            return service.list_chats(auth.user)
+        except PermissionError as error:
+            raise HTTPException(status_code=403, detail=str(error)) from error
 
-    @app.get("/api/chats/archived", response_model=list[ChatRead])
+    @app.get("/api/chats/archived", response_model=list[ChatRead], responses={403: {"model": ErrorResponse}})
     def list_archived_chats(
         auth: AuthContext = Depends(get_app_auth_context),
         service: RetrieverAppService = Depends(get_retriever_service),
     ) -> list[ChatRead]:
-        return service.list_archived_chats(auth.user)
+        try:
+            return service.list_archived_chats(auth.user)
+        except PermissionError as error:
+            raise HTTPException(status_code=403, detail=str(error)) from error
 
-    @app.get("/api/chats/{chat_id}", response_model=ChatRead, responses={404: {"model": ErrorResponse}})
+    @app.get("/api/chats/{chat_id}", response_model=ChatRead, responses={404: {"model": ErrorResponse}, 403: {"model": ErrorResponse}})
     def get_chat(
         chat_id: str,
         auth: AuthContext = Depends(get_app_auth_context),
         service: RetrieverAppService = Depends(get_retriever_service),
     ) -> ChatRead:
-        chat = service.get_chat(auth.user, chat_id)
+        try:
+            chat = service.get_chat(auth.user, chat_id)
+        except PermissionError as error:
+            raise HTTPException(status_code=403, detail=str(error)) from error
         if chat is None:
             raise HTTPException(status_code=404, detail="Chat not found")
         return chat
 
-    @app.patch("/api/chats/{chat_id}", response_model=ChatRead, responses={404: {"model": ErrorResponse}, 422: {"model": ErrorResponse}})
+    @app.patch("/api/chats/{chat_id}", response_model=ChatRead, responses={404: {"model": ErrorResponse}, 422: {"model": ErrorResponse}, 403: {"model": ErrorResponse}})
     def rename_chat(
         chat_id: str,
         payload: ChatUpdateRequest,
@@ -207,53 +233,67 @@ def create_app() -> FastAPI:
     ) -> ChatRead:
         try:
             chat = service.rename_chat(auth.user, chat_id, payload.chat_name)
+        except PermissionError as error:
+            raise HTTPException(status_code=403, detail=str(error)) from error
         except ValueError as error:
             raise HTTPException(status_code=422, detail=str(error)) from error
         if chat is None:
             raise HTTPException(status_code=404, detail="Chat not found")
         return chat
 
-    @app.patch("/api/chats/{chat_id}/archive", response_model=ChatRead, responses={404: {"model": ErrorResponse}})
+    @app.patch("/api/chats/{chat_id}/archive", response_model=ChatRead, responses={404: {"model": ErrorResponse}, 403: {"model": ErrorResponse}})
     def archive_chat(
         chat_id: str,
         auth: AuthContext = Depends(get_app_auth_context),
         service: RetrieverAppService = Depends(get_retriever_service),
     ) -> ChatRead:
-        chat = service.archive_chat(auth.user, chat_id)
+        try:
+            chat = service.archive_chat(auth.user, chat_id)
+        except PermissionError as error:
+            raise HTTPException(status_code=403, detail=str(error)) from error
         if chat is None:
             raise HTTPException(status_code=404, detail="Chat not found")
         return chat
 
-    @app.patch("/api/chats/{chat_id}/unarchive", response_model=ChatRead, responses={404: {"model": ErrorResponse}})
+    @app.patch("/api/chats/{chat_id}/unarchive", response_model=ChatRead, responses={404: {"model": ErrorResponse}, 403: {"model": ErrorResponse}})
     def unarchive_chat(
         chat_id: str,
         auth: AuthContext = Depends(get_app_auth_context),
         service: RetrieverAppService = Depends(get_retriever_service),
     ) -> ChatRead:
-        chat = service.unarchive_chat(auth.user, chat_id)
+        try:
+            chat = service.unarchive_chat(auth.user, chat_id)
+        except PermissionError as error:
+            raise HTTPException(status_code=403, detail=str(error)) from error
         if chat is None:
             raise HTTPException(status_code=404, detail="Chat not found")
         return chat
 
-    @app.delete("/api/chats/{chat_id}", response_model=ChatRead, responses={404: {"model": ErrorResponse}})
+    @app.delete("/api/chats/{chat_id}", response_model=ChatRead, responses={404: {"model": ErrorResponse}, 403: {"model": ErrorResponse}})
     def delete_chat(
         chat_id: str,
         auth: AuthContext = Depends(get_app_auth_context),
         service: RetrieverAppService = Depends(get_retriever_service),
     ) -> ChatRead:
-        chat = service.delete_chat(auth.user, chat_id)
+        try:
+            chat = service.delete_chat(auth.user, chat_id)
+        except PermissionError as error:
+            raise HTTPException(status_code=403, detail=str(error)) from error
         if chat is None:
             raise HTTPException(status_code=404, detail="Chat not found")
         return chat
 
-    @app.get("/api/gpts", response_model=list[GptRead])
+    @app.get("/api/gpts", response_model=list[GptRead], responses={403: {"model": ErrorResponse}})
     def list_gpts(
         auth: AuthContext = Depends(get_app_auth_context),
         service: RetrieverAppService = Depends(get_retriever_service),
     ) -> list[GptRead]:
-        return service.list_gpts(auth.user)
+        try:
+            return service.list_gpts(auth.user)
+        except PermissionError as error:
+            raise HTTPException(status_code=403, detail=str(error)) from error
 
-    @app.post("/api/gpts", response_model=GptRead, responses={422: {"model": ErrorResponse}})
+    @app.post("/api/gpts", response_model=GptRead, responses={422: {"model": ErrorResponse}, 403: {"model": ErrorResponse}})
     def create_gpt(
         payload: GptCreateRequest,
         auth: AuthContext = Depends(get_app_auth_context),
@@ -261,21 +301,26 @@ def create_app() -> FastAPI:
     ) -> GptRead:
         try:
             return service.create_gpt(auth.user, payload)
+        except PermissionError as error:
+            raise HTTPException(status_code=403, detail=str(error)) from error
         except ValueError as error:
             raise HTTPException(status_code=422, detail=str(error)) from error
 
-    @app.get("/api/gpts/{gpt_id}", response_model=GptRead, responses={404: {"model": ErrorResponse}})
+    @app.get("/api/gpts/{gpt_id}", response_model=GptRead, responses={404: {"model": ErrorResponse}, 403: {"model": ErrorResponse}})
     def get_gpt(
         gpt_id: str,
         auth: AuthContext = Depends(get_app_auth_context),
         service: RetrieverAppService = Depends(get_retriever_service),
     ) -> GptRead:
-        record = service.get_gpt(auth.user, gpt_id)
+        try:
+            record = service.get_gpt(auth.user, gpt_id)
+        except PermissionError as error:
+            raise HTTPException(status_code=403, detail=str(error)) from error
         if record is None:
             raise HTTPException(status_code=404, detail="GPT not found")
         return record
 
-    @app.patch("/api/gpts/{gpt_id}", response_model=GptRead, responses={404: {"model": ErrorResponse}, 422: {"model": ErrorResponse}})
+    @app.patch("/api/gpts/{gpt_id}", response_model=GptRead, responses={404: {"model": ErrorResponse}, 422: {"model": ErrorResponse}, 403: {"model": ErrorResponse}})
     def update_gpt(
         gpt_id: str,
         payload: GptUpdateRequest,
@@ -284,24 +329,29 @@ def create_app() -> FastAPI:
     ) -> GptRead:
         try:
             record = service.update_gpt(auth.user, gpt_id, payload)
+        except PermissionError as error:
+            raise HTTPException(status_code=403, detail=str(error)) from error
         except ValueError as error:
             raise HTTPException(status_code=422, detail=str(error)) from error
         if record is None:
             raise HTTPException(status_code=404, detail="GPT not found")
         return record
 
-    @app.delete("/api/gpts/{gpt_id}", response_model=GptDeleteResponse, responses={404: {"model": ErrorResponse}})
+    @app.delete("/api/gpts/{gpt_id}", response_model=GptDeleteResponse, responses={404: {"model": ErrorResponse}, 403: {"model": ErrorResponse}})
     def delete_gpt(
         gpt_id: str,
         auth: AuthContext = Depends(get_app_auth_context),
         service: RetrieverAppService = Depends(get_retriever_service),
     ) -> GptDeleteResponse:
-        record = service.delete_gpt(auth.user, gpt_id)
+        try:
+            record = service.delete_gpt(auth.user, gpt_id)
+        except PermissionError as error:
+            raise HTTPException(status_code=403, detail=str(error)) from error
         if record is None:
             raise HTTPException(status_code=404, detail="GPT not found")
         return record
 
-    @app.post("/api/gpts/preview/messages", response_model=MessageCreateResponse, responses={422: {"model": ErrorResponse}})
+    @app.post("/api/gpts/preview/messages", response_model=MessageCreateResponse, responses={422: {"model": ErrorResponse}, 403: {"model": ErrorResponse}})
     def preview_gpt_message(
         payload: GptPreviewMessageCreateRequest,
         auth: AuthContext = Depends(get_app_auth_context),
@@ -309,32 +359,40 @@ def create_app() -> FastAPI:
     ) -> MessageCreateResponse:
         try:
             return MessageCreateResponse(**service.preview_gpt_message(auth.user, payload))
+        except PermissionError as error:
+            raise HTTPException(status_code=403, detail=str(error)) from error
         except ValueError as error:
             raise HTTPException(status_code=422, detail=str(error)) from error
 
-    @app.get("/api/gpts/{gpt_id}/chat", response_model=GptChatRead, responses={404: {"model": ErrorResponse}})
+    @app.get("/api/gpts/{gpt_id}/chat", response_model=GptChatRead, responses={404: {"model": ErrorResponse}, 403: {"model": ErrorResponse}})
     def get_gpt_chat(
         gpt_id: str,
         auth: AuthContext = Depends(get_app_auth_context),
         service: RetrieverAppService = Depends(get_retriever_service),
     ) -> GptChatRead:
-        record = service.get_gpt_chat(auth.user, gpt_id)
+        try:
+            record = service.get_gpt_chat(auth.user, gpt_id)
+        except PermissionError as error:
+            raise HTTPException(status_code=403, detail=str(error)) from error
         if record is None:
             raise HTTPException(status_code=404, detail="GPT not found")
         return record
 
-    @app.delete("/api/gpts/{gpt_id}/chat", response_model=GptChatRead, responses={404: {"model": ErrorResponse}})
+    @app.delete("/api/gpts/{gpt_id}/chat", response_model=GptChatRead, responses={404: {"model": ErrorResponse}, 403: {"model": ErrorResponse}})
     def clear_gpt_chat(
         gpt_id: str,
         auth: AuthContext = Depends(get_app_auth_context),
         service: RetrieverAppService = Depends(get_retriever_service),
     ) -> GptChatRead:
-        record = service.clear_gpt_chat(auth.user, gpt_id)
+        try:
+            record = service.clear_gpt_chat(auth.user, gpt_id)
+        except PermissionError as error:
+            raise HTTPException(status_code=403, detail=str(error)) from error
         if record is None:
             raise HTTPException(status_code=404, detail="GPT not found")
         return record
 
-    @app.post("/api/gpts/{gpt_id}/messages", response_model=MessageCreateResponse, responses={404: {"model": ErrorResponse}, 422: {"model": ErrorResponse}})
+    @app.post("/api/gpts/{gpt_id}/messages", response_model=MessageCreateResponse, responses={404: {"model": ErrorResponse}, 422: {"model": ErrorResponse}, 403: {"model": ErrorResponse}})
     async def create_gpt_message(
         gpt_id: str,
         request: Request,
@@ -356,6 +414,8 @@ def create_app() -> FastAPI:
         try:
             uploads = [(upload.filename or "attachment.bin", await upload.read()) for upload in attachments]
             result = service.send_gpt_message(auth.user, gpt_id, payload_message.strip(), attachments=uploads)
+        except PermissionError as error:
+            raise HTTPException(status_code=403, detail=str(error)) from error
         except ValueError as error:
             raise HTTPException(status_code=422, detail=str(error)) from error
         except Exception as error:
@@ -364,30 +424,212 @@ def create_app() -> FastAPI:
             raise HTTPException(status_code=404, detail="GPT not found")
         return MessageCreateResponse(**result)
 
-    @app.get("/api/gpts/{gpt_id}/download", response_model=ChatDownloadResponse, responses={404: {"model": ErrorResponse}})
+    @app.get("/api/gpts/{gpt_id}/download", response_model=ChatDownloadResponse, responses={404: {"model": ErrorResponse}, 403: {"model": ErrorResponse}})
     def download_gpt_chat(
         gpt_id: str,
         response: Response,
         auth: AuthContext = Depends(get_app_auth_context),
         service: RetrieverAppService = Depends(get_retriever_service),
     ) -> ChatDownloadResponse:
-        payload = service.download_gpt_chat(auth.user, gpt_id)
+        try:
+            payload = service.download_gpt_chat(auth.user, gpt_id)
+        except PermissionError as error:
+            raise HTTPException(status_code=403, detail=str(error)) from error
         if payload is None:
             raise HTTPException(status_code=404, detail="GPT not found")
         safe_name = "".join(character if character.isalnum() or character in {"-", "_"} else "_" for character in payload.chat_name)
         response.headers["Content-Disposition"] = f'attachment; filename="{safe_name or "gpt"}-{gpt_id}.json"'
         return payload
 
-    @app.get("/api/chats/{chat_id}/messages", response_model=list[MessageRead], responses={404: {"model": ErrorResponse}})
+    @app.get("/api/chats/{chat_id}/messages", response_model=list[MessageRead], responses={404: {"model": ErrorResponse}, 403: {"model": ErrorResponse}})
     def get_messages(
         chat_id: str,
         auth: AuthContext = Depends(get_app_auth_context),
         service: RetrieverAppService = Depends(get_retriever_service),
     ) -> list[MessageRead]:
-        chat = service.get_chat(auth.user, chat_id)
+        try:
+            chat = service.get_chat(auth.user, chat_id)
+        except PermissionError as error:
+            raise HTTPException(status_code=403, detail=str(error)) from error
         if chat is None:
             raise HTTPException(status_code=404, detail="Chat not found")
         return service.get_chat_messages(auth.user, chat_id)
+
+    @app.get("/api/learning-paths", response_model=LearningPathListResponse)
+    def list_learning_paths(
+        auth: AuthContext = Depends(get_app_auth_context),
+        service: RetrieverAppService = Depends(get_retriever_service),
+    ) -> LearningPathListResponse:
+        return service.list_learning_paths(auth.user)
+
+    @app.post("/api/learning-paths", response_model=LearningPathRead, responses={403: {"model": ErrorResponse}})
+    def create_learning_path(
+        payload: LearningPathCreateRequest,
+        auth: AuthContext = Depends(get_app_auth_context),
+        service: RetrieverAppService = Depends(get_retriever_service),
+    ) -> LearningPathRead:
+        try:
+            return service.create_learning_path(auth.user, payload)
+        except PermissionError as error:
+            raise HTTPException(status_code=403, detail=str(error)) from error
+
+    @app.get("/api/learning-paths/{learning_path_id}", response_model=LearningPathRead, responses={404: {"model": ErrorResponse}})
+    def get_learning_path(
+        learning_path_id: str,
+        auth: AuthContext = Depends(get_app_auth_context),
+        service: RetrieverAppService = Depends(get_retriever_service),
+    ) -> LearningPathRead:
+        record = service.get_learning_path(auth.user, learning_path_id)
+        if record is None:
+            raise HTTPException(status_code=404, detail="Learning path not found")
+        return record
+
+    @app.patch("/api/learning-paths/{learning_path_id}", response_model=LearningPathRead, responses={404: {"model": ErrorResponse}, 403: {"model": ErrorResponse}})
+    def update_learning_path(
+        learning_path_id: str,
+        payload: LearningPathUpdateRequest,
+        auth: AuthContext = Depends(get_app_auth_context),
+        service: RetrieverAppService = Depends(get_retriever_service),
+    ) -> LearningPathRead:
+        try:
+            record = service.update_learning_path(auth.user, learning_path_id, payload)
+        except PermissionError as error:
+            raise HTTPException(status_code=403, detail=str(error)) from error
+        if record is None:
+            raise HTTPException(status_code=404, detail="Learning path not found")
+        return record
+
+    @app.delete("/api/learning-paths/{learning_path_id}", response_model=LearningPathRead, responses={404: {"model": ErrorResponse}, 403: {"model": ErrorResponse}})
+    def delete_learning_path(
+        learning_path_id: str,
+        auth: AuthContext = Depends(get_app_auth_context),
+        service: RetrieverAppService = Depends(get_retriever_service),
+    ) -> LearningPathRead:
+        try:
+            record = service.delete_learning_path(auth.user, learning_path_id)
+        except PermissionError as error:
+            raise HTTPException(status_code=403, detail=str(error)) from error
+        if record is None:
+            raise HTTPException(status_code=404, detail="Learning path not found")
+        return record
+
+    @app.post("/api/learning-paths/{learning_path_id}/modules", response_model=LearningModuleRead, responses={404: {"model": ErrorResponse}, 403: {"model": ErrorResponse}})
+    def create_learning_module(
+        learning_path_id: str,
+        payload: LearningModuleCreateRequest,
+        auth: AuthContext = Depends(get_app_auth_context),
+        service: RetrieverAppService = Depends(get_retriever_service),
+    ) -> LearningModuleRead:
+        try:
+            record = service.create_learning_module(auth.user, learning_path_id, payload)
+        except PermissionError as error:
+            raise HTTPException(status_code=403, detail=str(error)) from error
+        if record is None:
+            raise HTTPException(status_code=404, detail="Learning path not found")
+        return record
+
+    @app.patch("/api/learning-paths/{learning_path_id}/modules/reorder", response_model=list[LearningModuleRead], responses={404: {"model": ErrorResponse}, 403: {"model": ErrorResponse}})
+    def reorder_learning_modules(
+        learning_path_id: str,
+        payload: LearningModuleReorderRequest,
+        auth: AuthContext = Depends(get_app_auth_context),
+        service: RetrieverAppService = Depends(get_retriever_service),
+    ) -> list[LearningModuleRead]:
+        try:
+            records = service.reorder_learning_modules(auth.user, learning_path_id, payload)
+        except PermissionError as error:
+            raise HTTPException(status_code=403, detail=str(error)) from error
+        if records is None:
+            raise HTTPException(status_code=404, detail="Learning path not found")
+        return records
+
+    @app.patch("/api/learning-modules/{module_id}", response_model=LearningModuleRead, responses={404: {"model": ErrorResponse}, 403: {"model": ErrorResponse}})
+    def update_learning_module(
+        module_id: str,
+        payload: LearningModuleUpdateRequest,
+        auth: AuthContext = Depends(get_app_auth_context),
+        service: RetrieverAppService = Depends(get_retriever_service),
+    ) -> LearningModuleRead:
+        try:
+            record = service.update_learning_module(auth.user, module_id, payload)
+        except PermissionError as error:
+            raise HTTPException(status_code=403, detail=str(error)) from error
+        if record is None:
+            raise HTTPException(status_code=404, detail="Learning module not found")
+        return record
+
+    @app.delete("/api/learning-modules/{module_id}", response_model=LearningModuleRead, responses={404: {"model": ErrorResponse}, 403: {"model": ErrorResponse}})
+    def delete_learning_module(
+        module_id: str,
+        auth: AuthContext = Depends(get_app_auth_context),
+        service: RetrieverAppService = Depends(get_retriever_service),
+    ) -> LearningModuleRead:
+        try:
+            record = service.delete_learning_module(auth.user, module_id)
+        except PermissionError as error:
+            raise HTTPException(status_code=403, detail=str(error)) from error
+        if record is None:
+            raise HTTPException(status_code=404, detail="Learning module not found")
+        return record
+
+    @app.post("/api/learning-modules/{module_id}/lessons", response_model=LearningLessonRead, responses={404: {"model": ErrorResponse}, 403: {"model": ErrorResponse}})
+    def create_learning_lesson(
+        module_id: str,
+        payload: LearningLessonCreateRequest,
+        auth: AuthContext = Depends(get_app_auth_context),
+        service: RetrieverAppService = Depends(get_retriever_service),
+    ) -> LearningLessonRead:
+        try:
+            record = service.create_learning_lesson(auth.user, module_id, payload)
+        except PermissionError as error:
+            raise HTTPException(status_code=403, detail=str(error)) from error
+        if record is None:
+            raise HTTPException(status_code=404, detail="Learning module not found")
+        return record
+
+    @app.patch("/api/learning-modules/{module_id}/lessons/reorder", response_model=list[LearningLessonRead], responses={404: {"model": ErrorResponse}, 403: {"model": ErrorResponse}})
+    def reorder_learning_lessons(
+        module_id: str,
+        payload: LearningLessonReorderRequest,
+        auth: AuthContext = Depends(get_app_auth_context),
+        service: RetrieverAppService = Depends(get_retriever_service),
+    ) -> list[LearningLessonRead]:
+        try:
+            records = service.reorder_learning_lessons(auth.user, module_id, payload)
+        except PermissionError as error:
+            raise HTTPException(status_code=403, detail=str(error)) from error
+        if records is None:
+            raise HTTPException(status_code=404, detail="Learning module not found")
+        return records
+
+    @app.patch("/api/learning-lessons/{lesson_id}", response_model=LearningLessonRead, responses={404: {"model": ErrorResponse}, 403: {"model": ErrorResponse}})
+    def update_learning_lesson(
+        lesson_id: str,
+        payload: LearningLessonUpdateRequest,
+        auth: AuthContext = Depends(get_app_auth_context),
+        service: RetrieverAppService = Depends(get_retriever_service),
+    ) -> LearningLessonRead:
+        try:
+            record = service.update_learning_lesson(auth.user, lesson_id, payload)
+        except PermissionError as error:
+            raise HTTPException(status_code=403, detail=str(error)) from error
+        if record is None:
+            raise HTTPException(status_code=404, detail="Learning lesson not found")
+        return record
+
+    @app.delete("/api/learning-lessons/{lesson_id}", response_model=LearningLessonRead, responses={404: {"model": ErrorResponse}, 403: {"model": ErrorResponse}})
+    def delete_learning_lesson(
+        lesson_id: str,
+        auth: AuthContext = Depends(get_app_auth_context),
+        service: RetrieverAppService = Depends(get_retriever_service),
+    ) -> LearningLessonRead:
+        try:
+            record = service.delete_learning_lesson(auth.user, lesson_id)
+        except PermissionError as error:
+            raise HTTPException(status_code=403, detail=str(error)) from error
+        if record is None:
+            raise HTTPException(status_code=404, detail="Learning lesson not found")
+        return record
 
     @app.get("/api/user/files", response_model=FilterFileListResponse)
     def list_user_files(
@@ -484,7 +726,7 @@ def create_app() -> FastAPI:
     @app.post(
         "/api/chats/{chat_id}/messages",
         response_model=MessageCreateResponse,
-        responses={404: {"model": ErrorResponse}, 422: {"model": ErrorResponse}},
+        responses={404: {"model": ErrorResponse}, 422: {"model": ErrorResponse}, 403: {"model": ErrorResponse}},
     )
     async def create_message(
         chat_id: str,
@@ -510,6 +752,8 @@ def create_app() -> FastAPI:
         try:
             uploads = [(upload.filename or "attachment.bin", await upload.read()) for upload in attachments]
             result = service.send_message(auth.user, chat_id, payload_message.strip(), uploads, assistant_mode=payload_assistant_mode)
+        except PermissionError as error:
+            raise HTTPException(status_code=403, detail=str(error)) from error
         except ValueError as error:
             raise HTTPException(status_code=422, detail=str(error)) from error
         except Exception as error:
@@ -518,14 +762,17 @@ def create_app() -> FastAPI:
             raise HTTPException(status_code=404, detail="Chat not found")
         return MessageCreateResponse(**result)
 
-    @app.get("/api/chats/{chat_id}/download", response_model=ChatDownloadResponse, responses={404: {"model": ErrorResponse}})
+    @app.get("/api/chats/{chat_id}/download", response_model=ChatDownloadResponse, responses={404: {"model": ErrorResponse}, 403: {"model": ErrorResponse}})
     def download_chat(
         chat_id: str,
         response: Response,
         auth: AuthContext = Depends(get_app_auth_context),
         service: RetrieverAppService = Depends(get_retriever_service),
     ) -> ChatDownloadResponse:
-        payload = service.download_chat(auth.user, chat_id)
+        try:
+            payload = service.download_chat(auth.user, chat_id)
+        except PermissionError as error:
+            raise HTTPException(status_code=403, detail=str(error)) from error
         if payload is None:
             raise HTTPException(status_code=404, detail="Chat not found")
         safe_name = "".join(character if character.isalnum() or character in {"-", "_"} else "_" for character in payload.chat_name)

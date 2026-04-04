@@ -9,6 +9,8 @@ from pydantic import BaseModel, Field
 class ChatCreateResponse(BaseModel):
     id: str
     chat_name: str
+    chat_type: str = "normal"
+    learning_path_id: str | None = None
     gpt_id: str | None = None
     created_at: datetime
     updated_at: datetime

@@ -5,6 +5,11 @@ from services.common.models import (
     ChatSession,
     GPTChatSession,
     GPTRecord,
+    LearningLesson,
+    LearningModule,
+    LearningPath,
+    LearningPathAllowedFile,
+    LearningPathAllowedTag,
     MessageAttachment,
     RetrievalLog,
     SettingRecord,
@@ -260,3 +265,66 @@ class ChatRepository:
 
     def revoke_all_user_sessions(self, user_id: int, *, revoked_at) -> None:
         self.postgres_client.revoke_all_user_sessions(user_id, revoked_at=revoked_at)
+
+    def list_learning_paths(self, *, user_id: int, role: str) -> list[LearningPath]:
+        return self.postgres_client.list_learning_paths(user_id=user_id, role=role)
+
+    def get_learning_path(self, learning_path_id: str) -> LearningPath | None:
+        return self.postgres_client.get_learning_path(learning_path_id)
+
+    def create_learning_path(self, payload: dict[str, object]) -> LearningPath:
+        return self.postgres_client.create_learning_path(payload)
+
+    def update_learning_path(self, learning_path_id: str, fields: dict[str, object]) -> LearningPath | None:
+        return self.postgres_client.update_learning_path(learning_path_id, fields)
+
+    def delete_learning_path(self, learning_path_id: str) -> LearningPath | None:
+        return self.postgres_client.delete_learning_path(learning_path_id)
+
+    def list_learning_modules(self, learning_path_id: str) -> list[LearningModule]:
+        return self.postgres_client.list_learning_modules(learning_path_id)
+
+    def create_learning_module(self, payload: dict[str, object]) -> LearningModule:
+        return self.postgres_client.create_learning_module(payload)
+
+    def get_learning_module(self, module_id: str) -> LearningModule | None:
+        return self.postgres_client.get_learning_module(module_id)
+
+    def update_learning_module(self, module_id: str, fields: dict[str, object]) -> LearningModule | None:
+        return self.postgres_client.update_learning_module(module_id, fields)
+
+    def delete_learning_module(self, module_id: str) -> LearningModule | None:
+        return self.postgres_client.delete_learning_module(module_id)
+
+    def reorder_learning_modules(self, learning_path_id: str, module_orders: list[tuple[str, int]]) -> list[LearningModule]:
+        return self.postgres_client.reorder_learning_modules(learning_path_id, module_orders)
+
+    def list_learning_lessons(self, module_id: str) -> list[LearningLesson]:
+        return self.postgres_client.list_learning_lessons(module_id)
+
+    def create_learning_lesson(self, payload: dict[str, object]) -> LearningLesson:
+        return self.postgres_client.create_learning_lesson(payload)
+
+    def get_learning_lesson(self, lesson_id: str) -> LearningLesson | None:
+        return self.postgres_client.get_learning_lesson(lesson_id)
+
+    def update_learning_lesson(self, lesson_id: str, fields: dict[str, object]) -> LearningLesson | None:
+        return self.postgres_client.update_learning_lesson(lesson_id, fields)
+
+    def delete_learning_lesson(self, lesson_id: str) -> LearningLesson | None:
+        return self.postgres_client.delete_learning_lesson(lesson_id)
+
+    def reorder_learning_lessons(self, module_id: str, lesson_orders: list[tuple[str, int]]) -> list[LearningLesson]:
+        return self.postgres_client.reorder_learning_lessons(module_id, lesson_orders)
+
+    def replace_learning_path_allowed_files(self, learning_path_id: str, file_ids: list[int]) -> None:
+        self.postgres_client.replace_learning_path_allowed_files(learning_path_id, file_ids)
+
+    def replace_learning_path_allowed_tags(self, learning_path_id: str, tags: list[str]) -> None:
+        self.postgres_client.replace_learning_path_allowed_tags(learning_path_id, tags)
+
+    def list_learning_path_allowed_files(self, learning_path_id: str) -> list[LearningPathAllowedFile]:
+        return self.postgres_client.list_learning_path_allowed_files(learning_path_id)
+
+    def list_learning_path_allowed_tags(self, learning_path_id: str) -> list[LearningPathAllowedTag]:
+        return self.postgres_client.list_learning_path_allowed_tags(learning_path_id)

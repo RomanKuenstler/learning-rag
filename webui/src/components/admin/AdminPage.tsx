@@ -10,7 +10,7 @@ type AdminPageProps = {
   error: string | null;
   busyUserIds: number[];
   onLoad: () => void;
-  onCreateUser: (payload: { username: string; displayname: string; role: "user" | "admin" }) => Promise<void>;
+  onCreateUser: (payload: { username: string; displayname: string; role: "user" | "admin" | "student" }) => Promise<void>;
   onUpdateUser: (userId: number, payload: Partial<Pick<AdminUser, "status" | "force_password_change" | "role" | "displayname">>) => Promise<void>;
   onDeleteUser: (userId: number) => Promise<void>;
 };
@@ -28,7 +28,7 @@ export function AdminPage({
 }: AdminPageProps) {
   const [addOpen, setAddOpen] = useState(false);
   const [deleteTarget, setDeleteTarget] = useState<AdminUser | null>(null);
-  const [form, setForm] = useState({ username: "", displayname: "", role: "user" as "user" | "admin" });
+  const [form, setForm] = useState({ username: "", displayname: "", role: "user" as "user" | "admin" | "student" });
   const [roleMenuOpen, setRoleMenuOpen] = useState(false);
   const busy = useMemo(() => new Set(busyUserIds), [busyUserIds]);
 
@@ -151,12 +151,12 @@ export function AdminPage({
               <span className="dialog-field-label">Role</span>
               <div className={`header-mode-picker dialog-role-picker${roleMenuOpen ? " open" : ""}`}>
                 <button type="button" className="header-mode-trigger dialog-role-trigger" aria-expanded={roleMenuOpen} onClick={() => setRoleMenuOpen((current) => !current)}>
-                  <span className="dialog-role-trigger-label">{form.role === "admin" ? "Admin" : "User"}</span>
+                  <span className="dialog-role-trigger-label">{form.role[0].toUpperCase() + form.role.slice(1)}</span>
                   <Icon name="chevron-down" className="header-mode-chevron" />
                 </button>
                 {roleMenuOpen ? (
                   <div className="header-mode-menu dialog-role-menu" role="menu">
-                    {(["user", "admin"] as const).map((role) => (
+                    {(["user", "student", "admin"] as const).map((role) => (
                         <button
                           key={role}
                           type="button"
@@ -166,7 +166,7 @@ export function AdminPage({
                             setRoleMenuOpen(false);
                           }}
                         >
-                          <span className="dialog-role-option-label">{role === "admin" ? "Admin" : "User"}</span>
+                          <span className="dialog-role-option-label">{role[0].toUpperCase() + role.slice(1)}</span>
                           {form.role === role ? <Icon name="check" className="header-mode-option-check" /> : null}
                         </button>
                       ))}

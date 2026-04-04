@@ -18,6 +18,10 @@ import type {
   LibraryFile,
   LibraryResponse,
   LibraryUploadResponse,
+  LearningModule,
+  LearningLesson,
+  LearningPath,
+  LearningPathResponse,
   Message,
   MessageResponse,
   Personalization,
@@ -139,7 +143,7 @@ export const apiClient = {
   listAdminUsers() {
     return request<AdminUser[]>("/api/admin/users");
   },
-  createAdminUser(payload: { username: string; displayname: string; role: "user" | "admin" }) {
+  createAdminUser(payload: { username: string; displayname: string; role: "user" | "admin" | "student" }) {
     return request<AdminUser>("/api/admin/users", {
       method: "POST",
       body: JSON.stringify(payload),
@@ -149,6 +153,105 @@ export const apiClient = {
     return request<AdminUser>(`/api/admin/users/${userId}`, {
       method: "PATCH",
       body: JSON.stringify(payload),
+    });
+  },
+  listLearningPaths() {
+    return request<LearningPathResponse>("/api/learning-paths");
+  },
+  createLearningPath(payload: {
+    scope: "global" | "user";
+    title: string;
+    description: string;
+    subject: string;
+    difficulty_level: string;
+    estimated_duration_minutes: number | null;
+    status: "draft" | "published" | "archived";
+    allowed_file_ids: number[];
+    allowed_tags: string[];
+  }) {
+    return request<LearningPath>("/api/learning-paths", {
+      method: "POST",
+      body: JSON.stringify(payload),
+    });
+  },
+  getLearningPath(pathId: string) {
+    return request<LearningPath>(`/api/learning-paths/${pathId}`);
+  },
+  updateLearningPath(
+    pathId: string,
+    payload: Partial<{
+      title: string;
+      description: string;
+      subject: string;
+      difficulty_level: string;
+      estimated_duration_minutes: number | null;
+      status: "draft" | "published" | "archived";
+      allowed_file_ids: number[];
+      allowed_tags: string[];
+    }>,
+  ) {
+    return request<LearningPath>(`/api/learning-paths/${pathId}`, {
+      method: "PATCH",
+      body: JSON.stringify(payload),
+    });
+  },
+  deleteLearningPath(pathId: string) {
+    return request<LearningPath>(`/api/learning-paths/${pathId}`, { method: "DELETE" });
+  },
+  createLearningModule(
+    pathId: string,
+    payload: { title: string; description: string; learning_objectives: string[] },
+  ) {
+    return request<LearningModule>(`/api/learning-paths/${pathId}/modules`, {
+      method: "POST",
+      body: JSON.stringify(payload),
+    });
+  },
+  reorderLearningModules(pathId: string, modules: Array<{ id: string; order_index: number }>) {
+    return request<LearningModule[]>(`/api/learning-paths/${pathId}/modules/reorder`, {
+      method: "PATCH",
+      body: JSON.stringify({ modules }),
+    });
+  },
+  updateLearningModule(
+    moduleId: string,
+    payload: Partial<{ title: string; description: string; learning_objectives: string[] }>,
+  ) {
+    return request<LearningModule>(`/api/learning-modules/${moduleId}`, {
+      method: "PATCH",
+      body: JSON.stringify(payload),
+    });
+  },
+  deleteLearningModule(moduleId: string) {
+    return request<LearningModule>(`/api/learning-modules/${moduleId}`, { method: "DELETE" });
+  },
+  createLearningLesson(
+    moduleId: string,
+    payload: { title: string; description: string; objectives: string[]; teaching_notes: string },
+  ) {
+    return request<LearningLesson>(`/api/learning-modules/${moduleId}/lessons`, {
+      method: "POST",
+      body: JSON.stringify(payload),
+    });
+  },
+  reorderLearningLessons(moduleId: string, lessons: Array<{ id: string; order_index: number }>) {
+    return request<LearningLesson[]>(`/api/learning-modules/${moduleId}/lessons/reorder`, {
+      method: "PATCH",
+      body: JSON.stringify({ lessons }),
+    });
+  },
+  updateLearningLesson(
+    lessonId: string,
+    payload: Partial<{ title: string; description: string; objectives: string[]; teaching_notes: string }>,
+  ) {
+    return request<LearningLesson>(`/api/learning-lessons/${lessonId}`, {
+      method: "PATCH",
+      body: JSON.stringify(payload),
+    });
+  },
+  deleteLearningLesson(lessonId: string) {
+    return request<LearningLesson>(`/api/learning-lessons/${lessonId}`, {
+      method: "DELETE",
     });
   },
   deleteAdminUser(userId: number) {

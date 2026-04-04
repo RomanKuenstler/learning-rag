@@ -1,4 +1,4 @@
-export type Role = "user" | "admin";
+export type Role = "user" | "admin" | "student";
 
 export type CurrentUser = {
   id: number;
@@ -24,6 +24,8 @@ export type AdminUser = CurrentUser & {
 export type Chat = {
   id: string;
   chat_name: string;
+  chat_type: "normal" | "gpt" | "learning" | string;
+  learning_path_id?: string | null;
   gpt_id?: string | null;
   is_archived: boolean;
   created_at: string;
@@ -272,4 +274,54 @@ export type GptPreviewRequest = {
   message: string;
   gpt: GptUpsert;
   preview_messages: Message[];
+};
+
+export type LearningPathScope = "global" | "user";
+export type LearningPathStatus = "draft" | "published" | "archived";
+
+export type LearningLesson = {
+  id: string;
+  module_id: string;
+  order_index: number;
+  title: string;
+  description: string;
+  objectives: string[];
+  teaching_notes: string;
+  created_at: string;
+  updated_at: string;
+};
+
+export type LearningModule = {
+  id: string;
+  learning_path_id: string;
+  order_index: number;
+  title: string;
+  description: string;
+  learning_objectives: string[];
+  lessons: LearningLesson[];
+  created_at: string;
+  updated_at: string;
+};
+
+export type LearningPath = {
+  id: string;
+  scope: LearningPathScope | string;
+  owner_user_id: number | null;
+  title: string;
+  description: string;
+  subject: string;
+  difficulty_level: string;
+  estimated_duration_minutes: number | null;
+  status: LearningPathStatus | string;
+  allowed_file_ids: number[];
+  allowed_tags: string[];
+  modules: LearningModule[];
+  can_edit: boolean;
+  can_delete: boolean;
+  created_at: string;
+  updated_at: string;
+};
+
+export type LearningPathResponse = {
+  paths: LearningPath[];
 };

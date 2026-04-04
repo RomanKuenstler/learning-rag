@@ -1,5 +1,17 @@
 # Changelog
 
+## 2026-04-04 16:30 UTC
+
+- Implemented Step A learning foundation with backend schema, API, and web UI integration.
+- Added `student` role support throughout auth/admin flows and bootstrap role validation.
+- Added learning domain persistence: paths, modules, lessons, and learning-path file/tag scoping tables.
+- Added learning CRUD endpoints with permission enforcement for admin/user/student and global vs user-scoped paths.
+- Added module and lesson ordering support through explicit reorder endpoints.
+- Added chat foundation fields for future learning chats (`chat_type`, `learning_path_id`).
+- Enforced student restrictions for normal chat and GPT usage on both backend and frontend.
+- Added a new Learning navigation entry and a learning-path management page in the web UI.
+- Added focused tests for student restriction API behavior and learning-path endpoint access.
+
 ## 2026-04-04 14:45 UTC
 
 - Implemented Step 13 library ownership and visibility rules across ingestion, retrieval, API, and web UI.

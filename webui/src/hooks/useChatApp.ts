@@ -14,6 +14,9 @@ import type {
   GptUpsert,
   LibraryFile,
   LibraryResponse,
+  LearningLesson,
+  LearningModule,
+  LearningPath,
   Message,
   Personalization,
   PersonalizationUpdate,
@@ -127,6 +130,10 @@ export function useChatApp() {
   const [bootstrapping, setBootstrapping] = useState(false);
   const [chats, setChats] = useState<Chat[]>([]);
   const [gpts, setGpts] = useState<Gpt[]>([]);
+  const [learningPaths, setLearningPaths] = useState<LearningPath[]>([]);
+  const [learningLoading, setLearningLoading] = useState(false);
+  const [learningError, setLearningError] = useState<string | null>(null);
+  const [learningSaving, setLearningSaving] = useState(false);
   const [archivedChats, setArchivedChats] = useState<Chat[]>([]);
   const [messagesByChat, setMessagesByChat] = useState<Record<string, Message[]>>({});
   const [gptChatsById, setGptChatsById] = useState<Record<string, GptChat>>({});
@@ -222,15 +229,18 @@ export function useChatApp() {
     setBootstrapping(true);
     setAppError(null);
     try {
-      const [chatList, archivedList, runtimeSettings, personalizationSettings, gptList] = await Promise.all([
-        apiClient.listChats(),
-        apiClient.listArchivedChats(),
+      const isStudent = session.user.role === "student";
+      const [chatList, archivedList, runtimeSettings, personalizationSettings, gptList, learning] = await Promise.all([
+        isStudent ? Promise.resolve([]) : apiClient.listChats(),
+        isStudent ? Promise.resolve([]) : apiClient.listArchivedChats(),
         apiClient.getSettings(),
         apiClient.getPersonalization(),
-        apiClient.listGpts(),
+        isStudent ? Promise.resolve([]) : apiClient.listGpts(),
+        apiClient.listLearningPaths(),
       ]);
       setChats(sortChats(chatList));
       setGpts(gptList);
+      setLearningPaths(learning.paths);
       setArchivedChats(sortChats(archivedList));
       setSettings(runtimeSettings);
       setSettingsDraft({
@@ -243,7 +253,9 @@ export function useChatApp() {
       setPersonalizationDraft(personalizationSettings);
       setAssistantMode(runtimeSettings.default_assistant_mode);
 
-      if (chatList.length === 0) {
+      if (isStudent) {
+        setActiveChatInternal(null);
+      } else if (chatList.length === 0) {
         const created = await apiClient.createChat();
         setChats([created]);
         setActiveChatInternal(created.id);
@@ -263,6 +275,7 @@ export function useChatApp() {
   function clearAppState() {
     setChats([]);
     setGpts([]);
+    setLearningPaths([]);
     setArchivedChats([]);
     setMessagesByChat({});
     setGptChatsById({});
@@ -369,6 +382,9 @@ export function useChatApp() {
   }
 
   async function createChat() {
+    if (authSession?.user.role === "student") {
+      throw new Error("Students can only use learning mode");
+    }
     setAppError(null);
     const chat = await apiClient.createChat();
     setChats((current) => sortChats([chat, ...current]));
@@ -446,6 +462,10 @@ export function useChatApp() {
   }
 
   async function loadGpts() {
+    if (authSession?.user.role === "student") {
+      setGpts([]);
+      return [];
+    }
     const payload = await apiClient.listGpts();
     setGpts(payload);
     return payload;
@@ -471,6 +491,9 @@ export function useChatApp() {
   }
 
   async function createGpt(payload: GptUpsert) {
+    if (authSession?.user.role === "student") {
+      throw new Error("Students cannot create GPTs");
+    }
     setAppError(null);
     const created = await apiClient.createGpt(payload);
     setGpts((current) => sortGpts([created, ...current]));
@@ -840,11 +863,297 @@ export function useChatApp() {
     }
   }
 
-  async function createAdminUser(payload: { username: string; displayname: string; role: "user" | "admin" }) {
+  async function createAdminUser(payload: { username: string; displayname: string; role: "user" | "admin" | "student" }) {
     setAdminError(null);
     const created = await apiClient.createAdminUser(payload);
     setAdminUsers((current) => [...current, created].sort((left, right) => left.username.localeCompare(right.username)));
     return created;
+  }
+
+  async function loadLearningPaths() {
+    setLearningLoading(true);
+    setLearningError(null);
+    try {
+      const payload = await apiClient.listLearningPaths();
+      setLearningPaths(payload.paths);
+      return payload.paths;
+    } catch (error) {
+      setLearningError(error instanceof Error ? error.message : "Failed to load learning paths");
+      return [];
+    } finally {
+      setLearningLoading(false);
+    }
+  }
+
+  async function createLearningPath(payload: {
+    scope: "global" | "user";
+    title: string;
+    description: string;
+    subject: string;
+    difficulty_level: string;
+    estimated_duration_minutes: number | null;
+    status: "draft" | "published" | "archived";
+    allowed_file_ids: number[];
+    allowed_tags: string[];
+  }) {
+    setLearningSaving(true);
+    setLearningError(null);
+    try {
+      const created = await apiClient.createLearningPath(payload);
+      setLearningPaths((current) => [created, ...current.filter((entry) => entry.id !== created.id)]);
+      return created;
+    } catch (error) {
+      setLearningError(error instanceof Error ? error.message : "Failed to create learning path");
+      throw error;
+    } finally {
+      setLearningSaving(false);
+    }
+  }
+
+  async function updateLearningPath(
+    pathId: string,
+    payload: Partial<{
+      title: string;
+      description: string;
+      subject: string;
+      difficulty_level: string;
+      estimated_duration_minutes: number | null;
+      status: "draft" | "published" | "archived";
+      allowed_file_ids: number[];
+      allowed_tags: string[];
+    }>,
+  ) {
+    setLearningSaving(true);
+    setLearningError(null);
+    try {
+      const updated = await apiClient.updateLearningPath(pathId, payload);
+      setLearningPaths((current) => current.map((entry) => (entry.id === pathId ? updated : entry)));
+      return updated;
+    } catch (error) {
+      setLearningError(error instanceof Error ? error.message : "Failed to update learning path");
+      throw error;
+    } finally {
+      setLearningSaving(false);
+    }
+  }
+
+  async function deleteLearningPath(pathId: string) {
+    setLearningSaving(true);
+    setLearningError(null);
+    try {
+      await apiClient.deleteLearningPath(pathId);
+      setLearningPaths((current) => current.filter((entry) => entry.id !== pathId));
+    } catch (error) {
+      setLearningError(error instanceof Error ? error.message : "Failed to delete learning path");
+      throw error;
+    } finally {
+      setLearningSaving(false);
+    }
+  }
+
+  async function createLearningModule(pathId: string, payload: { title: string; description: string; learning_objectives: string[] }) {
+    setLearningSaving(true);
+    setLearningError(null);
+    try {
+      const module = await apiClient.createLearningModule(pathId, payload);
+      setLearningPaths((current) =>
+        current.map((entry) =>
+          entry.id === pathId
+            ? { ...entry, modules: [...entry.modules, module].sort((a, b) => a.order_index - b.order_index) }
+            : entry,
+        ),
+      );
+      return module;
+    } catch (error) {
+      setLearningError(error instanceof Error ? error.message : "Failed to create module");
+      throw error;
+    } finally {
+      setLearningSaving(false);
+    }
+  }
+
+  async function updateLearningModule(
+    pathId: string,
+    moduleId: string,
+    payload: Partial<{ title: string; description: string; learning_objectives: string[] }>,
+  ) {
+    setLearningSaving(true);
+    setLearningError(null);
+    try {
+      const updated = await apiClient.updateLearningModule(moduleId, payload);
+      setLearningPaths((current) =>
+        current.map((entry) =>
+          entry.id === pathId
+            ? { ...entry, modules: entry.modules.map((module) => (module.id === moduleId ? updated : module)) }
+            : entry,
+        ),
+      );
+      return updated;
+    } catch (error) {
+      setLearningError(error instanceof Error ? error.message : "Failed to update module");
+      throw error;
+    } finally {
+      setLearningSaving(false);
+    }
+  }
+
+  async function deleteLearningModule(pathId: string, moduleId: string) {
+    setLearningSaving(true);
+    setLearningError(null);
+    try {
+      await apiClient.deleteLearningModule(moduleId);
+      setLearningPaths((current) =>
+        current.map((entry) =>
+          entry.id === pathId ? { ...entry, modules: entry.modules.filter((module) => module.id !== moduleId) } : entry,
+        ),
+      );
+    } catch (error) {
+      setLearningError(error instanceof Error ? error.message : "Failed to delete module");
+      throw error;
+    } finally {
+      setLearningSaving(false);
+    }
+  }
+
+  async function reorderLearningModules(pathId: string, modules: LearningModule[]) {
+    setLearningSaving(true);
+    setLearningError(null);
+    try {
+      const reordered = await apiClient.reorderLearningModules(
+        pathId,
+        modules.map((module, index) => ({ id: module.id, order_index: index })),
+      );
+      setLearningPaths((current) =>
+        current.map((entry) => (entry.id === pathId ? { ...entry, modules: reordered } : entry)),
+      );
+      return reordered;
+    } catch (error) {
+      setLearningError(error instanceof Error ? error.message : "Failed to reorder modules");
+      throw error;
+    } finally {
+      setLearningSaving(false);
+    }
+  }
+
+  async function createLearningLesson(
+    pathId: string,
+    moduleId: string,
+    payload: { title: string; description: string; objectives: string[]; teaching_notes: string },
+  ) {
+    setLearningSaving(true);
+    setLearningError(null);
+    try {
+      const lesson = await apiClient.createLearningLesson(moduleId, payload);
+      setLearningPaths((current) =>
+        current.map((entry) =>
+          entry.id === pathId
+            ? {
+                ...entry,
+                modules: entry.modules.map((module) =>
+                  module.id === moduleId
+                    ? { ...module, lessons: [...module.lessons, lesson].sort((a, b) => a.order_index - b.order_index) }
+                    : module,
+                ),
+              }
+            : entry,
+        ),
+      );
+      return lesson;
+    } catch (error) {
+      setLearningError(error instanceof Error ? error.message : "Failed to create lesson");
+      throw error;
+    } finally {
+      setLearningSaving(false);
+    }
+  }
+
+  async function updateLearningLesson(
+    pathId: string,
+    moduleId: string,
+    lessonId: string,
+    payload: Partial<{ title: string; description: string; objectives: string[]; teaching_notes: string }>,
+  ) {
+    setLearningSaving(true);
+    setLearningError(null);
+    try {
+      const updated = await apiClient.updateLearningLesson(lessonId, payload);
+      setLearningPaths((current) =>
+        current.map((entry) =>
+          entry.id === pathId
+            ? {
+                ...entry,
+                modules: entry.modules.map((module) =>
+                  module.id === moduleId
+                    ? { ...module, lessons: module.lessons.map((lesson) => (lesson.id === lessonId ? updated : lesson)) }
+                    : module,
+                ),
+              }
+            : entry,
+        ),
+      );
+      return updated;
+    } catch (error) {
+      setLearningError(error instanceof Error ? error.message : "Failed to update lesson");
+      throw error;
+    } finally {
+      setLearningSaving(false);
+    }
+  }
+
+  async function deleteLearningLesson(pathId: string, moduleId: string, lessonId: string) {
+    setLearningSaving(true);
+    setLearningError(null);
+    try {
+      await apiClient.deleteLearningLesson(lessonId);
+      setLearningPaths((current) =>
+        current.map((entry) =>
+          entry.id === pathId
+            ? {
+                ...entry,
+                modules: entry.modules.map((module) =>
+                  module.id === moduleId
+                    ? { ...module, lessons: module.lessons.filter((lesson) => lesson.id !== lessonId) }
+                    : module,
+                ),
+              }
+            : entry,
+        ),
+      );
+    } catch (error) {
+      setLearningError(error instanceof Error ? error.message : "Failed to delete lesson");
+      throw error;
+    } finally {
+      setLearningSaving(false);
+    }
+  }
+
+  async function reorderLearningLessons(pathId: string, moduleId: string, lessons: LearningLesson[]) {
+    setLearningSaving(true);
+    setLearningError(null);
+    try {
+      const reordered = await apiClient.reorderLearningLessons(
+        moduleId,
+        lessons.map((lesson, index) => ({ id: lesson.id, order_index: index })),
+      );
+      setLearningPaths((current) =>
+        current.map((entry) =>
+          entry.id === pathId
+            ? {
+                ...entry,
+                modules: entry.modules.map((module) =>
+                  module.id === moduleId ? { ...module, lessons: reordered } : module,
+                ),
+              }
+            : entry,
+        ),
+      );
+      return reordered;
+    } catch (error) {
+      setLearningError(error instanceof Error ? error.message : "Failed to reorder lessons");
+      throw error;
+    } finally {
+      setLearningSaving(false);
+    }
   }
 
   async function updateAdminUser(userId: number, payload: Partial<Pick<AdminUser, "displayname" | "role" | "status" | "force_password_change">>) {
@@ -1012,6 +1321,10 @@ export function useChatApp() {
   }
 
   const activeMessages = useMemo(() => (activeChatId ? messagesByChat[activeChatId] ?? [] : []), [activeChatId, messagesByChat]);
+  const isStudent = authSession?.user.role === "student";
+  const canUseStandardChat = !isStudent;
+  const canUseGpts = !isStudent;
+  const canAuthorLearningPaths = authSession?.user.role === "admin" || authSession?.user.role === "user";
 
   return {
     authReady,
@@ -1036,6 +1349,10 @@ export function useChatApp() {
     bootstrapping,
     chats,
     gpts,
+    learningPaths,
+    learningLoading,
+    learningError,
+    learningSaving,
     archivedChats,
     gptChatsById,
     activeChatId,
@@ -1069,6 +1386,10 @@ export function useChatApp() {
     filterLoading,
     filterError,
     filterBusyKeys,
+    isStudent,
+    canUseStandardChat,
+    canUseGpts,
+    canAuthorLearningPaths,
     setAssistantMode,
     ensureChatLoaded,
     createChat,
@@ -1099,6 +1420,18 @@ export function useChatApp() {
     toggleChatFileFilter,
     toggleGlobalTagFilter,
     toggleChatTagFilter,
+    loadLearningPaths,
+    createLearningPath,
+    updateLearningPath,
+    deleteLearningPath,
+    createLearningModule,
+    updateLearningModule,
+    deleteLearningModule,
+    reorderLearningModules,
+    createLearningLesson,
+    updateLearningLesson,
+    deleteLearningLesson,
+    reorderLearningLessons,
     loadLibrary,
     setLibraryIncludeOtherUsers,
     toggleLibraryFile,

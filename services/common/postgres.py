@@ -20,6 +20,11 @@ from services.common.models import (
     FileRecord,
     GPTChatSession,
     GPTRecord,
+    LearningLesson,
+    LearningModule,
+    LearningPath,
+    LearningPathAllowedFile,
+    LearningPathAllowedTag,
     MessageAttachment,
     RetrievalLog,
     SettingRecord,
@@ -1049,6 +1054,207 @@ class PostgresClient:
                 .where(UserSessionRecord.user_id == user_id, UserSessionRecord.revoked_at.is_(None))
                 .values(revoked_at=revoked_at, updated_at=revoked_at)
             )
+
+    def list_learning_paths(self, *, user_id: int, role: str) -> list[LearningPath]:
+        with self.session() as session:
+            query = select(LearningPath).order_by(LearningPath.updated_at.desc(), LearningPath.created_at.desc())
+            if role == "admin":
+                rows = session.scalars(query)
+                return list(rows)
+            rows = session.scalars(
+                query.where(
+                    (LearningPath.scope == "global") | (LearningPath.owner_user_id == user_id)
+                )
+            )
+            return list(rows)
+
+    def get_learning_path(self, learning_path_id: str) -> LearningPath | None:
+        with self.session() as session:
+            return session.get(LearningPath, learning_path_id)
+
+    def create_learning_path(self, payload: dict[str, object]) -> LearningPath:
+        with self.session() as session:
+            record = LearningPath(**payload)
+            session.add(record)
+            session.flush()
+            session.refresh(record)
+            return record
+
+    def update_learning_path(self, learning_path_id: str, fields: dict[str, object]) -> LearningPath | None:
+        with self.session() as session:
+            record = session.get(LearningPath, learning_path_id)
+            if record is None:
+                return None
+            for key, value in fields.items():
+                setattr(record, key, value)
+            record.updated_at = datetime.now(timezone.utc)
+            session.flush()
+            session.refresh(record)
+            return record
+
+    def delete_learning_path(self, learning_path_id: str) -> LearningPath | None:
+        with self.session() as session:
+            record = session.get(LearningPath, learning_path_id)
+            if record is None:
+                return None
+            session.delete(record)
+            return record
+
+    def list_learning_modules(self, learning_path_id: str) -> list[LearningModule]:
+        with self.session() as session:
+            rows = session.scalars(
+                select(LearningModule)
+                .where(LearningModule.learning_path_id == learning_path_id)
+                .order_by(LearningModule.order_index.asc(), LearningModule.created_at.asc())
+            )
+            return list(rows)
+
+    def get_learning_module(self, module_id: str) -> LearningModule | None:
+        with self.session() as session:
+            return session.get(LearningModule, module_id)
+
+    def create_learning_module(self, payload: dict[str, object]) -> LearningModule:
+        with self.session() as session:
+            record = LearningModule(**payload)
+            session.add(record)
+            session.flush()
+            session.refresh(record)
+            return record
+
+    def update_learning_module(self, module_id: str, fields: dict[str, object]) -> LearningModule | None:
+        with self.session() as session:
+            record = session.get(LearningModule, module_id)
+            if record is None:
+                return None
+            for key, value in fields.items():
+                setattr(record, key, value)
+            record.updated_at = datetime.now(timezone.utc)
+            session.flush()
+            session.refresh(record)
+            return record
+
+    def delete_learning_module(self, module_id: str) -> LearningModule | None:
+        with self.session() as session:
+            record = session.get(LearningModule, module_id)
+            if record is None:
+                return None
+            session.delete(record)
+            return record
+
+    def reorder_learning_modules(self, learning_path_id: str, module_orders: list[tuple[str, int]]) -> list[LearningModule]:
+        with self.session() as session:
+            modules = list(
+                session.scalars(
+                    select(LearningModule).where(LearningModule.learning_path_id == learning_path_id)
+                )
+            )
+            order_map = {module_id: order_index for module_id, order_index in module_orders}
+            for module in modules:
+                if module.id in order_map:
+                    module.order_index = order_map[module.id]
+                    module.updated_at = datetime.now(timezone.utc)
+            session.flush()
+            rows = session.scalars(
+                select(LearningModule)
+                .where(LearningModule.learning_path_id == learning_path_id)
+                .order_by(LearningModule.order_index.asc(), LearningModule.created_at.asc())
+            )
+            return list(rows)
+
+    def list_learning_lessons(self, module_id: str) -> list[LearningLesson]:
+        with self.session() as session:
+            rows = session.scalars(
+                select(LearningLesson)
+                .where(LearningLesson.module_id == module_id)
+                .order_by(LearningLesson.order_index.asc(), LearningLesson.created_at.asc())
+            )
+            return list(rows)
+
+    def get_learning_lesson(self, lesson_id: str) -> LearningLesson | None:
+        with self.session() as session:
+            return session.get(LearningLesson, lesson_id)
+
+    def create_learning_lesson(self, payload: dict[str, object]) -> LearningLesson:
+        with self.session() as session:
+            record = LearningLesson(**payload)
+            session.add(record)
+            session.flush()
+            session.refresh(record)
+            return record
+
+    def update_learning_lesson(self, lesson_id: str, fields: dict[str, object]) -> LearningLesson | None:
+        with self.session() as session:
+            record = session.get(LearningLesson, lesson_id)
+            if record is None:
+                return None
+            for key, value in fields.items():
+                setattr(record, key, value)
+            record.updated_at = datetime.now(timezone.utc)
+            session.flush()
+            session.refresh(record)
+            return record
+
+    def delete_learning_lesson(self, lesson_id: str) -> LearningLesson | None:
+        with self.session() as session:
+            record = session.get(LearningLesson, lesson_id)
+            if record is None:
+                return None
+            session.delete(record)
+            return record
+
+    def reorder_learning_lessons(self, module_id: str, lesson_orders: list[tuple[str, int]]) -> list[LearningLesson]:
+        with self.session() as session:
+            lessons = list(
+                session.scalars(select(LearningLesson).where(LearningLesson.module_id == module_id))
+            )
+            order_map = {lesson_id: order_index for lesson_id, order_index in lesson_orders}
+            for lesson in lessons:
+                if lesson.id in order_map:
+                    lesson.order_index = order_map[lesson.id]
+                    lesson.updated_at = datetime.now(timezone.utc)
+            session.flush()
+            rows = session.scalars(
+                select(LearningLesson)
+                .where(LearningLesson.module_id == module_id)
+                .order_by(LearningLesson.order_index.asc(), LearningLesson.created_at.asc())
+            )
+            return list(rows)
+
+    def replace_learning_path_allowed_files(self, learning_path_id: str, file_ids: list[int]) -> None:
+        deduped = sorted(set(int(file_id) for file_id in file_ids))
+        with self.session() as session:
+            session.execute(
+                delete(LearningPathAllowedFile).where(LearningPathAllowedFile.learning_path_id == learning_path_id)
+            )
+            for file_id in deduped:
+                session.add(LearningPathAllowedFile(learning_path_id=learning_path_id, file_id=file_id))
+
+    def replace_learning_path_allowed_tags(self, learning_path_id: str, tags: list[str]) -> None:
+        normalized_tags = sorted({str(tag).strip().lower() for tag in tags if str(tag).strip()})
+        with self.session() as session:
+            session.execute(
+                delete(LearningPathAllowedTag).where(LearningPathAllowedTag.learning_path_id == learning_path_id)
+            )
+            for tag in normalized_tags:
+                session.add(LearningPathAllowedTag(learning_path_id=learning_path_id, tag=tag))
+
+    def list_learning_path_allowed_files(self, learning_path_id: str) -> list[LearningPathAllowedFile]:
+        with self.session() as session:
+            rows = session.scalars(
+                select(LearningPathAllowedFile)
+                .where(LearningPathAllowedFile.learning_path_id == learning_path_id)
+                .order_by(LearningPathAllowedFile.file_id.asc())
+            )
+            return list(rows)
+
+    def list_learning_path_allowed_tags(self, learning_path_id: str) -> list[LearningPathAllowedTag]:
+        with self.session() as session:
+            rows = session.scalars(
+                select(LearningPathAllowedTag)
+                .where(LearningPathAllowedTag.learning_path_id == learning_path_id)
+                .order_by(LearningPathAllowedTag.tag.asc())
+            )
+            return list(rows)
 
     def _default_user_file_enabled(self, record: FileRecord, *, user_id: int) -> bool:
         if record.is_global:

@@ -6,7 +6,7 @@ from dataclasses import dataclass
 from pathlib import Path
 
 from services.common.config import Settings
-from services.common.models import UserAccount
+from services.common.models import LearningLesson, LearningModule, LearningPath, UserAccount
 from services.embedder.chunking import Chunker
 from services.embedder.embedding import EmbeddingClient
 from services.embedder.postgres_client import EmbedderPostgresClient
@@ -38,6 +38,20 @@ from services.retriever.schemas.chat import (
     SettingsRead,
     SettingsUpdateRequest,
 )
+from services.retriever.schemas.learning import (
+    LearningLessonCreateRequest,
+    LearningLessonRead,
+    LearningLessonUpdateRequest,
+    LearningLessonReorderRequest,
+    LearningModuleCreateRequest,
+    LearningModuleRead,
+    LearningModuleReorderRequest,
+    LearningModuleUpdateRequest,
+    LearningPathCreateRequest,
+    LearningPathListResponse,
+    LearningPathRead,
+    LearningPathUpdateRequest,
+)
 from services.retriever.services.chat_naming import generate_chat_name
 from services.retriever.services.library_manager import LibraryManager, UploadFilePayload
 from services.retriever.services.message_mapper import map_attachment, map_chat, map_filter_file, map_filter_tag, map_gpt, map_message, map_source
@@ -67,6 +81,7 @@ GPT_PERSONALIZATION_DEFAULTS = {
     "enthusiastic": "default",
     "headers_and_lists": "default",
 }
+SUPPORTED_ROLES = {"admin", "user", "student"}
 logger = logging.getLogger(__name__)
 
 
@@ -126,13 +141,21 @@ class RetrieverAppService:
     def create_admin_user(self, auth: AuthContext, *, username: str, displayname: str, role: str) -> AdminUserRead:
         assert self.auth_manager is not None
         self.auth_manager.require_admin(auth)
-        return self.auth_manager.create_user(username=username, displayname=displayname, role=role)
+        normalized_role = role.strip().lower()
+        if normalized_role not in SUPPORTED_ROLES:
+            raise ValueError("Unsupported role")
+        return self.auth_manager.create_user(username=username, displayname=displayname, role=normalized_role)
 
     def update_admin_user(self, auth: AuthContext, user_id: int, **fields: object) -> AdminUserRead | None:
         assert self.auth_manager is not None
         self.auth_manager.require_admin(auth)
         if auth.user.id == user_id and fields.get("status") == "inactive":
             raise ValueError("Admin cannot deactivate own account")
+        if "role" in fields and fields["role"] is not None:
+            normalized_role = str(fields["role"]).strip().lower()
+            if normalized_role not in SUPPORTED_ROLES:
+                raise ValueError("Unsupported role")
+            fields["role"] = normalized_role
         return self.auth_manager.update_user(user_id, **fields)
 
     def delete_admin_user(self, auth: AuthContext, user_id: int) -> AdminUserRead | None:
@@ -141,22 +164,27 @@ class RetrieverAppService:
         return self.auth_manager.delete_user(actor=auth, user_id=user_id)
 
     def create_chat(self, user: UserAccount):
+        self._ensure_student_cannot_use_standard_chat(user)
         chat = self.chat_repository.create_chat(user.id, generate_chat_name())
         return map_chat(chat)
 
     def list_chats(self, user: UserAccount):
+        self._ensure_student_cannot_use_standard_chat(user)
         return [map_chat(chat) for chat in self.chat_repository.list_chats(user.id, archived=False)]
 
     def list_archived_chats(self, user: UserAccount):
+        self._ensure_student_cannot_use_standard_chat(user)
         return [map_chat(chat) for chat in self.chat_repository.list_chats(user.id, archived=True)]
 
     def get_chat(self, user: UserAccount, chat_id: str):
+        self._ensure_student_cannot_use_standard_chat(user)
         chat = self.chat_repository.get_chat(user.id, chat_id)
         if chat is None:
             return None
         return map_chat(chat)
 
     def get_chat_messages(self, user: UserAccount, chat_id: str):
+        self._ensure_student_cannot_use_standard_chat(user)
         messages = self.chat_repository.list_messages(user.id, chat_id)
         assistant_ids = [message.id for message in messages if message.role == "assistant"]
         message_ids = [message.id for message in messages]
@@ -170,6 +198,7 @@ class RetrieverAppService:
         ]
 
     def rename_chat(self, user: UserAccount, chat_id: str, chat_name: str):
+        self._ensure_student_cannot_use_standard_chat(user)
         normalized_name = chat_name.strip()
         if not normalized_name:
             raise ValueError("Chat name cannot be empty")
@@ -179,24 +208,28 @@ class RetrieverAppService:
         return map_chat(chat)
 
     def delete_chat(self, user: UserAccount, chat_id: str):
+        self._ensure_student_cannot_use_standard_chat(user)
         chat = self.chat_repository.delete_chat(user.id, chat_id)
         if chat is None:
             return None
         return map_chat(chat)
 
     def archive_chat(self, user: UserAccount, chat_id: str):
+        self._ensure_student_cannot_use_standard_chat(user)
         chat = self.chat_repository.set_chat_archived(user.id, chat_id, True)
         if chat is None:
             return None
         return map_chat(chat)
 
     def unarchive_chat(self, user: UserAccount, chat_id: str):
+        self._ensure_student_cannot_use_standard_chat(user)
         chat = self.chat_repository.set_chat_archived(user.id, chat_id, False)
         if chat is None:
             return None
         return map_chat(chat)
 
     def download_chat(self, user: UserAccount, chat_id: str):
+        self._ensure_student_cannot_use_standard_chat(user)
         chat = self.chat_repository.get_chat(user.id, chat_id)
         if chat is None:
             return None
@@ -226,6 +259,7 @@ class RetrieverAppService:
         )
 
     def list_gpts(self, user: UserAccount) -> list[GptRead]:
+        self._ensure_student_cannot_use_gpts(user)
         records = self.chat_repository.list_gpts(user.id)
         result: list[GptRead] = []
         for record in records:
@@ -234,6 +268,7 @@ class RetrieverAppService:
         return result
 
     def get_gpt(self, user: UserAccount, gpt_id: str) -> GptRead | None:
+        self._ensure_student_cannot_use_gpts(user)
         record = self.chat_repository.get_gpt(user.id, gpt_id)
         if record is None:
             return None
@@ -241,11 +276,13 @@ class RetrieverAppService:
         return map_gpt(record, chat_id=chat.id if chat else None)
 
     def create_gpt(self, user: UserAccount, payload: GptCreateRequest) -> GptRead:
+        self._ensure_student_cannot_use_gpts(user)
         persisted = self.chat_repository.create_gpt(user.id, self._build_gpt_payload(payload))
         chat = self.chat_repository.ensure_gpt_chat(persisted.id)
         return map_gpt(persisted, chat_id=chat.id)
 
     def update_gpt(self, user: UserAccount, gpt_id: str, payload: GptUpdateRequest) -> GptRead | None:
+        self._ensure_student_cannot_use_gpts(user)
         fields = self._build_gpt_update_fields(payload)
         record = self.chat_repository.update_gpt(user.id, gpt_id, fields)
         if record is None:
@@ -254,12 +291,14 @@ class RetrieverAppService:
         return map_gpt(record, chat_id=chat.id)
 
     def delete_gpt(self, user: UserAccount, gpt_id: str) -> GptDeleteResponse | None:
+        self._ensure_student_cannot_use_gpts(user)
         record = self.chat_repository.delete_gpt(user.id, gpt_id)
         if record is None:
             return None
         return GptDeleteResponse(id=record.id, deleted=True)
 
     def get_gpt_chat(self, user: UserAccount, gpt_id: str) -> GptChatRead | None:
+        self._ensure_student_cannot_use_gpts(user)
         gpt = self.chat_repository.get_gpt(user.id, gpt_id)
         if gpt is None:
             return None
@@ -280,6 +319,7 @@ class RetrieverAppService:
         )
 
     def clear_gpt_chat(self, user: UserAccount, gpt_id: str) -> GptChatRead | None:
+        self._ensure_student_cannot_use_gpts(user)
         gpt = self.chat_repository.get_gpt(user.id, gpt_id)
         if gpt is None:
             return None
@@ -289,6 +329,7 @@ class RetrieverAppService:
         return GptChatRead(gpt=map_gpt(gpt, chat_id=chat.id), messages=[])
 
     def download_gpt_chat(self, user: UserAccount, gpt_id: str) -> ChatDownloadResponse | None:
+        self._ensure_student_cannot_use_gpts(user)
         payload = self.get_gpt_chat(user, gpt_id)
         if payload is None or payload.gpt.chat_id is None:
             return None
@@ -311,6 +352,7 @@ class RetrieverAppService:
         )
 
     def preview_gpt_message(self, user: UserAccount, payload: GptPreviewMessageCreateRequest) -> dict[str, object]:
+        self._ensure_student_cannot_use_gpts(user)
         self._validate_gpt_request(payload.gpt)
         gpt_payload = payload.gpt
         gpt_config = self._extract_gpt_runtime_config(gpt_payload.config)
@@ -497,6 +539,249 @@ class RetrieverAppService:
             self.chat_repository.upsert_setting(user.id, key, json.dumps(str(value).strip()))
         return self.get_personalization(user)
 
+    def list_learning_paths(self, user: UserAccount) -> LearningPathListResponse:
+        paths = self.chat_repository.list_learning_paths(user_id=user.id, role=user.role)
+        return LearningPathListResponse(paths=[self._build_learning_path_read(user, path) for path in paths])
+
+    def create_learning_path(self, user: UserAccount, payload: LearningPathCreateRequest) -> LearningPathRead:
+        self._ensure_learning_path_create_allowed(user, payload.scope)
+        normalized_tags = self._normalize_tags(payload.allowed_tags)
+        record = self.chat_repository.create_learning_path(
+            {
+                "scope": payload.scope,
+                "owner_user_id": None if payload.scope == "global" else user.id,
+                "title": payload.title.strip(),
+                "description": payload.description.strip(),
+                "subject": payload.subject.strip(),
+                "difficulty_level": payload.difficulty_level.strip(),
+                "estimated_duration_minutes": payload.estimated_duration_minutes,
+                "status": payload.status,
+            }
+        )
+        self.chat_repository.replace_learning_path_allowed_files(record.id, payload.allowed_file_ids)
+        self.chat_repository.replace_learning_path_allowed_tags(record.id, normalized_tags)
+        refreshed = self.chat_repository.get_learning_path(record.id)
+        assert refreshed is not None
+        return self._build_learning_path_read(user, refreshed)
+
+    def get_learning_path(self, user: UserAccount, learning_path_id: str) -> LearningPathRead | None:
+        record = self.chat_repository.get_learning_path(learning_path_id)
+        if record is None or not self._can_view_learning_path(user, record):
+            return None
+        return self._build_learning_path_read(user, record)
+
+    def update_learning_path(
+        self,
+        user: UserAccount,
+        learning_path_id: str,
+        payload: LearningPathUpdateRequest,
+    ) -> LearningPathRead | None:
+        record = self.chat_repository.get_learning_path(learning_path_id)
+        if record is None:
+            return None
+        self._ensure_learning_path_edit_allowed(user, record)
+        fields = payload.model_dump(exclude_unset=True)
+        if "title" in fields and isinstance(fields["title"], str):
+            fields["title"] = fields["title"].strip()
+        if "description" in fields and isinstance(fields["description"], str):
+            fields["description"] = fields["description"].strip()
+        if "subject" in fields and isinstance(fields["subject"], str):
+            fields["subject"] = fields["subject"].strip()
+        if "difficulty_level" in fields and isinstance(fields["difficulty_level"], str):
+            fields["difficulty_level"] = fields["difficulty_level"].strip()
+        fields.pop("allowed_file_ids", None)
+        fields.pop("allowed_tags", None)
+        updated = self.chat_repository.update_learning_path(learning_path_id, fields)
+        if updated is None:
+            return None
+        if payload.allowed_file_ids is not None:
+            self.chat_repository.replace_learning_path_allowed_files(updated.id, payload.allowed_file_ids)
+        if payload.allowed_tags is not None:
+            self.chat_repository.replace_learning_path_allowed_tags(updated.id, self._normalize_tags(payload.allowed_tags))
+        refreshed = self.chat_repository.get_learning_path(updated.id)
+        assert refreshed is not None
+        return self._build_learning_path_read(user, refreshed)
+
+    def delete_learning_path(self, user: UserAccount, learning_path_id: str) -> LearningPathRead | None:
+        record = self.chat_repository.get_learning_path(learning_path_id)
+        if record is None:
+            return None
+        self._ensure_learning_path_edit_allowed(user, record, deleting=True)
+        deleted = self.chat_repository.delete_learning_path(learning_path_id)
+        if deleted is None:
+            return None
+        return self._build_learning_path_read(user, deleted)
+
+    def create_learning_module(
+        self,
+        user: UserAccount,
+        learning_path_id: str,
+        payload: LearningModuleCreateRequest,
+    ) -> LearningModuleRead | None:
+        learning_path = self.chat_repository.get_learning_path(learning_path_id)
+        if learning_path is None:
+            return None
+        self._ensure_learning_path_edit_allowed(user, learning_path)
+        existing = self.chat_repository.list_learning_modules(learning_path_id)
+        module = self.chat_repository.create_learning_module(
+            {
+                "learning_path_id": learning_path_id,
+                "order_index": len(existing),
+                "title": payload.title.strip(),
+                "description": payload.description.strip(),
+                "learning_objectives": [item.strip() for item in payload.learning_objectives if item.strip()],
+            }
+        )
+        return self._build_learning_module_read(module, lessons=[])
+
+    def update_learning_module(
+        self,
+        user: UserAccount,
+        module_id: str,
+        payload: LearningModuleUpdateRequest,
+    ) -> LearningModuleRead | None:
+        module = self.chat_repository.get_learning_module(module_id)
+        if module is None:
+            return None
+        learning_path = self.chat_repository.get_learning_path(module.learning_path_id)
+        if learning_path is None:
+            return None
+        self._ensure_learning_path_edit_allowed(user, learning_path)
+        fields = payload.model_dump(exclude_unset=True)
+        if "title" in fields and isinstance(fields["title"], str):
+            fields["title"] = fields["title"].strip()
+        if "description" in fields and isinstance(fields["description"], str):
+            fields["description"] = fields["description"].strip()
+        if "learning_objectives" in fields and fields["learning_objectives"] is not None:
+            fields["learning_objectives"] = [
+                item.strip() for item in list(fields["learning_objectives"]) if str(item).strip()
+            ]
+        updated = self.chat_repository.update_learning_module(module_id, fields)
+        if updated is None:
+            return None
+        lessons = self.chat_repository.list_learning_lessons(updated.id)
+        return self._build_learning_module_read(updated, lessons=lessons)
+
+    def delete_learning_module(self, user: UserAccount, module_id: str) -> LearningModuleRead | None:
+        module = self.chat_repository.get_learning_module(module_id)
+        if module is None:
+            return None
+        learning_path = self.chat_repository.get_learning_path(module.learning_path_id)
+        if learning_path is None:
+            return None
+        self._ensure_learning_path_edit_allowed(user, learning_path)
+        deleted = self.chat_repository.delete_learning_module(module_id)
+        if deleted is None:
+            return None
+        return self._build_learning_module_read(deleted, lessons=[])
+
+    def reorder_learning_modules(
+        self,
+        user: UserAccount,
+        learning_path_id: str,
+        payload: LearningModuleReorderRequest,
+    ) -> list[LearningModuleRead] | None:
+        learning_path = self.chat_repository.get_learning_path(learning_path_id)
+        if learning_path is None:
+            return None
+        self._ensure_learning_path_edit_allowed(user, learning_path)
+        module_orders = [(item.id, item.order_index) for item in payload.modules]
+        modules = self.chat_repository.reorder_learning_modules(learning_path_id, module_orders)
+        lessons_by_module = {
+            module.id: self.chat_repository.list_learning_lessons(module.id)
+            for module in modules
+        }
+        return [self._build_learning_module_read(module, lessons=lessons_by_module.get(module.id, [])) for module in modules]
+
+    def create_learning_lesson(
+        self,
+        user: UserAccount,
+        module_id: str,
+        payload: LearningLessonCreateRequest,
+    ) -> LearningLessonRead | None:
+        module = self.chat_repository.get_learning_module(module_id)
+        if module is None:
+            return None
+        learning_path = self.chat_repository.get_learning_path(module.learning_path_id)
+        if learning_path is None:
+            return None
+        self._ensure_learning_path_edit_allowed(user, learning_path)
+        existing = self.chat_repository.list_learning_lessons(module_id)
+        lesson = self.chat_repository.create_learning_lesson(
+            {
+                "module_id": module_id,
+                "order_index": len(existing),
+                "title": payload.title.strip(),
+                "description": payload.description.strip(),
+                "objectives": [item.strip() for item in payload.objectives if item.strip()],
+                "teaching_notes": payload.teaching_notes.strip(),
+            }
+        )
+        return self._build_learning_lesson_read(lesson)
+
+    def update_learning_lesson(
+        self,
+        user: UserAccount,
+        lesson_id: str,
+        payload: LearningLessonUpdateRequest,
+    ) -> LearningLessonRead | None:
+        lesson = self.chat_repository.get_learning_lesson(lesson_id)
+        if lesson is None:
+            return None
+        module = self.chat_repository.get_learning_module(lesson.module_id)
+        if module is None:
+            return None
+        learning_path = self.chat_repository.get_learning_path(module.learning_path_id)
+        if learning_path is None:
+            return None
+        self._ensure_learning_path_edit_allowed(user, learning_path)
+        fields = payload.model_dump(exclude_unset=True)
+        if "title" in fields and isinstance(fields["title"], str):
+            fields["title"] = fields["title"].strip()
+        if "description" in fields and isinstance(fields["description"], str):
+            fields["description"] = fields["description"].strip()
+        if "teaching_notes" in fields and isinstance(fields["teaching_notes"], str):
+            fields["teaching_notes"] = fields["teaching_notes"].strip()
+        if "objectives" in fields and fields["objectives"] is not None:
+            fields["objectives"] = [item.strip() for item in list(fields["objectives"]) if str(item).strip()]
+        updated = self.chat_repository.update_learning_lesson(lesson_id, fields)
+        if updated is None:
+            return None
+        return self._build_learning_lesson_read(updated)
+
+    def delete_learning_lesson(self, user: UserAccount, lesson_id: str) -> LearningLessonRead | None:
+        lesson = self.chat_repository.get_learning_lesson(lesson_id)
+        if lesson is None:
+            return None
+        module = self.chat_repository.get_learning_module(lesson.module_id)
+        if module is None:
+            return None
+        learning_path = self.chat_repository.get_learning_path(module.learning_path_id)
+        if learning_path is None:
+            return None
+        self._ensure_learning_path_edit_allowed(user, learning_path)
+        deleted = self.chat_repository.delete_learning_lesson(lesson_id)
+        if deleted is None:
+            return None
+        return self._build_learning_lesson_read(deleted)
+
+    def reorder_learning_lessons(
+        self,
+        user: UserAccount,
+        module_id: str,
+        payload: LearningLessonReorderRequest,
+    ) -> list[LearningLessonRead] | None:
+        module = self.chat_repository.get_learning_module(module_id)
+        if module is None:
+            return None
+        learning_path = self.chat_repository.get_learning_path(module.learning_path_id)
+        if learning_path is None:
+            return None
+        self._ensure_learning_path_edit_allowed(user, learning_path)
+        lesson_orders = [(item.id, item.order_index) for item in payload.lessons]
+        lessons = self.chat_repository.reorder_learning_lessons(module_id, lesson_orders)
+        return [self._build_learning_lesson_read(lesson) for lesson in lessons]
+
     def send_message(
         self,
         user: UserAccount | str,
@@ -528,6 +813,7 @@ class RetrieverAppService:
         *,
         attachments: list[tuple[str, bytes]] | None = None,
     ):
+        self._ensure_student_cannot_use_gpts(user)
         gpt = self.chat_repository.get_gpt(user.id, gpt_id)
         if gpt is None:
             return None
@@ -611,6 +897,7 @@ class RetrieverAppService:
         attachments: list[tuple[str, bytes]] | None = None,
         assistant_mode: str | None = None,
     ):
+        self._ensure_student_cannot_use_standard_chat(user)
         chat = self.chat_repository.get_chat(user.id, chat_id)
         if chat is None:
             return None
@@ -886,6 +1173,104 @@ class RetrieverAppService:
                 attachments=attachments,
                 attachment_char_limit=attachment_char_limit,
             )
+        )
+
+    def _normalize_tags(self, tags: list[str]) -> list[str]:
+        return sorted({tag.strip().lower() for tag in tags if tag.strip()})
+
+    def _can_view_learning_path(self, user: UserAccount, path: LearningPath) -> bool:
+        if user.role == "admin":
+            return True
+        if path.scope == "global":
+            return True
+        return path.owner_user_id == user.id
+
+    def _can_edit_learning_path(self, user: UserAccount, path: LearningPath) -> bool:
+        if user.role == "admin":
+            return True
+        if user.role == "student":
+            return False
+        if path.scope == "global":
+            return False
+        return path.owner_user_id == user.id
+
+    def _can_delete_learning_path(self, user: UserAccount, path: LearningPath) -> bool:
+        return self._can_edit_learning_path(user, path)
+
+    def _ensure_learning_path_create_allowed(self, user: UserAccount, scope: str) -> None:
+        if user.role == "student":
+            raise PermissionError("Students cannot create learning paths")
+        if scope == "global" and user.role != "admin":
+            raise PermissionError("Only admins can create global learning paths")
+
+    def _ensure_learning_path_edit_allowed(self, user: UserAccount, path: LearningPath, *, deleting: bool = False) -> None:
+        if deleting and not self._can_delete_learning_path(user, path):
+            raise PermissionError("You do not have permission to delete this learning path")
+        if not deleting and not self._can_edit_learning_path(user, path):
+            raise PermissionError("You do not have permission to edit this learning path")
+
+    def _ensure_student_cannot_use_standard_chat(self, user: UserAccount) -> None:
+        if user.role == "student":
+            raise PermissionError("Students can only use learning mode")
+
+    def _ensure_student_cannot_use_gpts(self, user: UserAccount) -> None:
+        if user.role == "student":
+            raise PermissionError("Students cannot create or use GPTs")
+
+    def _build_learning_lesson_read(self, lesson: LearningLesson) -> LearningLessonRead:
+        return LearningLessonRead(
+            id=lesson.id,
+            module_id=lesson.module_id,
+            order_index=lesson.order_index,
+            title=lesson.title,
+            description=lesson.description or "",
+            objectives=list(lesson.objectives or []),
+            teaching_notes=lesson.teaching_notes or "",
+            created_at=lesson.created_at,
+            updated_at=lesson.updated_at,
+        )
+
+    def _build_learning_module_read(self, module: LearningModule, *, lessons: list[LearningLesson]) -> LearningModuleRead:
+        return LearningModuleRead(
+            id=module.id,
+            learning_path_id=module.learning_path_id,
+            order_index=module.order_index,
+            title=module.title,
+            description=module.description or "",
+            learning_objectives=list(module.learning_objectives or []),
+            lessons=[self._build_learning_lesson_read(lesson) for lesson in lessons],
+            created_at=module.created_at,
+            updated_at=module.updated_at,
+        )
+
+    def _build_learning_path_read(self, user: UserAccount, path: LearningPath) -> LearningPathRead:
+        modules = self.chat_repository.list_learning_modules(path.id)
+        lessons_by_module = {
+            module.id: self.chat_repository.list_learning_lessons(module.id)
+            for module in modules
+        }
+        allowed_files = self.chat_repository.list_learning_path_allowed_files(path.id)
+        allowed_tags = self.chat_repository.list_learning_path_allowed_tags(path.id)
+        return LearningPathRead(
+            id=path.id,
+            scope=path.scope,
+            owner_user_id=path.owner_user_id,
+            title=path.title,
+            description=path.description or "",
+            subject=path.subject or "",
+            difficulty_level=path.difficulty_level or "",
+            estimated_duration_minutes=path.estimated_duration_minutes,
+            status=path.status,
+            allowed_file_ids=[item.file_id for item in allowed_files],
+            allowed_tags=[item.tag for item in allowed_tags],
+            modules=[
+                self._build_learning_module_read(module, lessons=lessons_by_module.get(module.id, []))
+                for module in modules
+            ],
+            can_edit=self._can_edit_learning_path(user, path),
+            can_delete=self._can_delete_learning_path(user, path),
+            created_at=path.created_at,
+            updated_at=path.updated_at,
         )
 
     def _resolve_assistant_mode(self, assistant_mode: str | None) -> str:

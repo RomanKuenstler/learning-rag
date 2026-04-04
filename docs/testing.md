@@ -62,6 +62,14 @@ npm run build
 - library listing support for `include_other_users` query behavior
 - web library switch behavior for showing or hiding other users' files
 
+## Step A Learning Foundation Checks Covered
+
+- role validation accepts `student` in auth/admin-user flows
+- student restrictions block normal chat and GPT endpoints
+- learning-path list and create endpoints with role-aware authorization
+- ordered module and lesson CRUD/reorder endpoint coverage
+- source scoping persistence fields (`allowed_file_ids`, `allowed_tags`)
+
 Recommended focused run:
 
 ```bash

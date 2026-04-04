@@ -23,6 +23,8 @@ def map_chat(chat: ChatSession) -> ChatRead:
     return ChatRead(
         id=chat.id,
         chat_name=chat.chat_name,
+        chat_type=getattr(chat, "chat_type", "normal"),
+        learning_path_id=getattr(chat, "learning_path_id", None),
         gpt_id=getattr(chat, "gpt_id", None),
         is_archived=chat.is_archived,
         created_at=chat.created_at,

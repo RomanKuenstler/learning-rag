@@ -7,6 +7,7 @@ import { Icon } from "../components/common/Icons";
 import { ChatFilterDialog } from "../components/filters/ChatFilterDialog";
 import { AppShell } from "../components/layout/AppShell";
 import { LibraryPage } from "../components/library/LibraryPage";
+import { LearningPathsPage } from "../components/learning/LearningPathsPage";
 import { PreferencesDialog } from "../components/preferences/PreferencesDialog";
 import { Sidebar } from "../components/sidebar/Sidebar";
 import { useChatApp } from "../hooks/useChatApp";
@@ -22,7 +23,15 @@ function AppRoutes() {
   const location = useLocation();
   const currentChatId = location.pathname.startsWith("/chats/") ? location.pathname.split("/")[2] ?? null : null;
   const currentGptId = location.pathname.startsWith("/gpts/") && location.pathname.endsWith("/chat") ? location.pathname.split("/")[2] ?? null : null;
-  const activeView = location.pathname.startsWith("/library") ? "library" : location.pathname.startsWith("/admin") ? "admin" : currentGptId ? "gpt" : "chat";
+  const activeView = location.pathname.startsWith("/learning")
+    ? "learning"
+    : location.pathname.startsWith("/library")
+      ? "library"
+      : location.pathname.startsWith("/admin")
+        ? "admin"
+        : currentGptId
+          ? "gpt"
+          : "chat";
   const activeGptChat = currentGptId ? app.gptChatsById[currentGptId] ?? null : null;
   const [preferencesTab, setPreferencesTab] = useState<PreferencesTab | null>(null);
   const [infoOpen, setInfoOpen] = useState(false);
@@ -36,7 +45,17 @@ function AppRoutes() {
       return;
     }
 
-    const fallbackChatId = app.activeChatId ?? app.chats[0].id;
+    if (app.isStudent) {
+      if (!location.pathname.startsWith("/learning") && !location.pathname.startsWith("/library")) {
+        navigate("/learning", { replace: true });
+      }
+      return;
+    }
+
+    const fallbackChatId = app.activeChatId ?? app.chats[0]?.id;
+    if (!fallbackChatId) {
+      return;
+    }
 
     if (location.pathname === "/" || location.pathname === "/login") {
       navigate(`/chats/${fallbackChatId}`, { replace: true });
@@ -135,8 +154,12 @@ function AppRoutes() {
       activeChatId={currentGptId ?? app.activeChatId}
       activeView={activeView}
       currentUser={app.currentUser}
+      canUseStandardChat={app.canUseStandardChat}
+      canUseGpts={app.canUseGpts}
+      canUseLibrary
       onCreateGpt={handleCreateGpt}
       onCreateChat={() => void handleCreateChat()}
+      onOpenLearning={() => navigate("/learning")}
       onOpenLibrary={() => navigate("/library")}
       onOpenAdmin={() => navigate("/admin")}
       onOpenArchive={() => void openPreferences("archive")}
@@ -197,6 +220,9 @@ function AppRoutes() {
   );
 
   if (isGptEditorRoute) {
+    if (!app.canUseGpts) {
+      return <Navigate to="/learning" replace />;
+    }
     return gptEditorRoutes;
   }
 
@@ -205,9 +231,15 @@ function AppRoutes() {
       <AppShell
         sidebar={sidebar}
         assistantMode={activeGptChat?.gpt.assistant_mode ?? app.assistantMode}
-        availableModes={currentGptId ? [activeGptChat?.gpt.assistant_mode ?? "simple"] : (app.settings?.available_assistant_modes ?? ["simple", "refine", "thinking"])}
-        onAssistantModeChange={currentGptId ? (() => undefined) : app.setAssistantMode}
-        assistantModeLocked={Boolean(currentGptId)}
+        availableModes={
+          currentGptId
+            ? [activeGptChat?.gpt.assistant_mode ?? "simple"]
+            : app.isStudent
+              ? ["simple"]
+              : (app.settings?.available_assistant_modes ?? ["simple", "refine", "thinking"])
+        }
+        onAssistantModeChange={currentGptId || app.isStudent ? (() => undefined) : app.setAssistantMode}
+        assistantModeLocked={Boolean(currentGptId) || app.isStudent}
         headerRight={
           currentGptId ? (
             <div className="header-gpt-badge" aria-label="Active GPT">
@@ -226,8 +258,37 @@ function AppRoutes() {
             <Route
               path="/gpts/:gptId/chat"
               element={
-                <GptChatRoute
-                  app={app}
+                app.canUseGpts ? <GptChatRoute app={app} /> : <Navigate to="/learning" replace />
+              }
+            />
+            <Route
+              path="/learning"
+              element={
+                <LearningPathsPage
+                  role={app.currentUser.role}
+                  paths={app.learningPaths}
+                  libraryFiles={app.library?.files ?? []}
+                  loading={app.learningLoading}
+                  saving={app.learningSaving}
+                  error={app.learningError}
+                  canAuthor={app.canAuthorLearningPaths}
+                  onLoad={async () => {
+                    if (!app.library) {
+                      await app.loadLibrary(false);
+                    }
+                    await app.loadLearningPaths();
+                  }}
+                  onCreatePath={app.createLearningPath}
+                  onUpdatePath={app.updateLearningPath}
+                  onDeletePath={app.deleteLearningPath}
+                  onCreateModule={app.createLearningModule}
+                  onUpdateModule={app.updateLearningModule}
+                  onDeleteModule={app.deleteLearningModule}
+                  onReorderModules={app.reorderLearningModules}
+                  onCreateLesson={app.createLearningLesson}
+                  onUpdateLesson={app.updateLearningLesson}
+                  onDeleteLesson={app.deleteLearningLesson}
+                  onReorderLessons={app.reorderLearningLessons}
                 />
               }
             />
@@ -272,16 +333,20 @@ function AppRoutes() {
             <Route
               path="/chats/:chatId"
               element={
-                <ChatRoute
-                  loading={app.loadingMessages}
-                  error={app.appError}
-                  messages={app.activeMessages}
-                  sending={app.sending}
-                  assistantMode={app.assistantMode}
-                  attachmentRules={app.attachmentRules}
-                  onOpenChat={(chatId) => void app.ensureChatLoaded(chatId)}
-                  onSend={app.sendMessage}
-                />
+                app.canUseStandardChat ? (
+                  <ChatRoute
+                    loading={app.loadingMessages}
+                    error={app.appError}
+                    messages={app.activeMessages}
+                    sending={app.sending}
+                    assistantMode={app.assistantMode}
+                    attachmentRules={app.attachmentRules}
+                    onOpenChat={(chatId) => void app.ensureChatLoaded(chatId)}
+                    onSend={app.sendMessage}
+                  />
+                ) : (
+                  <Navigate to="/learning" replace />
+                )
               }
             />
             <Route path="*" element={<Navigate to="/" replace />} />

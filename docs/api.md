@@ -47,6 +47,10 @@ Clears the persistent GPT chat while keeping the GPT definition intact.
 
 Exports the GPT chat as JSON.
 
+Student restriction:
+
+- `student` role receives `403` for GPT endpoints in Step A.
+
 ## Chats
 
 ### `POST /api/chats`
@@ -105,6 +109,70 @@ JSON request:
   "assistant_mode": "thinking"
 }
 ```
+
+Student restriction:
+
+- `student` role receives `403` for normal chat endpoints in Step A.
+
+## Learning Paths
+
+### `GET /api/learning-paths`
+
+Lists learning paths visible to the authenticated user.
+
+### `POST /api/learning-paths`
+
+Creates a learning path.
+
+Permission rules:
+
+- `admin`: can create `global` and `user` scope.
+- `user`: can create `user` scope only.
+- `student`: `403`.
+
+### `GET /api/learning-paths/{learning_path_id}`
+
+Returns one visible learning path with nested modules and lessons.
+
+### `PATCH /api/learning-paths/{learning_path_id}`
+
+Updates path metadata and source scoping (`allowed_file_ids`, `allowed_tags`).
+
+### `DELETE /api/learning-paths/{learning_path_id}`
+
+Deletes a learning path.
+
+### `POST /api/learning-paths/{learning_path_id}/modules`
+
+Creates a module appended to the end of the path.
+
+### `PATCH /api/learning-paths/{learning_path_id}/modules/reorder`
+
+Reorders modules by explicit `order_index`.
+
+### `PATCH /api/learning-modules/{module_id}`
+
+Updates one module.
+
+### `DELETE /api/learning-modules/{module_id}`
+
+Deletes one module and its lessons.
+
+### `POST /api/learning-modules/{module_id}/lessons`
+
+Creates a lesson appended to the end of the module.
+
+### `PATCH /api/learning-modules/{module_id}/lessons/reorder`
+
+Reorders lessons by explicit `order_index`.
+
+### `PATCH /api/learning-lessons/{lesson_id}`
+
+Updates one lesson.
+
+### `DELETE /api/learning-lessons/{lesson_id}`
+
+Deletes one lesson.
 
 Multipart request:
 

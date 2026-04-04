@@ -41,3 +41,23 @@ Permission enforcement is also server-side:
 - non-admin users cannot disable global files
 - non-admin users cannot delete global files
 - non-admin users cannot delete files owned by other users
+
+## Learning Foundation Model
+
+Step A introduces a dedicated learning domain:
+
+- `learning_paths` with scope (`global` or `user`), status (`draft|published|archived`), and metadata.
+- `learning_modules` ordered per path.
+- `learning_lessons` ordered per module.
+- `learning_path_allowed_files` and `learning_path_allowed_tags` for learning-path source scoping.
+
+Authorization rules:
+
+- admins can create global and user-scoped learning paths and manage any path.
+- users can create and manage only their own user-scoped paths.
+- students are read-only for learning paths in Step A.
+
+Future learning chat support is prepared through:
+
+- `chats.chat_type` (`normal|gpt|learning`)
+- `chats.learning_path_id` nullable foreign key

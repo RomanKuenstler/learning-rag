@@ -24,6 +24,13 @@ docker compose up --build
 
 - web UI: `http://localhost:5173`
 - retriever API: `http://localhost:8000/docs`
+- learning paths page: `http://localhost:5173/learning`
+
+## Step A Learning Setup Notes
+
+- Ensure `users.json` includes valid roles only: `admin`, `user`, `student`.
+- Student accounts are intentionally restricted from normal chat and GPT flows.
+- Learning-path authoring in the UI is available to `admin` and `user` roles.
 
 ## Optional CLI Retriever
 

@@ -3233,7 +3233,7 @@ button.send:hover:not(:disabled) {
     grid-template-columns: minmax(0, 1fr);
   }
 
-  .archive-actions,
+.archive-actions,
   .archive-row-actions {
     flex-wrap: wrap;
   }
@@ -3242,4 +3242,14 @@ button.send:hover:not(:disabled) {
   .filter-library-body {
     min-width: 640px;
   }
+}
+
+.rotate-180 {
+  transform: rotate(180deg);
+}
+
+.side-nav-chat-item small {
+  margin-left: 0.4rem;
+  color: var(--muted);
+  font-size: 0.72rem;
 }
