@@ -195,13 +195,15 @@ export function LibraryPage({
           ) : null}
         </div>
         <div className="library-table-footer">
-          <label className="filter-switch" title="Show files uploaded by other users">
-            <input
-              type="checkbox"
-              checked={showOtherUsers}
-              onChange={(event) => onToggleShowOtherUsers(event.target.checked)}
-            />
-            <span className="filter-switch-slider" />
+          <label className="library-switch-label" title="Show files uploaded by other users">
+            <span className="filter-switch">
+              <input
+                type="checkbox"
+                checked={showOtherUsers}
+                onChange={(event) => onToggleShowOtherUsers(event.target.checked)}
+              />
+              <span className="filter-switch-slider" />
+            </span>
             <span>Show other users' files</span>
           </label>
           <button className="restart-button library-upload-button" type="button" onClick={() => setUploadOpen(true)}>

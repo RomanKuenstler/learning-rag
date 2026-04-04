@@ -1939,6 +1939,14 @@ button.send:hover:not(:disabled) {
   font-size: 0.8rem;
 }
 
+.library-switch-label {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.55rem;
+  color: var(--text-soft);
+  font-size: 0.8rem;
+}
+
 .dialog-backdrop,
 .panel-modal-backdrop {
   position: fixed;

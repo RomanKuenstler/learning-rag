@@ -13,5 +13,10 @@
     "username": "anna",
     "displayname": "Anna Smith",
     "role": "user"
+  },
+  {
+    "username": "test",
+    "displayname": "test test",
+    "role": "user"
   }
 ]

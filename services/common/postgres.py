@@ -88,6 +88,8 @@ class PostgresClient:
                     record.chunk_count = resolved_chunk_count
                 if resolved_chunk_count and not record.is_embedded:
                     record.is_embedded = True
+                self._materialize_file_record(record)
+                session.expunge(record)
             return records
 
     def list_files_for_user(self, *, user_id: int, is_admin: bool, include_other_users: bool = False) -> list[FileRecord]:
@@ -118,6 +120,8 @@ class PostgresClient:
                     is_admin=is_admin,
                     explicit_setting=settings.get(record.id),
                 )
+                self._materialize_file_record(record)
+                session.expunge(record)
             return records
 
     def get_file(self, file_path: str) -> FileRecord | None:
@@ -1050,6 +1054,26 @@ class PostgresClient:
         if record.is_global:
             return True
         return bool(record.uploaded_by_user_id == user_id)
+
+    def _materialize_file_record(self, record: FileRecord) -> None:
+        _ = (
+            record.id,
+            record.file_path,
+            record.file_name,
+            record.file_type,
+            record.extension,
+            record.size_bytes,
+            record.chunk_count,
+            list(record.tags or []),
+            record.is_embedded,
+            record.is_enabled,
+            record.is_system,
+            record.is_global,
+            record.source_origin,
+            record.uploaded_by_user_id,
+            record.processing_status,
+            record.updated_at,
+        )
 
     def _resolve_user_file_enabled(
         self,
