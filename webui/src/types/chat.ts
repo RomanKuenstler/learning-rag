@@ -325,3 +325,58 @@ export type LearningPath = {
 export type LearningPathResponse = {
   paths: LearningPath[];
 };
+
+export type LearningPreferencePace = "slow" | "balanced" | "fast";
+export type LearningPreferenceDepth = "concise" | "balanced" | "detailed";
+export type LearningPreferenceExamplesTheory = "more_examples" | "balanced" | "more_theory";
+export type LearningPreferenceStructure = "more_structured" | "balanced" | "more_conversational";
+export type LearningPreferenceFrequency = "low" | "medium" | "high";
+export type LearningPreferenceEncouragement = "low" | "balanced" | "high";
+export type LearningPreferenceGuidance = "step_by_step" | "balanced" | "more_independent";
+export type LearningPreferenceFormat = "reading" | "dialogue" | "exercises" | "mixed";
+export type LearningGoalPriority = "low" | "medium" | "high";
+
+export type LearningPreferences = {
+  preferred_pace: LearningPreferencePace;
+  explanation_depth: LearningPreferenceDepth;
+  examples_vs_theory: LearningPreferenceExamplesTheory;
+  structure_preference: LearningPreferenceStructure;
+  checkpoint_frequency: LearningPreferenceFrequency;
+  encouragement_level: LearningPreferenceEncouragement;
+  guidance_level: LearningPreferenceGuidance;
+  recap_frequency: LearningPreferenceFrequency;
+  preferred_learning_format: LearningPreferenceFormat;
+  custom_preference_note: string;
+  updated_at: string | null;
+};
+
+export type LearningProfileContext = {
+  education_background: string;
+  current_skill_areas: string[];
+  interests: string[];
+  professional_context: string;
+  current_reason_for_learning: string;
+  preferred_form_of_address: string;
+  learning_context_notes: string;
+  updated_at: string | null;
+};
+
+export type LearningGoal = {
+  id: string;
+  target_topic: string;
+  reason_for_learning: string;
+  target_level: string;
+  deadline: string | null;
+  priority: LearningGoalPriority | null;
+  notes: string;
+  is_active: boolean;
+  created_at: string;
+  updated_at: string;
+};
+
+export type LearningProfileBundle = {
+  preferences: LearningPreferences;
+  context: LearningProfileContext;
+  goals: LearningGoal[];
+  diagnostics_status: "not_started";
+};

@@ -20,6 +20,11 @@ import type {
   LibraryUploadResponse,
   LearningModule,
   LearningLesson,
+  LearningGoal,
+  LearningGoalPriority,
+  LearningProfileBundle,
+  LearningProfileContext,
+  LearningPreferences,
   LearningPath,
   LearningPathResponse,
   Message,
@@ -157,6 +162,57 @@ export const apiClient = {
   },
   listLearningPaths() {
     return request<LearningPathResponse>("/api/learning-paths");
+  },
+  getLearningProfile() {
+    return request<LearningProfileBundle>("/api/learning-profile");
+  },
+  updateLearningPreferences(payload: Partial<Omit<LearningPreferences, "updated_at">>) {
+    return request<LearningPreferences>("/api/learning-profile/preferences", {
+      method: "PATCH",
+      body: JSON.stringify(payload),
+    });
+  },
+  updateLearningContext(payload: Partial<Omit<LearningProfileContext, "updated_at">>) {
+    return request<LearningProfileContext>("/api/learning-profile/context", {
+      method: "PATCH",
+      body: JSON.stringify(payload),
+    });
+  },
+  createLearningGoal(payload: {
+    target_topic: string;
+    reason_for_learning: string;
+    target_level: string;
+    deadline: string | null;
+    priority: LearningGoalPriority | null;
+    notes: string;
+    is_active: boolean;
+  }) {
+    return request<LearningGoal>("/api/learning-profile/goals", {
+      method: "POST",
+      body: JSON.stringify(payload),
+    });
+  },
+  updateLearningGoal(
+    goalId: string,
+    payload: Partial<{
+      target_topic: string;
+      reason_for_learning: string;
+      target_level: string;
+      deadline: string | null;
+      priority: LearningGoalPriority | null;
+      notes: string;
+      is_active: boolean;
+    }>,
+  ) {
+    return request<LearningGoal>(`/api/learning-profile/goals/${goalId}`, {
+      method: "PATCH",
+      body: JSON.stringify(payload),
+    });
+  },
+  deleteLearningGoal(goalId: string) {
+    return request<LearningGoal>(`/api/learning-profile/goals/${goalId}`, {
+      method: "DELETE",
+    });
   },
   createLearningPath(payload: {
     scope: "global" | "user";

@@ -2,9 +2,9 @@
 
 Local, containerized Retrieval-Augmented Generation for indexing your own files and chatting with grounded, citation-ready answers.
 
-## Step A Scope
+## Step B Scope
 
-This repository now includes the learning foundation layer:
+This repository includes the learning foundation and declared learning profile layer:
 
 - JWT-based authentication with forced password change flow
 - role model: `admin`, `user`, `student`
@@ -13,8 +13,14 @@ This repository now includes the learning foundation layer:
 - ordered module and lesson structure
 - learning-path source scoping through allowed files and tags
 - learning-path CRUD API with role-based authorization
+- user-scoped declared learning preferences
+- user-scoped learner context/background profile
+- user-scoped structured learning goals
+- dedicated learning UI sections for preferences, context, and goals
 - web UI learning-path management page and sidebar navigation entry
 - future learning-chat foundation fields (`chat_type`, `learning_path_id`)
+
+Step B only stores explicit learner input. Diagnostic/inferred profiling is not part of this step and is reserved for Step B.1.
 
 ## Quick Start
 

@@ -1,6 +1,17 @@
 import { useEffect, useMemo, useState } from "react";
-import type { LearningLesson, LearningModule, LearningPath, LibraryFile, Role } from "../../types/chat";
+import type {
+  LearningGoal,
+  LearningLesson,
+  LearningModule,
+  LearningPath,
+  LearningProfileBundle,
+  LearningProfileContext,
+  LearningPreferences,
+  LibraryFile,
+  Role,
+} from "../../types/chat";
 import { Icon } from "../common/Icons";
+import { LearningProfilePanel } from "./LearningProfilePanel";
 
 type LearningPathDraft = {
   scope: "global" | "user";
@@ -23,6 +34,25 @@ type LearningPathsPageProps = {
   error: string | null;
   canAuthor: boolean;
   onLoad: () => void;
+  learningProfile: LearningProfileBundle | null;
+  learningProfileLoading: boolean;
+  learningProfileSaving: boolean;
+  learningProfileError: string | null;
+  learningProfileSuccess: string | null;
+  onLoadLearningProfile: () => void;
+  onSaveLearningPreferences: (payload: Partial<Omit<LearningPreferences, "updated_at">>) => Promise<unknown>;
+  onSaveLearningContext: (payload: Partial<Omit<LearningProfileContext, "updated_at">>) => Promise<unknown>;
+  onCreateLearningGoal: (payload: {
+    target_topic: string;
+    reason_for_learning: string;
+    target_level: string;
+    deadline: string | null;
+    priority: "low" | "medium" | "high" | null;
+    notes: string;
+    is_active: boolean;
+  }) => Promise<unknown>;
+  onUpdateLearningGoal: (goalId: string, payload: Partial<Omit<LearningGoal, "id" | "created_at" | "updated_at">>) => Promise<unknown>;
+  onDeleteLearningGoal: (goalId: string) => Promise<unknown>;
   onCreatePath: (payload: {
     scope: "global" | "user";
     title: string;
@@ -92,6 +122,17 @@ export function LearningPathsPage({
   error,
   canAuthor,
   onLoad,
+  learningProfile,
+  learningProfileLoading,
+  learningProfileSaving,
+  learningProfileError,
+  learningProfileSuccess,
+  onLoadLearningProfile,
+  onSaveLearningPreferences,
+  onSaveLearningContext,
+  onCreateLearningGoal,
+  onUpdateLearningGoal,
+  onDeleteLearningGoal,
   onCreatePath,
   onUpdatePath,
   onDeletePath,
@@ -109,7 +150,9 @@ export function LearningPathsPage({
 
   useEffect(() => {
     void onLoad();
-  }, [onLoad]);
+    // This load is mount-scoped; the parent currently passes a new callback each render.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const selectedPath = useMemo(() => paths.find((item) => item.id === selectedPathId) ?? null, [paths, selectedPathId]);
 
@@ -122,27 +165,56 @@ export function LearningPathsPage({
   return (
     <section className="chat-column library-column">
       {error ? <p className="chat-error chat-error-banner">{error}</p> : null}
+      <LearningProfilePanel
+        profile={learningProfile}
+        loading={learningProfileLoading}
+        saving={learningProfileSaving}
+        error={learningProfileError}
+        success={learningProfileSuccess}
+        onLoad={onLoadLearningProfile}
+        onSavePreferences={onSaveLearningPreferences}
+        onSaveContext={onSaveLearningContext}
+        onCreateGoal={onCreateLearningGoal}
+        onUpdateGoal={onUpdateLearningGoal}
+        onDeleteGoal={onDeleteLearningGoal}
+      />
       <section className="info-group-card library-table-card">
         <div className="library-table-header">
           <h4>Learning paths</h4>
         </div>
-        <div className="library-table">
+        <div className="library-table learning-paths-table">
           {loading ? <div className="empty-state">Loading learning paths...</div> : null}
           {!loading ? (
-            <div className="library-table-body">
+            <>
+              <div className="library-table-head learning-paths-head">
+                <span>Title</span>
+                <span>Scope</span>
+                <span>Subject</span>
+                <span>Status</span>
+                <span>Modules</span>
+                <span>Open</span>
+              </div>
+              <div className="library-table-body">
               {paths.length === 0 ? <div className="empty-state">No learning paths yet.</div> : null}
               {paths.map((path) => (
-                <button
-                  key={path.id}
-                  type="button"
-                  className={`side-nav-chat-item${selectedPathId === path.id ? " active" : ""}`}
-                  onClick={() => setSelectedPathId(path.id)}
-                >
-                  <span>{path.title}</span>
-                  <small>{path.scope === "global" ? "Global" : "User"}</small>
-                </button>
+                <div key={path.id} className={`library-table-row learning-paths-row${selectedPathId === path.id ? " active" : ""}`}>
+                  <span className="learning-paths-title">
+                    <strong>{path.title}</strong>
+                    <small>{path.description || "No description yet."}</small>
+                  </span>
+                  <span>{path.scope === "global" ? "Global" : "User"}</span>
+                  <span>{path.subject || "-"}</span>
+                  <span className={`learning-path-status learning-path-status-${path.status}`}>{path.status}</span>
+                  <span>{path.modules.length}</span>
+                  <span>
+                    <button className="secondary-button" type="button" onClick={() => setSelectedPathId(path.id)}>
+                      {selectedPathId === path.id ? "Selected" : "Open"}
+                    </button>
+                  </span>
+                </div>
               ))}
-            </div>
+              </div>
+            </>
           ) : null}
         </div>
       </section>
@@ -320,9 +392,17 @@ function LearningPathEditor({
   }, [path]);
 
   return (
-    <section className="info-group-card">
-      <h4>{path.title}</h4>
-      <div className="settings-grid">
+    <section className="info-group-card learning-path-editor-card">
+      <div className="learning-path-editor-header">
+        <h4>{path.title}</h4>
+        <div className="learning-path-editor-meta">
+          <span className={`learning-path-status learning-path-status-${path.status}`}>{path.status}</span>
+          <span className="learning-path-editor-chip">{path.subject || "General"}</span>
+          <span className="learning-path-editor-chip">{path.modules.length} modules</span>
+        </div>
+      </div>
+      <p className="learning-path-editor-description">{path.description || "No description yet."}</p>
+      <div className="settings-grid learning-path-editor-grid">
         <label>
           <span>Title</span>
           <input value={title} disabled={!path.can_edit} onChange={(event) => setTitle(event.target.value)} />
@@ -355,7 +435,7 @@ function LearningPathEditor({
           <span>Allowed tags</span>
           <input value={allowedTags} disabled={!path.can_edit} onChange={(event) => setAllowedTags(event.target.value)} />
         </label>
-        <div>
+        <div className="learning-path-editor-files">
           <span>Allowed files</span>
           <div className="archive-list">
             {libraryFiles.map((file) => (
@@ -407,10 +487,10 @@ function LearningPathEditor({
         </div>
       ) : null}
 
-      <div className="library-table-header">
+      <div className="library-table-header learning-path-modules-header">
         <h4>Modules</h4>
       </div>
-      <div className="library-table-body">
+      <div className="library-table-body learning-modules-list">
         {path.modules.map((module, moduleIndex) => (
           <LearningModuleEditor
             key={module.id}
@@ -503,9 +583,9 @@ function LearningModuleEditor({
   }, [module]);
 
   return (
-    <div className="archive-row">
-      <div className="archive-row-main">
-        <strong>Module {moduleIndex + 1}: {module.title}</strong>
+    <div className="archive-row learning-module-card">
+      <div className="archive-row-main learning-module-head">
+        <strong className="learning-module-title">Module {moduleIndex + 1}: {module.title}</strong>
         <div className="archive-row-actions">
           {canEdit ? (
             <>
@@ -519,7 +599,11 @@ function LearningModuleEditor({
           ) : null}
         </div>
       </div>
-      <div className="settings-grid">
+      {module.description ? <p className="learning-module-summary">{module.description}</p> : null}
+      {module.learning_objectives.length > 0 ? (
+        <p className="learning-module-objectives-preview">Objectives: {module.learning_objectives.join(" • ")}</p>
+      ) : null}
+      <div className="settings-grid learning-module-grid">
         <input value={title} disabled={!canEdit} onChange={(event) => setTitle(event.target.value)} />
         <textarea value={description} disabled={!canEdit} onChange={(event) => setDescription(event.target.value)} />
         <input value={objectives} disabled={!canEdit} onChange={(event) => setObjectives(event.target.value)} placeholder="Objectives comma-separated" />
@@ -545,7 +629,7 @@ function LearningModuleEditor({
         </div>
       ) : null}
 
-      <div className="archive-list">
+      <div className="archive-list learning-lessons-list">
         {module.lessons.map((lesson, lessonIndex) => (
           <LearningLessonEditor
             key={lesson.id}
@@ -572,7 +656,7 @@ function LearningModuleEditor({
         ))}
       </div>
       {canEdit ? (
-        <div className="archive-row-actions">
+        <div className="archive-row-actions learning-module-add-lesson">
           <input value={newLessonTitle} placeholder="New lesson title" onChange={(event) => setNewLessonTitle(event.target.value)} />
           <button
             className="secondary-button"
@@ -633,9 +717,9 @@ function LearningLessonEditor({
   }, [lesson]);
 
   return (
-    <div className="archive-row">
-      <strong>Lesson {lessonIndex + 1}: {lesson.title}</strong>
-      <div className="settings-grid">
+    <div className="archive-row learning-lesson-card">
+      <strong className="learning-lesson-title">Lesson {lessonIndex + 1}: {lesson.title}</strong>
+      <div className="settings-grid learning-lesson-grid">
         <input value={title} disabled={!canEdit} onChange={(event) => setTitle(event.target.value)} />
         <textarea value={description} disabled={!canEdit} onChange={(event) => setDescription(event.target.value)} />
         <input value={objectives} disabled={!canEdit} onChange={(event) => setObjectives(event.target.value)} placeholder="Objectives comma-separated" />

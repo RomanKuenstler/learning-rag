@@ -70,10 +70,19 @@ npm run build
 - ordered module and lesson CRUD/reorder endpoint coverage
 - source scoping persistence fields (`allowed_file_ids`, `allowed_tags`)
 
+## Step B Declared Learning Profile Checks Covered
+
+- user-scoped declared learning preferences load/save
+- user-scoped learner context/background load/save
+- user-scoped learning-goal create/update/delete
+- enum validation for declared preference fields
+- student-role access for declared learning profile endpoints
+- cross-user goal isolation (`404` on other-user goal mutate attempts)
+
 Recommended focused run:
 
 ```bash
-./.venv311/bin/pytest tests/test_step6_assistant_modes.py tests/test_step10_personalization.py tests/test_retriever_api.py
+./.venv311/bin/pytest tests/test_step6_assistant_modes.py tests/test_step10_personalization.py tests/test_retriever_api.py tests/test_stepb_learning_profile_api.py tests/test_stepb_learning_profile_service.py
 cd webui && npm run build
 ```
 

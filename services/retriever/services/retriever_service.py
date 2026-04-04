@@ -6,7 +6,15 @@ from dataclasses import dataclass
 from pathlib import Path
 
 from services.common.config import Settings
-from services.common.models import LearningLesson, LearningModule, LearningPath, UserAccount
+from services.common.models import (
+    LearningLesson,
+    LearningModule,
+    LearningPath,
+    UserAccount,
+    UserLearningGoal,
+    UserLearningPreference,
+    UserLearningProfile,
+)
 from services.embedder.chunking import Chunker
 from services.embedder.embedding import EmbeddingClient
 from services.embedder.postgres_client import EmbedderPostgresClient
@@ -52,6 +60,16 @@ from services.retriever.schemas.learning import (
     LearningPathRead,
     LearningPathUpdateRequest,
 )
+from services.retriever.schemas.learning_profile import (
+    LearningGoalCreateRequest,
+    LearningGoalRead,
+    LearningGoalUpdateRequest,
+    LearningPreferencesRead,
+    LearningPreferencesUpdateRequest,
+    LearningProfileBundleRead,
+    LearningProfileContextRead,
+    LearningProfileContextUpdateRequest,
+)
 from services.retriever.services.chat_naming import generate_chat_name
 from services.retriever.services.library_manager import LibraryManager, UploadFilePayload
 from services.retriever.services.message_mapper import map_attachment, map_chat, map_filter_file, map_filter_tag, map_gpt, map_message, map_source
@@ -81,7 +99,32 @@ GPT_PERSONALIZATION_DEFAULTS = {
     "enthusiastic": "default",
     "headers_and_lists": "default",
 }
+LEARNING_PREFERENCE_DEFAULTS = {
+    "preferred_pace": "balanced",
+    "explanation_depth": "balanced",
+    "examples_vs_theory": "balanced",
+    "structure_preference": "balanced",
+    "checkpoint_frequency": "medium",
+    "encouragement_level": "balanced",
+    "guidance_level": "balanced",
+    "recap_frequency": "medium",
+    "preferred_learning_format": "mixed",
+    "custom_preference_note": "",
+}
+
+LEARNING_CONTEXT_DEFAULTS = {
+    "education_background": "",
+    "current_skill_areas": [],
+    "interests": [],
+    "professional_context": "",
+    "current_reason_for_learning": "",
+    "preferred_form_of_address": "",
+    "learning_context_notes": "",
+}
+
 SUPPORTED_ROLES = {"admin", "user", "student"}
+EXAMPLE_LEARNING_PATH_TITLE = "Example: Docker Fundamentals"
+EXAMPLE_LEARNING_PATH_TITLE_SECOND = "Example: Python Learning Sprint"
 logger = logging.getLogger(__name__)
 
 
@@ -111,6 +154,7 @@ class RetrieverAppService:
         self.settings = deps.settings
         if self.auth_manager is not None:
             self.auth_manager.bootstrap_users()
+        self._ensure_example_learning_path()
 
     def login(self, username: str, password: str) -> AuthLoginResponse:
         assert self.auth_manager is not None
@@ -538,6 +582,107 @@ class RetrieverAppService:
         for key, value in payload.model_dump().items():
             self.chat_repository.upsert_setting(user.id, key, json.dumps(str(value).strip()))
         return self.get_personalization(user)
+
+    def get_learning_profile_bundle(self, user: UserAccount) -> LearningProfileBundleRead:
+        preference = self.chat_repository.get_user_learning_preference(user.id)
+        profile = self.chat_repository.get_user_learning_profile(user.id)
+        goals = self.chat_repository.list_user_learning_goals(user.id)
+        return LearningProfileBundleRead(
+            preferences=self._build_learning_preferences_read(preference),
+            context=self._build_learning_context_read(profile),
+            goals=[self._build_learning_goal_read(goal) for goal in goals],
+        )
+
+    def update_learning_preferences(self, user: UserAccount, payload: LearningPreferencesUpdateRequest) -> LearningPreferencesRead:
+        existing = self.chat_repository.get_user_learning_preference(user.id)
+        fields = payload.model_dump(exclude_unset=True)
+        next_values = {
+            **LEARNING_PREFERENCE_DEFAULTS,
+            **(self._serialize_learning_preference(existing) if existing else {}),
+            **fields,
+        }
+        next_values["custom_preference_note"] = str(next_values.get("custom_preference_note", "")).strip()
+        updated = self.chat_repository.upsert_user_learning_preference(
+            user.id,
+            fields={
+                "preferred_pace": next_values["preferred_pace"],
+                "explanation_depth": next_values["explanation_depth"],
+                "examples_vs_theory": next_values["examples_vs_theory"],
+                "structure_preference": next_values["structure_preference"],
+                "checkpoint_frequency": next_values["checkpoint_frequency"],
+                "encouragement_level": next_values["encouragement_level"],
+                "guidance_level": next_values["guidance_level"],
+                "recap_frequency": next_values["recap_frequency"],
+                "preferred_learning_format": next_values["preferred_learning_format"],
+                "custom_preference_note": next_values["custom_preference_note"],
+            },
+        )
+        return self._build_learning_preferences_read(updated)
+
+    def update_learning_context(self, user: UserAccount, payload: LearningProfileContextUpdateRequest) -> LearningProfileContextRead:
+        existing = self.chat_repository.get_user_learning_profile(user.id)
+        fields = payload.model_dump(exclude_unset=True)
+        next_values = {
+            **LEARNING_CONTEXT_DEFAULTS,
+            **(self._serialize_learning_profile(existing) if existing else {}),
+            **fields,
+        }
+        if "current_skill_areas" in next_values:
+            next_values["current_skill_areas"] = self._normalize_string_list(next_values["current_skill_areas"])
+        if "interests" in next_values:
+            next_values["interests"] = self._normalize_string_list(next_values["interests"])
+        for field_name in {
+            "education_background",
+            "professional_context",
+            "current_reason_for_learning",
+            "preferred_form_of_address",
+            "learning_context_notes",
+        }:
+            next_values[field_name] = str(next_values.get(field_name, "")).strip()
+        updated = self.chat_repository.upsert_user_learning_profile(
+            user.id,
+            fields={
+                "education_background": next_values["education_background"],
+                "current_skill_areas": next_values["current_skill_areas"],
+                "interests": next_values["interests"],
+                "professional_context": next_values["professional_context"],
+                "current_reason_for_learning": next_values["current_reason_for_learning"],
+                "preferred_form_of_address": next_values["preferred_form_of_address"],
+                "learning_context_notes": next_values["learning_context_notes"],
+            },
+        )
+        return self._build_learning_context_read(updated)
+
+    def create_learning_goal(self, user: UserAccount, payload: LearningGoalCreateRequest) -> LearningGoalRead:
+        record = self.chat_repository.create_user_learning_goal(
+            {
+                "user_id": user.id,
+                "target_topic": payload.target_topic.strip(),
+                "reason_for_learning": payload.reason_for_learning.strip(),
+                "target_level": payload.target_level.strip(),
+                "deadline": payload.deadline,
+                "priority": payload.priority,
+                "notes": payload.notes.strip(),
+                "is_active": payload.is_active,
+            }
+        )
+        return self._build_learning_goal_read(record)
+
+    def update_learning_goal(self, user: UserAccount, goal_id: str, payload: LearningGoalUpdateRequest) -> LearningGoalRead | None:
+        fields = payload.model_dump(exclude_unset=True)
+        for field_name in {"target_topic", "reason_for_learning", "target_level", "notes"}:
+            if field_name in fields and isinstance(fields[field_name], str):
+                fields[field_name] = fields[field_name].strip()
+        updated = self.chat_repository.update_user_learning_goal(user.id, goal_id, fields)
+        if updated is None:
+            return None
+        return self._build_learning_goal_read(updated)
+
+    def delete_learning_goal(self, user: UserAccount, goal_id: str) -> LearningGoalRead | None:
+        deleted = self.chat_repository.delete_user_learning_goal(user.id, goal_id)
+        if deleted is None:
+            return None
+        return self._build_learning_goal_read(deleted)
 
     def list_learning_paths(self, user: UserAccount) -> LearningPathListResponse:
         paths = self.chat_repository.list_learning_paths(user_id=user.id, role=user.role)
@@ -1177,6 +1322,209 @@ class RetrieverAppService:
 
     def _normalize_tags(self, tags: list[str]) -> list[str]:
         return sorted({tag.strip().lower() for tag in tags if tag.strip()})
+
+    def _ensure_example_learning_path(self) -> None:
+        try:
+            existing_paths = self.chat_repository.list_learning_paths(user_id=0, role="admin")
+            existing_titles = {path.title for path in existing_paths}
+            if EXAMPLE_LEARNING_PATH_TITLE not in existing_titles:
+                path = self.chat_repository.create_learning_path(
+                    {
+                        "scope": "global",
+                        "owner_user_id": None,
+                        "title": EXAMPLE_LEARNING_PATH_TITLE,
+                        "description": "Starter path demonstrating a complete learning setup.",
+                        "subject": "Docker",
+                        "difficulty_level": "beginner",
+                        "estimated_duration_minutes": 120,
+                        "status": "published",
+                    }
+                )
+                intro_module = self.chat_repository.create_learning_module(
+                    {
+                        "learning_path_id": path.id,
+                        "order_index": 0,
+                        "title": "Getting Started",
+                        "description": "Core concepts and first practical steps.",
+                        "learning_objectives": ["Understand images/containers", "Run and inspect containers"],
+                    }
+                )
+                self.chat_repository.create_learning_lesson(
+                    {
+                        "module_id": intro_module.id,
+                        "order_index": 0,
+                        "title": "What Docker Is",
+                        "description": "Mental model for images, containers, and registries.",
+                        "objectives": ["Differentiate image vs container", "Know when to use Docker"],
+                        "teaching_notes": "",
+                    }
+                )
+                self.chat_repository.create_learning_lesson(
+                    {
+                        "module_id": intro_module.id,
+                        "order_index": 1,
+                        "title": "First Container Run",
+                        "description": "Run, stop, and inspect a hello-world style container.",
+                        "objectives": ["Use run/ps/stop/logs"],
+                        "teaching_notes": "",
+                    }
+                )
+                compose_module = self.chat_repository.create_learning_module(
+                    {
+                        "learning_path_id": path.id,
+                        "order_index": 1,
+                        "title": "Compose Basics",
+                        "description": "Model multi-service local development.",
+                        "learning_objectives": ["Read compose files", "Start and manage service stacks"],
+                    }
+                )
+                self.chat_repository.create_learning_lesson(
+                    {
+                        "module_id": compose_module.id,
+                        "order_index": 0,
+                        "title": "Compose File Structure",
+                        "description": "Services, volumes, ports, and environment basics.",
+                        "objectives": ["Understand core compose keys"],
+                        "teaching_notes": "",
+                    }
+                )
+
+            if EXAMPLE_LEARNING_PATH_TITLE_SECOND not in existing_titles:
+                path = self.chat_repository.create_learning_path(
+                    {
+                        "scope": "global",
+                        "owner_user_id": None,
+                        "title": EXAMPLE_LEARNING_PATH_TITLE_SECOND,
+                        "description": "Practical beginner path to write and reason about Python code quickly.",
+                        "subject": "Python",
+                        "difficulty_level": "beginner",
+                        "estimated_duration_minutes": 150,
+                        "status": "published",
+                    }
+                )
+                basics_module = self.chat_repository.create_learning_module(
+                    {
+                        "learning_path_id": path.id,
+                        "order_index": 0,
+                        "title": "Python Basics",
+                        "description": "Syntax, variables, conditionals, and loops.",
+                        "learning_objectives": ["Read basic Python", "Write simple scripts"],
+                    }
+                )
+                self.chat_repository.create_learning_lesson(
+                    {
+                        "module_id": basics_module.id,
+                        "order_index": 0,
+                        "title": "Variables and Data Types",
+                        "description": "Numbers, strings, booleans, and lists in small examples.",
+                        "objectives": ["Choose the right data type", "Use simple transformations"],
+                        "teaching_notes": "",
+                    }
+                )
+                self.chat_repository.create_learning_lesson(
+                    {
+                        "module_id": basics_module.id,
+                        "order_index": 1,
+                        "title": "Control Flow",
+                        "description": "If statements and loops for basic program logic.",
+                        "objectives": ["Write conditional logic", "Iterate with for/while"],
+                        "teaching_notes": "",
+                    }
+                )
+                functions_module = self.chat_repository.create_learning_module(
+                    {
+                        "learning_path_id": path.id,
+                        "order_index": 1,
+                        "title": "Functions and Small Projects",
+                        "description": "Reusable functions and basic problem decomposition.",
+                        "learning_objectives": ["Define and call functions", "Structure a tiny script project"],
+                    }
+                )
+                self.chat_repository.create_learning_lesson(
+                    {
+                        "module_id": functions_module.id,
+                        "order_index": 0,
+                        "title": "Functions and Parameters",
+                        "description": "Build reusable code with arguments and return values.",
+                        "objectives": ["Write functions", "Use return values effectively"],
+                        "teaching_notes": "",
+                    }
+                )
+        except Exception:
+            logger.exception("Failed to ensure example learning path")
+
+    def _normalize_string_list(self, values: list[str]) -> list[str]:
+        return list(dict.fromkeys(str(item).strip() for item in values if str(item).strip()))
+
+    def _serialize_learning_preference(self, preference: UserLearningPreference) -> dict[str, object]:
+        return {
+            "preferred_pace": preference.preferred_pace,
+            "explanation_depth": preference.explanation_depth,
+            "examples_vs_theory": preference.examples_vs_theory,
+            "structure_preference": preference.structure_preference,
+            "checkpoint_frequency": preference.checkpoint_frequency,
+            "encouragement_level": preference.encouragement_level,
+            "guidance_level": preference.guidance_level,
+            "recap_frequency": preference.recap_frequency,
+            "preferred_learning_format": preference.preferred_learning_format,
+            "custom_preference_note": preference.custom_preference_note or "",
+        }
+
+    def _serialize_learning_profile(self, profile: UserLearningProfile) -> dict[str, object]:
+        return {
+            "education_background": profile.education_background or "",
+            "current_skill_areas": list(profile.current_skill_areas or []),
+            "interests": list(profile.interests or []),
+            "professional_context": profile.professional_context or "",
+            "current_reason_for_learning": profile.current_reason_for_learning or "",
+            "preferred_form_of_address": profile.preferred_form_of_address or "",
+            "learning_context_notes": profile.learning_context_notes or "",
+        }
+
+    def _build_learning_preferences_read(self, preference: UserLearningPreference | None) -> LearningPreferencesRead:
+        if preference is None:
+            return LearningPreferencesRead(**LEARNING_PREFERENCE_DEFAULTS, updated_at=None)
+        return LearningPreferencesRead(
+            preferred_pace=preference.preferred_pace,
+            explanation_depth=preference.explanation_depth,
+            examples_vs_theory=preference.examples_vs_theory,
+            structure_preference=preference.structure_preference,
+            checkpoint_frequency=preference.checkpoint_frequency,
+            encouragement_level=preference.encouragement_level,
+            guidance_level=preference.guidance_level,
+            recap_frequency=preference.recap_frequency,
+            preferred_learning_format=preference.preferred_learning_format,
+            custom_preference_note=preference.custom_preference_note or "",
+            updated_at=preference.updated_at,
+        )
+
+    def _build_learning_context_read(self, profile: UserLearningProfile | None) -> LearningProfileContextRead:
+        if profile is None:
+            return LearningProfileContextRead(**LEARNING_CONTEXT_DEFAULTS, updated_at=None)
+        return LearningProfileContextRead(
+            education_background=profile.education_background or "",
+            current_skill_areas=list(profile.current_skill_areas or []),
+            interests=list(profile.interests or []),
+            professional_context=profile.professional_context or "",
+            current_reason_for_learning=profile.current_reason_for_learning or "",
+            preferred_form_of_address=profile.preferred_form_of_address or "",
+            learning_context_notes=profile.learning_context_notes or "",
+            updated_at=profile.updated_at,
+        )
+
+    def _build_learning_goal_read(self, goal: UserLearningGoal) -> LearningGoalRead:
+        return LearningGoalRead(
+            id=goal.id,
+            target_topic=goal.target_topic,
+            reason_for_learning=goal.reason_for_learning or "",
+            target_level=goal.target_level or "",
+            deadline=goal.deadline,
+            priority=goal.priority,
+            notes=goal.notes or "",
+            is_active=goal.is_active,
+            created_at=goal.created_at,
+            updated_at=goal.updated_at,
+        )
 
     def _can_view_learning_path(self, user: UserAccount, path: LearningPath) -> bool:
         if user.role == "admin":

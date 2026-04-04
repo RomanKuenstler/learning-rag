@@ -13,6 +13,9 @@ from services.common.models import (
     MessageAttachment,
     RetrievalLog,
     SettingRecord,
+    UserLearningGoal,
+    UserLearningPreference,
+    UserLearningProfile,
     UserAccount,
     UserSessionRecord,
 )
@@ -105,6 +108,30 @@ class ChatRepository:
 
     def upsert_setting(self, user_id: int, key: str, value: str) -> SettingRecord:
         return self.postgres_client.upsert_setting(user_id=user_id, key=key, value=value)
+
+    def get_user_learning_preference(self, user_id: int) -> UserLearningPreference | None:
+        return self.postgres_client.get_user_learning_preference(user_id=user_id)
+
+    def upsert_user_learning_preference(self, user_id: int, fields: dict[str, object]) -> UserLearningPreference:
+        return self.postgres_client.upsert_user_learning_preference(user_id=user_id, fields=fields)
+
+    def get_user_learning_profile(self, user_id: int) -> UserLearningProfile | None:
+        return self.postgres_client.get_user_learning_profile(user_id=user_id)
+
+    def upsert_user_learning_profile(self, user_id: int, fields: dict[str, object]) -> UserLearningProfile:
+        return self.postgres_client.upsert_user_learning_profile(user_id=user_id, fields=fields)
+
+    def list_user_learning_goals(self, user_id: int) -> list[UserLearningGoal]:
+        return self.postgres_client.list_user_learning_goals(user_id=user_id)
+
+    def create_user_learning_goal(self, payload: dict[str, object]) -> UserLearningGoal:
+        return self.postgres_client.create_user_learning_goal(payload=payload)
+
+    def update_user_learning_goal(self, user_id: int, goal_id: str, fields: dict[str, object]) -> UserLearningGoal | None:
+        return self.postgres_client.update_user_learning_goal(user_id=user_id, goal_id=goal_id, fields=fields)
+
+    def delete_user_learning_goal(self, user_id: int, goal_id: str) -> UserLearningGoal | None:
+        return self.postgres_client.delete_user_learning_goal(user_id=user_id, goal_id=goal_id)
 
     def list_user_file_filters(self, user_id: int, *, is_admin: bool):
         return self.postgres_client.list_user_file_filters(user_id=user_id, is_admin=is_admin)

@@ -278,6 +278,17 @@ function AppRoutes() {
                     }
                     await app.loadLearningPaths();
                   }}
+                  learningProfile={app.learningProfile}
+                  learningProfileLoading={app.learningProfileLoading}
+                  learningProfileSaving={app.learningProfileSaving}
+                  learningProfileError={app.learningProfileError}
+                  learningProfileSuccess={app.learningProfileSuccess}
+                  onLoadLearningProfile={() => void app.loadLearningProfile()}
+                  onSaveLearningPreferences={(payload) => app.saveLearningPreferences(payload).then(() => undefined)}
+                  onSaveLearningContext={(payload) => app.saveLearningContext(payload).then(() => undefined)}
+                  onCreateLearningGoal={(payload) => app.createLearningGoal(payload).then(() => undefined)}
+                  onUpdateLearningGoal={(goalId, payload) => app.updateLearningGoal(goalId, payload).then(() => undefined)}
+                  onDeleteLearningGoal={(goalId) => app.deleteLearningGoal(goalId).then(() => undefined)}
                   onCreatePath={app.createLearningPath}
                   onUpdatePath={app.updateLearningPath}
                   onDeletePath={app.deleteLearningPath}

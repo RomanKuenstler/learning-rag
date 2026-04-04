@@ -59,6 +59,16 @@ from services.retriever.schemas.learning import (
     LearningPathRead,
     LearningPathUpdateRequest,
 )
+from services.retriever.schemas.learning_profile import (
+    LearningGoalCreateRequest,
+    LearningGoalRead,
+    LearningGoalUpdateRequest,
+    LearningPreferencesRead,
+    LearningPreferencesUpdateRequest,
+    LearningProfileBundleRead,
+    LearningProfileContextRead,
+    LearningProfileContextUpdateRequest,
+)
 from services.retriever.services.library_manager import UploadFilePayload
 from services.retriever.services.retriever_service import RetrieverAppService
 
@@ -630,6 +640,60 @@ def create_app() -> FastAPI:
         if record is None:
             raise HTTPException(status_code=404, detail="Learning lesson not found")
         return record
+
+    @app.get("/api/learning-profile", response_model=LearningProfileBundleRead)
+    def get_learning_profile_bundle(
+        auth: AuthContext = Depends(get_app_auth_context),
+        service: RetrieverAppService = Depends(get_retriever_service),
+    ) -> LearningProfileBundleRead:
+        return service.get_learning_profile_bundle(auth.user)
+
+    @app.patch("/api/learning-profile/preferences", response_model=LearningPreferencesRead)
+    def update_learning_preferences(
+        payload: LearningPreferencesUpdateRequest,
+        auth: AuthContext = Depends(get_app_auth_context),
+        service: RetrieverAppService = Depends(get_retriever_service),
+    ) -> LearningPreferencesRead:
+        return service.update_learning_preferences(auth.user, payload)
+
+    @app.patch("/api/learning-profile/context", response_model=LearningProfileContextRead)
+    def update_learning_context(
+        payload: LearningProfileContextUpdateRequest,
+        auth: AuthContext = Depends(get_app_auth_context),
+        service: RetrieverAppService = Depends(get_retriever_service),
+    ) -> LearningProfileContextRead:
+        return service.update_learning_context(auth.user, payload)
+
+    @app.post("/api/learning-profile/goals", response_model=LearningGoalRead)
+    def create_learning_goal(
+        payload: LearningGoalCreateRequest,
+        auth: AuthContext = Depends(get_app_auth_context),
+        service: RetrieverAppService = Depends(get_retriever_service),
+    ) -> LearningGoalRead:
+        return service.create_learning_goal(auth.user, payload)
+
+    @app.patch("/api/learning-profile/goals/{goal_id}", response_model=LearningGoalRead, responses={404: {"model": ErrorResponse}})
+    def update_learning_goal(
+        goal_id: str,
+        payload: LearningGoalUpdateRequest,
+        auth: AuthContext = Depends(get_app_auth_context),
+        service: RetrieverAppService = Depends(get_retriever_service),
+    ) -> LearningGoalRead:
+        updated = service.update_learning_goal(auth.user, goal_id, payload)
+        if updated is None:
+            raise HTTPException(status_code=404, detail="Learning goal not found")
+        return updated
+
+    @app.delete("/api/learning-profile/goals/{goal_id}", response_model=LearningGoalRead, responses={404: {"model": ErrorResponse}})
+    def delete_learning_goal(
+        goal_id: str,
+        auth: AuthContext = Depends(get_app_auth_context),
+        service: RetrieverAppService = Depends(get_retriever_service),
+    ) -> LearningGoalRead:
+        deleted = service.delete_learning_goal(auth.user, goal_id)
+        if deleted is None:
+            raise HTTPException(status_code=404, detail="Learning goal not found")
+        return deleted
 
     @app.get("/api/user/files", response_model=FilterFileListResponse)
     def list_user_files(

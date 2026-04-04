@@ -1,9 +1,9 @@
 from __future__ import annotations
 
 import uuid
-from datetime import datetime
+from datetime import date, datetime
 
-from sqlalchemy import Boolean, DateTime, Float, ForeignKey, Index, Integer, JSON, String, Text, UniqueConstraint, func
+from sqlalchemy import Boolean, Date, DateTime, Float, ForeignKey, Index, Integer, JSON, String, Text, UniqueConstraint, func
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship
 
 
@@ -357,3 +357,62 @@ class LearningPathAllowedTag(Base):
     )
     tag: Mapped[str] = mapped_column(String(128), nullable=False)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, server_default=func.now())
+
+
+class UserLearningPreference(Base):
+    __tablename__ = "user_learning_preferences"
+    __table_args__ = (UniqueConstraint("user_id", name="uq_user_learning_preferences_user"),)
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    user_id: Mapped[int] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True)
+    preferred_pace: Mapped[str] = mapped_column(String(32), nullable=False, default="balanced")
+    explanation_depth: Mapped[str] = mapped_column(String(32), nullable=False, default="balanced")
+    examples_vs_theory: Mapped[str] = mapped_column(String(32), nullable=False, default="balanced")
+    structure_preference: Mapped[str] = mapped_column(String(32), nullable=False, default="balanced")
+    checkpoint_frequency: Mapped[str] = mapped_column(String(32), nullable=False, default="medium")
+    encouragement_level: Mapped[str] = mapped_column(String(32), nullable=False, default="balanced")
+    guidance_level: Mapped[str] = mapped_column(String(32), nullable=False, default="balanced")
+    recap_frequency: Mapped[str] = mapped_column(String(32), nullable=False, default="medium")
+    preferred_learning_format: Mapped[str] = mapped_column(String(32), nullable=False, default="mixed")
+    custom_preference_note: Mapped[str] = mapped_column(Text, nullable=False, default="")
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, server_default=func.now())
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, server_default=func.now(), onupdate=func.now()
+    )
+
+
+class UserLearningProfile(Base):
+    __tablename__ = "user_learning_profiles"
+    __table_args__ = (UniqueConstraint("user_id", name="uq_user_learning_profiles_user"),)
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    user_id: Mapped[int] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True)
+    education_background: Mapped[str] = mapped_column(Text, nullable=False, default="")
+    current_skill_areas: Mapped[list[str]] = mapped_column(JSON, default=list)
+    interests: Mapped[list[str]] = mapped_column(JSON, default=list)
+    professional_context: Mapped[str] = mapped_column(Text, nullable=False, default="")
+    current_reason_for_learning: Mapped[str] = mapped_column(Text, nullable=False, default="")
+    preferred_form_of_address: Mapped[str] = mapped_column(String(255), nullable=False, default="")
+    learning_context_notes: Mapped[str] = mapped_column(Text, nullable=False, default="")
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, server_default=func.now())
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, server_default=func.now(), onupdate=func.now()
+    )
+
+
+class UserLearningGoal(Base):
+    __tablename__ = "user_learning_goals"
+
+    id: Mapped[str] = mapped_column(String(128), primary_key=True, default=lambda: str(uuid.uuid4()))
+    user_id: Mapped[int] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True)
+    target_topic: Mapped[str] = mapped_column(String(255), nullable=False)
+    reason_for_learning: Mapped[str] = mapped_column(Text, nullable=False, default="")
+    target_level: Mapped[str] = mapped_column(String(128), nullable=False, default="")
+    deadline: Mapped[date | None] = mapped_column(Date, nullable=True)
+    priority: Mapped[str | None] = mapped_column(String(32), nullable=True)
+    notes: Mapped[str] = mapped_column(Text, nullable=False, default="")
+    is_active: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, server_default=func.now())
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, server_default=func.now(), onupdate=func.now()
+    )

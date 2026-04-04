@@ -61,3 +61,22 @@ Future learning chat support is prepared through:
 
 - `chats.chat_type` (`normal|gpt|learning`)
 - `chats.learning_path_id` nullable foreign key
+
+## Declared Learning Profile Model (Step B)
+
+Step B adds an explicit, user-declared learning profile layer that is separate from:
+
+- generic assistant personalization
+- diagnostic/psychometric learning profiling (Step B.1)
+
+New user-scoped tables:
+
+- `user_learning_preferences`
+- `user_learning_profiles`
+- `user_learning_goals`
+
+This layer stores only learner-provided inputs and is designed for future composition with:
+
+- Step B.1 diagnosed profile signals
+- future real-time learning-state feedback
+- future mastery/progress systems

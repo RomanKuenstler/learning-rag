@@ -15,6 +15,10 @@ import type {
   LibraryFile,
   LibraryResponse,
   LearningLesson,
+  LearningGoal,
+  LearningProfileBundle,
+  LearningProfileContext,
+  LearningPreferences,
   LearningModule,
   LearningPath,
   Message,
@@ -134,6 +138,11 @@ export function useChatApp() {
   const [learningLoading, setLearningLoading] = useState(false);
   const [learningError, setLearningError] = useState<string | null>(null);
   const [learningSaving, setLearningSaving] = useState(false);
+  const [learningProfile, setLearningProfile] = useState<LearningProfileBundle | null>(null);
+  const [learningProfileLoading, setLearningProfileLoading] = useState(false);
+  const [learningProfileSaving, setLearningProfileSaving] = useState(false);
+  const [learningProfileError, setLearningProfileError] = useState<string | null>(null);
+  const [learningProfileSuccess, setLearningProfileSuccess] = useState<string | null>(null);
   const [archivedChats, setArchivedChats] = useState<Chat[]>([]);
   const [messagesByChat, setMessagesByChat] = useState<Record<string, Message[]>>({});
   const [gptChatsById, setGptChatsById] = useState<Record<string, GptChat>>({});
@@ -230,17 +239,19 @@ export function useChatApp() {
     setAppError(null);
     try {
       const isStudent = session.user.role === "student";
-      const [chatList, archivedList, runtimeSettings, personalizationSettings, gptList, learning] = await Promise.all([
+      const [chatList, archivedList, runtimeSettings, personalizationSettings, gptList, learning, declaredLearningProfile] = await Promise.all([
         isStudent ? Promise.resolve([]) : apiClient.listChats(),
         isStudent ? Promise.resolve([]) : apiClient.listArchivedChats(),
         apiClient.getSettings(),
         apiClient.getPersonalization(),
         isStudent ? Promise.resolve([]) : apiClient.listGpts(),
         apiClient.listLearningPaths(),
+        apiClient.getLearningProfile(),
       ]);
       setChats(sortChats(chatList));
       setGpts(gptList);
       setLearningPaths(learning.paths);
+      setLearningProfile(declaredLearningProfile);
       setArchivedChats(sortChats(archivedList));
       setSettings(runtimeSettings);
       setSettingsDraft({
@@ -276,6 +287,11 @@ export function useChatApp() {
     setChats([]);
     setGpts([]);
     setLearningPaths([]);
+    setLearningProfile(null);
+    setLearningProfileLoading(false);
+    setLearningProfileSaving(false);
+    setLearningProfileError(null);
+    setLearningProfileSuccess(null);
     setArchivedChats([]);
     setMessagesByChat({});
     setGptChatsById({});
@@ -885,6 +901,186 @@ export function useChatApp() {
     }
   }
 
+  async function loadLearningProfile() {
+    setLearningProfileLoading(true);
+    setLearningProfileError(null);
+    try {
+      const payload = await apiClient.getLearningProfile();
+      setLearningProfile(payload);
+      setLearningProfileSuccess(null);
+      return payload;
+    } catch (error) {
+      setLearningProfileError(error instanceof Error ? error.message : "Failed to load learning profile");
+      return null;
+    } finally {
+      setLearningProfileLoading(false);
+    }
+  }
+
+  async function saveLearningPreferences(payload: Partial<Omit<LearningPreferences, "updated_at">>) {
+    setLearningProfileSaving(true);
+    setLearningProfileError(null);
+    setLearningProfileSuccess(null);
+    try {
+      const updated = await apiClient.updateLearningPreferences(payload);
+      setLearningProfile((current) => {
+        if (!current) {
+          return {
+            preferences: updated,
+            context: {
+              education_background: "",
+              current_skill_areas: [],
+              interests: [],
+              professional_context: "",
+              current_reason_for_learning: "",
+              preferred_form_of_address: "",
+              learning_context_notes: "",
+              updated_at: null,
+            },
+            goals: [],
+            diagnostics_status: "not_started",
+          };
+        }
+        return { ...current, preferences: updated };
+      });
+      setLearningProfileSuccess("Learning preferences saved.");
+      return updated;
+    } catch (error) {
+      setLearningProfileError(error instanceof Error ? error.message : "Failed to save learning preferences");
+      throw error;
+    } finally {
+      setLearningProfileSaving(false);
+    }
+  }
+
+  async function saveLearningContext(payload: Partial<Omit<LearningProfileContext, "updated_at">>) {
+    setLearningProfileSaving(true);
+    setLearningProfileError(null);
+    setLearningProfileSuccess(null);
+    try {
+      const updated = await apiClient.updateLearningContext(payload);
+      setLearningProfile((current) => {
+        if (!current) {
+          return {
+            preferences: {
+              preferred_pace: "balanced",
+              explanation_depth: "balanced",
+              examples_vs_theory: "balanced",
+              structure_preference: "balanced",
+              checkpoint_frequency: "medium",
+              encouragement_level: "balanced",
+              guidance_level: "balanced",
+              recap_frequency: "medium",
+              preferred_learning_format: "mixed",
+              custom_preference_note: "",
+              updated_at: null,
+            },
+            context: updated,
+            goals: [],
+            diagnostics_status: "not_started",
+          };
+        }
+        return { ...current, context: updated };
+      });
+      setLearningProfileSuccess("Learning context saved.");
+      return updated;
+    } catch (error) {
+      setLearningProfileError(error instanceof Error ? error.message : "Failed to save learning context");
+      throw error;
+    } finally {
+      setLearningProfileSaving(false);
+    }
+  }
+
+  async function createLearningGoal(payload: {
+    target_topic: string;
+    reason_for_learning: string;
+    target_level: string;
+    deadline: string | null;
+    priority: "low" | "medium" | "high" | null;
+    notes: string;
+    is_active: boolean;
+  }) {
+    setLearningProfileSaving(true);
+    setLearningProfileError(null);
+    setLearningProfileSuccess(null);
+    try {
+      const created = await apiClient.createLearningGoal(payload);
+      setLearningProfile((current) => {
+        if (!current) {
+          return {
+            preferences: {
+              preferred_pace: "balanced",
+              explanation_depth: "balanced",
+              examples_vs_theory: "balanced",
+              structure_preference: "balanced",
+              checkpoint_frequency: "medium",
+              encouragement_level: "balanced",
+              guidance_level: "balanced",
+              recap_frequency: "medium",
+              preferred_learning_format: "mixed",
+              custom_preference_note: "",
+              updated_at: null,
+            },
+            context: {
+              education_background: "",
+              current_skill_areas: [],
+              interests: [],
+              professional_context: "",
+              current_reason_for_learning: "",
+              preferred_form_of_address: "",
+              learning_context_notes: "",
+              updated_at: null,
+            },
+            goals: [created],
+            diagnostics_status: "not_started",
+          };
+        }
+        return { ...current, goals: [created, ...current.goals.filter((goal) => goal.id !== created.id)] };
+      });
+      setLearningProfileSuccess("Learning goal saved.");
+      return created;
+    } catch (error) {
+      setLearningProfileError(error instanceof Error ? error.message : "Failed to save learning goal");
+      throw error;
+    } finally {
+      setLearningProfileSaving(false);
+    }
+  }
+
+  async function updateLearningGoal(goalId: string, payload: Partial<Omit<LearningGoal, "id" | "created_at" | "updated_at">>) {
+    setLearningProfileSaving(true);
+    setLearningProfileError(null);
+    setLearningProfileSuccess(null);
+    try {
+      const updated = await apiClient.updateLearningGoal(goalId, payload);
+      setLearningProfile((current) => (current ? { ...current, goals: current.goals.map((goal) => (goal.id === goalId ? updated : goal)) } : current));
+      setLearningProfileSuccess("Learning goal updated.");
+      return updated;
+    } catch (error) {
+      setLearningProfileError(error instanceof Error ? error.message : "Failed to update learning goal");
+      throw error;
+    } finally {
+      setLearningProfileSaving(false);
+    }
+  }
+
+  async function deleteLearningGoal(goalId: string) {
+    setLearningProfileSaving(true);
+    setLearningProfileError(null);
+    setLearningProfileSuccess(null);
+    try {
+      await apiClient.deleteLearningGoal(goalId);
+      setLearningProfile((current) => (current ? { ...current, goals: current.goals.filter((goal) => goal.id !== goalId) } : current));
+      setLearningProfileSuccess("Learning goal deleted.");
+    } catch (error) {
+      setLearningProfileError(error instanceof Error ? error.message : "Failed to delete learning goal");
+      throw error;
+    } finally {
+      setLearningProfileSaving(false);
+    }
+  }
+
   async function createLearningPath(payload: {
     scope: "global" | "user";
     title: string;
@@ -1353,6 +1549,11 @@ export function useChatApp() {
     learningLoading,
     learningError,
     learningSaving,
+    learningProfile,
+    learningProfileLoading,
+    learningProfileSaving,
+    learningProfileError,
+    learningProfileSuccess,
     archivedChats,
     gptChatsById,
     activeChatId,
@@ -1421,6 +1622,12 @@ export function useChatApp() {
     toggleGlobalTagFilter,
     toggleChatTagFilter,
     loadLearningPaths,
+    loadLearningProfile,
+    saveLearningPreferences,
+    saveLearningContext,
+    createLearningGoal,
+    updateLearningGoal,
+    deleteLearningGoal,
     createLearningPath,
     updateLearningPath,
     deleteLearningPath,

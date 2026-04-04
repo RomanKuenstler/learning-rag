@@ -1,5 +1,18 @@
 # Changelog
 
+## 2026-04-04 17:45 UTC
+
+- Implemented Step B declared learning profile layer with dedicated persistence for:
+  - user learning preferences
+  - learner background/context
+  - structured learning goals
+- Added Alembic migration `20260404_0008` for `user_learning_preferences`, `user_learning_profiles`, and `user_learning_goals`.
+- Added authenticated Step B API endpoints for get/update profile bundle and goal CRUD with strict user ownership.
+- Added enum and input validation for declared preference values and goal/context payloads.
+- Added learning-page UI sections for `Learning Preferences`, `Learning Context / Background`, and `Learning Goals`.
+- Kept Step B explicitly separate from diagnostic profiling; `diagnostics_status` remains `not_started`.
+- Added focused Step B API and service tests for validation, role access, and user scoping.
+
 ## 2026-04-04 16:30 UTC
 
 - Implemented Step A learning foundation with backend schema, API, and web UI integration.

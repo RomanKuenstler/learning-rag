@@ -28,6 +28,9 @@ from services.common.models import (
     MessageAttachment,
     RetrievalLog,
     SettingRecord,
+    UserLearningGoal,
+    UserLearningPreference,
+    UserLearningProfile,
     UserAccount,
     UserFileSetting,
     UserTagSetting,
@@ -871,6 +874,184 @@ class PostgresClient:
             session.flush()
             session.refresh(record)
             return record
+
+    def get_user_learning_preference(self, *, user_id: int) -> UserLearningPreference | None:
+        try:
+            with self.session() as session:
+                return session.scalar(select(UserLearningPreference).where(UserLearningPreference.user_id == user_id))
+        except Exception as error:
+            if "does not exist" not in str(error).lower():
+                raise
+            run_migrations(self.database_url, force=True)
+            with self.session() as session:
+                return session.scalar(select(UserLearningPreference).where(UserLearningPreference.user_id == user_id))
+
+    def upsert_user_learning_preference(self, *, user_id: int, fields: dict[str, object]) -> UserLearningPreference:
+        try:
+            with self.session() as session:
+                record = session.scalar(select(UserLearningPreference).where(UserLearningPreference.user_id == user_id))
+                if record is None:
+                    record = UserLearningPreference(user_id=user_id, **fields)
+                    session.add(record)
+                else:
+                    for key, value in fields.items():
+                        setattr(record, key, value)
+                    record.updated_at = datetime.now(timezone.utc)
+                session.flush()
+                session.refresh(record)
+                return record
+        except Exception as error:
+            if "does not exist" not in str(error).lower():
+                raise
+            run_migrations(self.database_url, force=True)
+            with self.session() as session:
+                record = session.scalar(select(UserLearningPreference).where(UserLearningPreference.user_id == user_id))
+                if record is None:
+                    record = UserLearningPreference(user_id=user_id, **fields)
+                    session.add(record)
+                else:
+                    for key, value in fields.items():
+                        setattr(record, key, value)
+                    record.updated_at = datetime.now(timezone.utc)
+                session.flush()
+                session.refresh(record)
+                return record
+
+    def get_user_learning_profile(self, *, user_id: int) -> UserLearningProfile | None:
+        try:
+            with self.session() as session:
+                return session.scalar(select(UserLearningProfile).where(UserLearningProfile.user_id == user_id))
+        except Exception as error:
+            if "does not exist" not in str(error).lower():
+                raise
+            run_migrations(self.database_url, force=True)
+            with self.session() as session:
+                return session.scalar(select(UserLearningProfile).where(UserLearningProfile.user_id == user_id))
+
+    def upsert_user_learning_profile(self, *, user_id: int, fields: dict[str, object]) -> UserLearningProfile:
+        try:
+            with self.session() as session:
+                record = session.scalar(select(UserLearningProfile).where(UserLearningProfile.user_id == user_id))
+                if record is None:
+                    record = UserLearningProfile(user_id=user_id, **fields)
+                    session.add(record)
+                else:
+                    for key, value in fields.items():
+                        setattr(record, key, value)
+                    record.updated_at = datetime.now(timezone.utc)
+                session.flush()
+                session.refresh(record)
+                return record
+        except Exception as error:
+            if "does not exist" not in str(error).lower():
+                raise
+            run_migrations(self.database_url, force=True)
+            with self.session() as session:
+                record = session.scalar(select(UserLearningProfile).where(UserLearningProfile.user_id == user_id))
+                if record is None:
+                    record = UserLearningProfile(user_id=user_id, **fields)
+                    session.add(record)
+                else:
+                    for key, value in fields.items():
+                        setattr(record, key, value)
+                    record.updated_at = datetime.now(timezone.utc)
+                session.flush()
+                session.refresh(record)
+                return record
+
+    def list_user_learning_goals(self, *, user_id: int) -> list[UserLearningGoal]:
+        try:
+            with self.session() as session:
+                rows = session.scalars(
+                    select(UserLearningGoal)
+                    .where(UserLearningGoal.user_id == user_id)
+                    .order_by(UserLearningGoal.is_active.desc(), UserLearningGoal.updated_at.desc(), UserLearningGoal.created_at.desc())
+                )
+                return list(rows)
+        except Exception as error:
+            if "does not exist" not in str(error).lower():
+                raise
+            run_migrations(self.database_url, force=True)
+            with self.session() as session:
+                rows = session.scalars(
+                    select(UserLearningGoal)
+                    .where(UserLearningGoal.user_id == user_id)
+                    .order_by(UserLearningGoal.is_active.desc(), UserLearningGoal.updated_at.desc(), UserLearningGoal.created_at.desc())
+                )
+                return list(rows)
+
+    def create_user_learning_goal(self, *, payload: dict[str, object]) -> UserLearningGoal:
+        try:
+            with self.session() as session:
+                record = UserLearningGoal(**payload)
+                session.add(record)
+                session.flush()
+                session.refresh(record)
+                return record
+        except Exception as error:
+            if "does not exist" not in str(error).lower():
+                raise
+            run_migrations(self.database_url, force=True)
+            with self.session() as session:
+                record = UserLearningGoal(**payload)
+                session.add(record)
+                session.flush()
+                session.refresh(record)
+                return record
+
+    def update_user_learning_goal(self, *, user_id: int, goal_id: str, fields: dict[str, object]) -> UserLearningGoal | None:
+        try:
+            with self.session() as session:
+                record = session.scalar(
+                    select(UserLearningGoal).where(UserLearningGoal.id == goal_id, UserLearningGoal.user_id == user_id)
+                )
+                if record is None:
+                    return None
+                for key, value in fields.items():
+                    setattr(record, key, value)
+                record.updated_at = datetime.now(timezone.utc)
+                session.flush()
+                session.refresh(record)
+                return record
+        except Exception as error:
+            if "does not exist" not in str(error).lower():
+                raise
+            run_migrations(self.database_url, force=True)
+            with self.session() as session:
+                record = session.scalar(
+                    select(UserLearningGoal).where(UserLearningGoal.id == goal_id, UserLearningGoal.user_id == user_id)
+                )
+                if record is None:
+                    return None
+                for key, value in fields.items():
+                    setattr(record, key, value)
+                record.updated_at = datetime.now(timezone.utc)
+                session.flush()
+                session.refresh(record)
+                return record
+
+    def delete_user_learning_goal(self, *, user_id: int, goal_id: str) -> UserLearningGoal | None:
+        try:
+            with self.session() as session:
+                record = session.scalar(
+                    select(UserLearningGoal).where(UserLearningGoal.id == goal_id, UserLearningGoal.user_id == user_id)
+                )
+                if record is None:
+                    return None
+                session.delete(record)
+                return record
+        except Exception as error:
+            if "does not exist" not in str(error).lower():
+                raise
+            run_migrations(self.database_url, force=True)
+            with self.session() as session:
+                record = session.scalar(
+                    select(UserLearningGoal).where(UserLearningGoal.id == goal_id, UserLearningGoal.user_id == user_id)
+                )
+                if record is None:
+                    return None
+                session.delete(record)
+                return record
 
     def get_user_by_id(self, user_id: int) -> UserAccount | None:
         with self.session() as session:

@@ -10,9 +10,9 @@ _migration_lock = Lock()
 _migrated_urls: set[str] = set()
 
 
-def run_migrations(database_url: str) -> None:
+def run_migrations(database_url: str, *, force: bool = False) -> None:
     with _migration_lock:
-        if database_url in _migrated_urls:
+        if not force and database_url in _migrated_urls:
             return
         root_dir = Path(__file__).resolve().parents[2]
         config = Config()

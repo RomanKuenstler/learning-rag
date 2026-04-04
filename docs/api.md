@@ -174,6 +174,57 @@ Updates one lesson.
 
 Deletes one lesson.
 
+## Declared Learning Profile (Step B)
+
+### `GET /api/learning-profile`
+
+Returns the current user bundle:
+
+- `preferences` (declared learning preferences)
+- `context` (learner background/context)
+- `goals` (structured learning goals)
+- `diagnostics_status` (currently `not_started`)
+
+### `PATCH /api/learning-profile/preferences`
+
+Partial update for declared learning preferences.
+
+Supported enum fields:
+
+- `preferred_pace`: `slow|balanced|fast`
+- `explanation_depth`: `concise|balanced|detailed`
+- `examples_vs_theory`: `more_examples|balanced|more_theory`
+- `structure_preference`: `more_structured|balanced|more_conversational`
+- `checkpoint_frequency`: `low|medium|high`
+- `encouragement_level`: `low|balanced|high`
+- `guidance_level`: `step_by_step|balanced|more_independent`
+- `recap_frequency`: `low|medium|high`
+- `preferred_learning_format`: `reading|dialogue|exercises|mixed`
+
+### `PATCH /api/learning-profile/context`
+
+Partial update for learner background/context:
+
+- `education_background`
+- `current_skill_areas`
+- `interests`
+- `professional_context`
+- `current_reason_for_learning`
+- `preferred_form_of_address`
+- `learning_context_notes`
+
+### `POST /api/learning-profile/goals`
+
+Creates one user-scoped learning goal.
+
+### `PATCH /api/learning-profile/goals/{goal_id}`
+
+Partially updates one user-owned goal (`404` when not owned or missing).
+
+### `DELETE /api/learning-profile/goals/{goal_id}`
+
+Deletes one user-owned goal (`404` when not owned or missing).
+
 Multipart request:
 
 - `message`: text field
