@@ -137,6 +137,7 @@ export function useChatApp() {
   const [library, setLibrary] = useState<LibraryResponse | null>(null);
   const [libraryLoading, setLibraryLoading] = useState(false);
   const [libraryError, setLibraryError] = useState<string | null>(null);
+  const [libraryIncludeOtherUsers, setLibraryIncludeOtherUsers] = useState(false);
   const [uploading, setUploading] = useState(false);
   const [busyFileIds, setBusyFileIds] = useState<number[]>([]);
   const [assistantMode, setAssistantMode] = useState<AssistantMode>("simple");
@@ -268,6 +269,7 @@ export function useChatApp() {
     setActiveChatId(null);
     setLibrary(null);
     setLibraryError(null);
+    setLibraryIncludeOtherUsers(false);
     setSettings(null);
     setSettingsDraft(null);
     setPersonalization(null);
@@ -738,11 +740,12 @@ export function useChatApp() {
     }
   }
 
-  async function loadLibrary() {
+  async function loadLibrary(includeOtherUsers = libraryIncludeOtherUsers) {
     setLibraryLoading(true);
     setLibraryError(null);
+    setLibraryIncludeOtherUsers(includeOtherUsers);
     try {
-      const payload = await apiClient.listLibraryFiles();
+      const payload = await apiClient.listLibraryFiles({ includeOtherUsers });
       setLibrary(payload);
       const userFiles = await apiClient.listUserFiles();
       setGlobalFileFilters(userFiles.files);
@@ -754,7 +757,7 @@ export function useChatApp() {
   }
 
   async function toggleLibraryFile(file: LibraryFile) {
-    if (!file.can_toggle_enabled) {
+    if (!file.can_disable) {
       return;
     }
     setBusyFileIds((current) => [...current, file.id]);
@@ -800,7 +803,7 @@ export function useChatApp() {
     setLibraryError(null);
     try {
       await apiClient.deleteLibraryFile(fileId);
-      await loadLibrary();
+      await loadLibrary(libraryIncludeOtherUsers);
     } catch (error) {
       setLibraryError(error instanceof Error ? error.message : "Failed to delete file");
     } finally {
@@ -813,7 +816,7 @@ export function useChatApp() {
     setLibraryError(null);
     try {
       await apiClient.uploadLibraryFiles(files, tagsByFile);
-      await loadLibrary();
+      await loadLibrary(libraryIncludeOtherUsers);
     } catch (error) {
       setLibraryError(error instanceof Error ? error.message : "Failed to upload files");
       throw error;
@@ -1043,6 +1046,7 @@ export function useChatApp() {
     library,
     libraryLoading,
     libraryError,
+    libraryIncludeOtherUsers,
     uploading,
     busyFileIds,
     assistantMode,
@@ -1096,6 +1100,7 @@ export function useChatApp() {
     toggleGlobalTagFilter,
     toggleChatTagFilter,
     loadLibrary,
+    setLibraryIncludeOtherUsers,
     toggleLibraryFile,
     deleteLibraryFile,
     uploadLibraryFiles,

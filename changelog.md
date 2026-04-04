@@ -1,5 +1,17 @@
 # Changelog
 
+## 2026-04-04 14:45 UTC
+
+- Implemented Step 13 library ownership and visibility rules across ingestion, retrieval, API, and web UI.
+- Added file metadata fields `is_global` and `source_origin` plus Alembic migration/backfill logic.
+- Updated ingestion classification so direct `data/` files are global system files and admin uploads are global admin-managed files.
+- Enforced server-side protections so non-admin users cannot disable global files, delete global files, or delete files owned by other users.
+- Reworked default file enablement to be owner-aware: owner-enabled by default, other users disabled by default, and global files enabled by default.
+- Updated retrieval filtering to apply ownership defaults and user settings before selecting usable chunks.
+- Added library API support for `include_other_users` and expanded library responses with ownership/global metadata and permission flags.
+- Added a library-page bottom switch to show or hide other users' files (default off), and ownership/global badges in the table rows.
+- Expanded tests and docs for ownership behavior, permission enforcement, retrieval defaults, and library visibility toggling.
+
 ## 2026-04-01 18:45 UTC
 
 - Implemented Step 12 user-owned GPTs with isolated personalization, retrieval settings, file and tag overrides, instructions, and assistant mode.

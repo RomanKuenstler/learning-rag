@@ -373,8 +373,8 @@ class RetrieverAppService:
             "attachments_used": [],
         }
 
-    def list_library_files(self, user: UserAccount):
-        return self.library_manager.list_files(user)
+    def list_library_files(self, user: UserAccount, *, include_other_users: bool = False):
+        return self.library_manager.list_files(user, include_other_users=include_other_users)
 
     def update_library_file(self, user: UserAccount, file_id: int, *, is_enabled: bool):
         return self.library_manager.update_file_state(user, file_id, is_enabled=is_enabled)
@@ -388,22 +388,38 @@ class RetrieverAppService:
         return {"files": files}
 
     def list_user_file_filters(self, user: UserAccount):
-        return {"files": [map_filter_file(item) for item in self.chat_repository.list_user_file_filters(user.id)]}
+        return {
+            "files": [
+                map_filter_file(item)
+                for item in self.chat_repository.list_user_file_filters(user.id, is_admin=user.role == "admin")
+            ]
+        }
 
     def update_user_file_filter(self, user: UserAccount, file_id: int, *, is_enabled: bool):
-        record = self.chat_repository.set_user_file_filter(user.id, file_id, is_enabled)
+        record = self.chat_repository.set_user_file_filter(
+            user.id,
+            file_id,
+            is_enabled,
+            is_admin=user.role == "admin",
+        )
         if record is None:
             return None
         return map_filter_file(record)
 
     def list_chat_file_filters(self, user: UserAccount, chat_id: str):
-        records = self.chat_repository.list_chat_file_filters(user.id, chat_id)
+        records = self.chat_repository.list_chat_file_filters(user.id, chat_id, is_admin=user.role == "admin")
         if records is None:
             return None
         return {"files": [map_filter_file(item) for item in records]}
 
     def update_chat_file_filter(self, user: UserAccount, chat_id: str, file_id: int, *, is_enabled: bool):
-        record = self.chat_repository.set_chat_file_filter(user.id, chat_id, file_id, is_enabled)
+        record = self.chat_repository.set_chat_file_filter(
+            user.id,
+            chat_id,
+            file_id,
+            is_enabled,
+            is_admin=user.role == "admin",
+        )
         if record is None:
             return None
         return map_filter_file(record)

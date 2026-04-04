@@ -337,6 +337,8 @@ class StubRetrieverService:
     def update_library_file(self, *_args, file_id: int | None = None, is_enabled: bool = True, **_kwargs):
         if file_id is None and _args:
             file_id = _args[-1]
+        if file_id == 99 and not is_enabled:
+            raise PermissionError("Global files cannot be disabled by non-admin users")
         if file_id != 1:
             return None
         record = self.list_library_files().files[0]
@@ -369,6 +371,8 @@ class StubRetrieverService:
     def update_user_file_filter(self, *_args, file_id: int | None = None, is_enabled: bool = True, **_kwargs):
         if file_id is None and _args:
             file_id = _args[-1]
+        if file_id == 99 and not is_enabled:
+            raise PermissionError("Global files cannot be disabled by non-admin users")
         if file_id != 1:
             return None
         return self.list_user_file_filters()["files"][0].model_copy(
@@ -400,6 +404,8 @@ class StubRetrieverService:
         if chat_id is None and len(_args) >= 2:
             chat_id = _args[-2]
             file_id = _args[-1]
+        if file_id == 99 and not is_enabled:
+            raise PermissionError("Global files cannot be disabled by non-admin users")
         if chat_id != "chat-1" or file_id != 1:
             return None
         return self.list_chat_file_filters(chat_id="chat-1")["files"][0].model_copy(
@@ -739,6 +745,12 @@ def test_library_endpoints() -> None:
     delete_response = client.delete("/api/library/files/1")
     assert delete_response.status_code == 200
 
+    include_other_users_response = client.get("/api/library/files?include_other_users=true")
+    assert include_other_users_response.status_code == 200
+
+    forbidden_patch = client.patch("/api/library/files/99", json={"is_enabled": False})
+    assert forbidden_patch.status_code == 403
+
 
 def test_download_and_settings_endpoints() -> None:
     client = build_client()
@@ -813,6 +825,12 @@ def test_filter_endpoints() -> None:
     chat_file_patch = client.patch("/api/chats/chat-1/files/1", json={"is_enabled": False})
     assert chat_file_patch.status_code == 200
     assert chat_file_patch.json()["scoped_is_enabled"] is False
+
+    global_forbidden = client.patch("/api/user/files/99", json={"is_enabled": False})
+    assert global_forbidden.status_code == 403
+
+    chat_global_forbidden = client.patch("/api/chats/chat-1/files/99", json={"is_enabled": False})
+    assert chat_global_forbidden.status_code == 403
 
     chat_tags = client.get("/api/chats/chat-1/tags")
     assert chat_tags.status_code == 200

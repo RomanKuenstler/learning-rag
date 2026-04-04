@@ -238,9 +238,11 @@ function AppRoutes() {
                   library={app.library}
                   loading={app.libraryLoading}
                   error={app.libraryError}
+                  showOtherUsers={app.libraryIncludeOtherUsers}
                   uploading={app.uploading}
                   busyFileIds={app.busyFileIds}
-                  onLoad={() => void app.loadLibrary()}
+                  onLoad={(includeOtherUsers) => void app.loadLibrary(includeOtherUsers)}
+                  onToggleShowOtherUsers={(nextValue) => void app.loadLibrary(nextValue)}
                   onToggleFile={(file) => void app.toggleLibraryFile(file)}
                   onDeleteFile={(fileId) => void app.deleteLibraryFile(fileId)}
                   onUploadFiles={(files, tagsByFile) => app.uploadLibraryFiles(files, tagsByFile)}

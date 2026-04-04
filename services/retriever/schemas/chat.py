@@ -240,8 +240,15 @@ class LibraryFileRead(BaseModel):
     is_embedded: bool
     is_enabled: bool
     is_system: bool = False
+    is_global: bool = False
+    source_origin: str = "unknown"
     uploaded_by_user_id: int | None = None
+    owner_user_id: int | None = None
+    owner_username: str | None = None
+    owner_displayname: str | None = None
+    is_owned_by_current_user: bool = False
     can_delete: bool = False
+    can_disable: bool = True
     can_toggle_enabled: bool = True
     processing_status: str
     updated_at: datetime

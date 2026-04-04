@@ -1758,7 +1758,19 @@ button.send:hover:not(:disabled) {
 .library-path {
   color: var(--text);
   font-size: 0.82rem;
+  display: grid;
+  gap: 0.12rem;
   overflow-wrap: anywhere;
+}
+
+.library-path strong {
+  font-size: 0.82rem;
+}
+
+.library-owner-cell {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem;
 }
 
 .library-status-cell {
@@ -1917,7 +1929,14 @@ button.send:hover:not(:disabled) {
 
 .library-table-footer {
   display: flex;
-  justify-content: flex-end;
+  justify-content: space-between;
+  align-items: center;
+  gap: 0.75rem;
+}
+
+.library-table-footer .filter-switch {
+  color: var(--text-soft);
+  font-size: 0.8rem;
 }
 
 .dialog-backdrop,

@@ -190,6 +190,17 @@ Request:
 
 Returns embedded library files and upload constraints.
 
+Query params:
+
+- `include_other_users` (boolean, default `false`)
+
+When `false`, the list includes:
+
+- global files
+- files owned by the authenticated user
+
+When `true`, other users' files are also included.
+
 ### `POST /api/library/files/upload`
 
 Multipart upload endpoint used by the web UI.
@@ -200,14 +211,27 @@ Rules:
 - allowed extensions come from `ALLOWED_UPLOAD_EXTENSIONS`
 - tags default to `DEFAULT_TAG`
 - duplicate names are rejected
+- admin uploads are persisted as global files (`is_global=true`, `source_origin=admin_upload`)
+- non-admin uploads are persisted as user-owned files (`is_global=false`, `source_origin=user_upload`)
 
 ### `PATCH /api/library/files/{file_id}`
 
 Toggles `is_enabled` without deleting vectors.
 
+Permission rules:
+
+- normal users cannot disable global files (`403`)
+- admins can toggle any file
+
 ### `DELETE /api/library/files/{file_id}`
 
 Deletes the library file from local storage, PostgreSQL, Qdrant, and tag metadata.
+
+Permission rules:
+
+- normal users cannot delete global files (`403`)
+- normal users cannot delete other users' files (`403`)
+- admins can delete any file
 
 ## Internal Embedder Attachment Job
 
@@ -284,6 +308,11 @@ File filters return:
 - `is_enabled`
 - `is_locked`
 - `updated_at`
+
+File filter permissions:
+
+- `PATCH /api/user/files/{file_id}` returns `403` when a non-admin tries to disable a global file
+- `PATCH /api/chats/{chat_id}/files/{file_id}` returns `403` for the same restriction
 
 Tag filters return:
 

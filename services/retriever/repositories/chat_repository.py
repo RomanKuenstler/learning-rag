@@ -101,17 +101,28 @@ class ChatRepository:
     def upsert_setting(self, user_id: int, key: str, value: str) -> SettingRecord:
         return self.postgres_client.upsert_setting(user_id=user_id, key=key, value=value)
 
-    def list_user_file_filters(self, user_id: int):
-        return self.postgres_client.list_user_file_filters(user_id=user_id)
+    def list_user_file_filters(self, user_id: int, *, is_admin: bool):
+        return self.postgres_client.list_user_file_filters(user_id=user_id, is_admin=is_admin)
 
-    def set_user_file_filter(self, user_id: int, file_id: int, is_enabled: bool):
-        return self.postgres_client.set_user_file_filter(user_id=user_id, file_id=file_id, is_enabled=is_enabled)
+    def set_user_file_filter(self, user_id: int, file_id: int, is_enabled: bool, *, is_admin: bool):
+        return self.postgres_client.set_user_file_filter(
+            user_id=user_id,
+            file_id=file_id,
+            is_enabled=is_enabled,
+            is_admin=is_admin,
+        )
 
-    def list_chat_file_filters(self, user_id: int, chat_id: str):
-        return self.postgres_client.list_chat_file_filters(user_id=user_id, chat_id=chat_id)
+    def list_chat_file_filters(self, user_id: int, chat_id: str, *, is_admin: bool):
+        return self.postgres_client.list_chat_file_filters(user_id=user_id, chat_id=chat_id, is_admin=is_admin)
 
-    def set_chat_file_filter(self, user_id: int, chat_id: str, file_id: int, is_enabled: bool):
-        return self.postgres_client.set_chat_file_filter(user_id=user_id, chat_id=chat_id, file_id=file_id, is_enabled=is_enabled)
+    def set_chat_file_filter(self, user_id: int, chat_id: str, file_id: int, is_enabled: bool, *, is_admin: bool):
+        return self.postgres_client.set_chat_file_filter(
+            user_id=user_id,
+            chat_id=chat_id,
+            file_id=file_id,
+            is_enabled=is_enabled,
+            is_admin=is_admin,
+        )
 
     def list_user_tag_filters(self, user_id: int):
         return self.postgres_client.list_user_tag_filters(user_id=user_id)

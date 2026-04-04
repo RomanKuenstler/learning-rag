@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from fastapi import Depends, FastAPI, File, Form, HTTPException, Request, Response, UploadFile, status
+from fastapi import Depends, FastAPI, File, Form, HTTPException, Query, Request, Response, UploadFile, status
 from fastapi.middleware.cors import CORSMiddleware
 
 from services.common.config import get_settings
@@ -396,14 +396,17 @@ def create_app() -> FastAPI:
     ) -> FilterFileListResponse:
         return FilterFileListResponse(**service.list_user_file_filters(auth.user))
 
-    @app.patch("/api/user/files/{file_id}", response_model=FilterFileRead, responses={404: {"model": ErrorResponse}})
+    @app.patch("/api/user/files/{file_id}", response_model=FilterFileRead, responses={404: {"model": ErrorResponse}, 403: {"model": ErrorResponse}})
     def update_user_file(
         file_id: int,
         payload: FilterUpdateRequest,
         auth: AuthContext = Depends(get_app_auth_context),
         service: RetrieverAppService = Depends(get_retriever_service),
     ) -> FilterFileRead:
-        record = service.update_user_file_filter(auth.user, file_id, is_enabled=payload.is_enabled)
+        try:
+            record = service.update_user_file_filter(auth.user, file_id, is_enabled=payload.is_enabled)
+        except PermissionError as error:
+            raise HTTPException(status_code=403, detail=str(error)) from error
         if record is None:
             raise HTTPException(status_code=404, detail="File not found")
         return record
@@ -419,7 +422,7 @@ def create_app() -> FastAPI:
             raise HTTPException(status_code=404, detail="Chat not found")
         return FilterFileListResponse(**records)
 
-    @app.patch("/api/chats/{chat_id}/files/{file_id}", response_model=FilterFileRead, responses={404: {"model": ErrorResponse}})
+    @app.patch("/api/chats/{chat_id}/files/{file_id}", response_model=FilterFileRead, responses={404: {"model": ErrorResponse}, 403: {"model": ErrorResponse}})
     def update_chat_file(
         chat_id: str,
         file_id: int,
@@ -427,7 +430,10 @@ def create_app() -> FastAPI:
         auth: AuthContext = Depends(get_app_auth_context),
         service: RetrieverAppService = Depends(get_retriever_service),
     ) -> FilterFileRead:
-        record = service.update_chat_file_filter(auth.user, chat_id, file_id, is_enabled=payload.is_enabled)
+        try:
+            record = service.update_chat_file_filter(auth.user, chat_id, file_id, is_enabled=payload.is_enabled)
+        except PermissionError as error:
+            raise HTTPException(status_code=403, detail=str(error)) from error
         if record is None:
             raise HTTPException(status_code=404, detail="Chat or file not found")
         return record
@@ -528,10 +534,11 @@ def create_app() -> FastAPI:
 
     @app.get("/api/library/files", response_model=LibraryListResponse)
     def list_library_files(
+        include_other_users: bool = Query(default=False),
         auth: AuthContext = Depends(get_app_auth_context),
         service: RetrieverAppService = Depends(get_retriever_service),
     ) -> LibraryListResponse:
-        return service.list_library_files(auth.user)
+        return service.list_library_files(auth.user, include_other_users=include_other_users)
 
     @app.post("/api/library/files/upload", response_model=LibraryUploadResponse, responses={422: {"model": ErrorResponse}})
     async def upload_library_files(

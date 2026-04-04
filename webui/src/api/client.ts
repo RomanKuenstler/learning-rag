@@ -271,8 +271,9 @@ export const apiClient = {
       body: JSON.stringify(payload),
     });
   },
-  listLibraryFiles() {
-    return request<LibraryResponse>("/api/library/files");
+  listLibraryFiles(options?: { includeOtherUsers?: boolean }) {
+    const includeOtherUsers = options?.includeOtherUsers ?? false;
+    return request<LibraryResponse>(`/api/library/files?include_other_users=${includeOtherUsers ? "true" : "false"}`);
   },
   updateLibraryFile(fileId: number, payload: { is_enabled: boolean }) {
     return request<LibraryFile>(`/api/library/files/${fileId}`, {

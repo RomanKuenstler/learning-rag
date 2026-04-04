@@ -90,11 +90,17 @@ class PostgresClient:
                     record.is_embedded = True
             return records
 
-    def list_files_for_user(self, *, user_id: int, is_admin: bool) -> list[FileRecord]:
+    def list_files_for_user(self, *, user_id: int, is_admin: bool, include_other_users: bool = False) -> list[FileRecord]:
         with self.session() as session:
             records = list(
                 session.scalars(select(FileRecord).order_by(FileRecord.updated_at.desc(), FileRecord.file_name.asc()))
             )
+            if not include_other_users:
+                records = [
+                    record
+                    for record in records
+                    if record.is_global or record.uploaded_by_user_id == user_id
+                ]
             file_ids = [record.id for record in records]
             chunk_counts = self.chunk_counts_by_file_ids(file_ids)
             settings = self._user_file_settings_map(session, user_id=user_id, file_ids=file_ids)
@@ -106,10 +112,12 @@ class PostgresClient:
                     record.chunk_count = resolved_chunk_count
                 if resolved_chunk_count and not record.is_embedded:
                     record.is_embedded = True
-                if record.is_system and not is_admin:
-                    record.is_enabled = True
-                else:
-                    record.is_enabled = settings.get(record.id, True)
+                record.is_enabled = self._resolve_user_file_enabled(
+                    record,
+                    user_id=user_id,
+                    is_admin=is_admin,
+                    explicit_setting=settings.get(record.id),
+                )
             return records
 
     def get_file(self, file_path: str) -> FileRecord | None:
@@ -176,6 +184,8 @@ class PostgresClient:
             record = session.get(FileRecord, file_id)
             if record is None:
                 return None
+            if not is_admin and record.is_global and not is_enabled:
+                raise PermissionError("Global files cannot be disabled by non-admin users")
             setting = session.scalar(
                 select(UserFileSetting).where(UserFileSetting.user_id == user_id, UserFileSetting.file_id == file_id)
             )
@@ -185,9 +195,15 @@ class PostgresClient:
             else:
                 setting.is_enabled = is_enabled
                 setting.updated_at = datetime.now(timezone.utc)
-            record.is_enabled = is_enabled
+            effective_enabled = self._resolve_user_file_enabled(
+                record,
+                user_id=user_id,
+                is_admin=is_admin,
+                explicit_setting=is_enabled,
+            )
             session.flush()
             session.refresh(record)
+            record.is_enabled = effective_enabled
             return record
 
     def filter_retrieval_candidates(
@@ -206,6 +222,7 @@ class PostgresClient:
             records = list(session.scalars(select(FileRecord).where(FileRecord.file_path.in_(file_paths))))
             file_ids = [record.id for record in records]
             tags_in_system = self._all_tags_from_records(records)
+            user_file_settings = self._user_file_settings_map(session, user_id=user_id, file_ids=file_ids)
             if gpt_overrides:
                 file_settings = {
                     int(file_id): bool(is_enabled)
@@ -218,7 +235,6 @@ class PostgresClient:
                 files_enabled = bool(gpt_overrides.get("files_enabled", True))
                 tags_enabled = bool(gpt_overrides.get("tags_enabled", True))
             else:
-                user_file_settings = self._user_file_settings_map(session, user_id=user_id, file_ids=file_ids)
                 chat_file_settings = self._chat_file_settings_map(session, chat_id=chat_id, file_ids=file_ids)
                 self._delete_stale_tag_settings(session, user_id=user_id, chat_id=chat_id, valid_tags=tags_in_system)
                 user_tag_settings = self._user_tag_settings_map(session, user_id=user_id, tags=tags_in_system)
@@ -230,13 +246,18 @@ class PostgresClient:
                 record = file_map.get(file_path)
                 if record is None:
                     continue
+                global_file_enabled = self._resolve_user_file_enabled(
+                    record,
+                    user_id=user_id,
+                    is_admin=is_admin,
+                    explicit_setting=user_file_settings.get(record.id),
+                )
                 if gpt_overrides:
-                    if not record.is_enabled:
+                    if not global_file_enabled:
                         continue
                     if files_enabled and not file_settings.get(record.id, True):
                         continue
                 else:
-                    global_file_enabled = user_file_settings.get(record.id, True)
                     chat_file_enabled = chat_file_settings.get(record.id, True)
                     if not global_file_enabled or not chat_file_enabled:
                         continue
@@ -262,45 +283,61 @@ class PostgresClient:
                     filtered.append(candidate)
             return filtered
 
-    def list_user_file_filters(self, *, user_id: int) -> list[FileFilterState]:
+    def list_user_file_filters(self, *, user_id: int, is_admin: bool) -> list[FileFilterState]:
         with self.session() as session:
             records = list(session.scalars(select(FileRecord).order_by(FileRecord.file_name.asc())))
             user_file_settings = self._user_file_settings_map(session, user_id=user_id, file_ids=[record.id for record in records])
-            return [
-                FileFilterState(
-                    file_id=record.id,
-                    file_name=record.file_name,
-                    file_path=record.file_path,
-                    tags=list(record.tags or []),
-                    global_is_enabled=user_file_settings.get(record.id, True),
-                    scoped_is_enabled=user_file_settings.get(record.id, True),
-                    is_enabled=user_file_settings.get(record.id, True),
-                    is_locked=False,
-                    updated_at=record.updated_at,
+            result: list[FileFilterState] = []
+            for record in records:
+                effective_enabled = self._resolve_user_file_enabled(
+                    record,
+                    user_id=user_id,
+                    is_admin=is_admin,
+                    explicit_setting=user_file_settings.get(record.id),
                 )
-                for record in records
-            ]
+                result.append(
+                    FileFilterState(
+                        file_id=record.id,
+                        file_name=record.file_name,
+                        file_path=record.file_path,
+                        tags=list(record.tags or []),
+                        global_is_enabled=effective_enabled,
+                        scoped_is_enabled=effective_enabled,
+                        is_enabled=effective_enabled,
+                        is_locked=record.is_global and not is_admin,
+                        updated_at=record.updated_at,
+                    )
+                )
+            return result
 
-    def set_user_file_filter(self, *, user_id: int, file_id: int, is_enabled: bool) -> FileFilterState | None:
+    def set_user_file_filter(self, *, user_id: int, file_id: int, is_enabled: bool, is_admin: bool) -> FileFilterState | None:
         with self.session() as session:
             record = session.get(FileRecord, file_id)
             if record is None:
                 return None
+            if not is_admin and record.is_global and not is_enabled:
+                raise PermissionError("Global files cannot be disabled by non-admin users")
             self._upsert_user_file_setting(session, user_id=user_id, file_id=file_id, is_enabled=is_enabled)
             session.flush()
+            effective_enabled = self._resolve_user_file_enabled(
+                record,
+                user_id=user_id,
+                is_admin=is_admin,
+                explicit_setting=is_enabled,
+            )
             return FileFilterState(
                 file_id=record.id,
                 file_name=record.file_name,
                 file_path=record.file_path,
                 tags=list(record.tags or []),
-                global_is_enabled=is_enabled,
-                scoped_is_enabled=is_enabled,
-                is_enabled=is_enabled,
-                is_locked=False,
+                global_is_enabled=effective_enabled,
+                scoped_is_enabled=effective_enabled,
+                is_enabled=effective_enabled,
+                is_locked=record.is_global and not is_admin,
                 updated_at=record.updated_at,
             )
 
-    def list_chat_file_filters(self, *, user_id: int, chat_id: str) -> list[FileFilterState] | None:
+    def list_chat_file_filters(self, *, user_id: int, chat_id: str, is_admin: bool) -> list[FileFilterState] | None:
         with self.session() as session:
             if session.scalar(select(ChatSession.id).where(ChatSession.id == chat_id, ChatSession.user_id == user_id)) is None:
                 return None
@@ -310,7 +347,12 @@ class PostgresClient:
             chat_file_settings = self._chat_file_settings_map(session, chat_id=chat_id, file_ids=file_ids)
             result: list[FileFilterState] = []
             for record in records:
-                global_enabled = user_file_settings.get(record.id, True)
+                global_enabled = self._resolve_user_file_enabled(
+                    record,
+                    user_id=user_id,
+                    is_admin=is_admin,
+                    explicit_setting=user_file_settings.get(record.id),
+                )
                 scoped_enabled = chat_file_settings.get(record.id, True)
                 result.append(
                     FileFilterState(
@@ -321,19 +363,26 @@ class PostgresClient:
                         global_is_enabled=global_enabled,
                         scoped_is_enabled=scoped_enabled,
                         is_enabled=global_enabled and scoped_enabled,
-                        is_locked=not global_enabled,
+                        is_locked=(not global_enabled) or (record.is_global and not is_admin),
                         updated_at=record.updated_at,
                     )
                 )
             return result
 
-    def set_chat_file_filter(self, *, user_id: int, chat_id: str, file_id: int, is_enabled: bool) -> FileFilterState | None:
+    def set_chat_file_filter(self, *, user_id: int, chat_id: str, file_id: int, is_enabled: bool, is_admin: bool) -> FileFilterState | None:
         with self.session() as session:
             chat = session.scalar(select(ChatSession).where(ChatSession.id == chat_id, ChatSession.user_id == user_id))
             record = session.get(FileRecord, file_id)
             if chat is None or record is None:
                 return None
-            global_enabled = self._user_file_settings_map(session, user_id=user_id, file_ids=[file_id]).get(file_id, True)
+            global_enabled = self._resolve_user_file_enabled(
+                record,
+                user_id=user_id,
+                is_admin=is_admin,
+                explicit_setting=self._user_file_settings_map(session, user_id=user_id, file_ids=[file_id]).get(file_id),
+            )
+            if not is_admin and record.is_global and not is_enabled:
+                raise PermissionError("Global files cannot be disabled by non-admin users")
             if not global_enabled:
                 is_enabled = False
             self._upsert_chat_file_setting(session, chat_id=chat_id, file_id=file_id, is_enabled=is_enabled)
@@ -346,7 +395,7 @@ class PostgresClient:
                 global_is_enabled=global_enabled,
                 scoped_is_enabled=is_enabled,
                 is_enabled=global_enabled and is_enabled,
-                is_locked=not global_enabled,
+                is_locked=(not global_enabled) or (record.is_global and not is_admin),
                 updated_at=record.updated_at,
             )
 
@@ -996,6 +1045,25 @@ class PostgresClient:
                 .where(UserSessionRecord.user_id == user_id, UserSessionRecord.revoked_at.is_(None))
                 .values(revoked_at=revoked_at, updated_at=revoked_at)
             )
+
+    def _default_user_file_enabled(self, record: FileRecord, *, user_id: int) -> bool:
+        if record.is_global:
+            return True
+        return bool(record.uploaded_by_user_id == user_id)
+
+    def _resolve_user_file_enabled(
+        self,
+        record: FileRecord,
+        *,
+        user_id: int,
+        is_admin: bool,
+        explicit_setting: bool | None,
+    ) -> bool:
+        if record.is_global and not is_admin:
+            return True
+        if explicit_setting is not None:
+            return bool(explicit_setting)
+        return self._default_user_file_enabled(record, user_id=user_id)
 
     def _upsert_user_file_setting(self, session: Session, *, user_id: int, file_id: int, is_enabled: bool) -> None:
         setting = session.scalar(

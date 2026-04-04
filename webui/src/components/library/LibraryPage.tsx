@@ -8,9 +8,11 @@ type LibraryPageProps = {
   library: LibraryResponse | null;
   loading: boolean;
   error: string | null;
+  showOtherUsers: boolean;
   uploading: boolean;
   busyFileIds: number[];
-  onLoad: () => void;
+  onLoad: (includeOtherUsers: boolean) => void;
+  onToggleShowOtherUsers: (nextValue: boolean) => void;
   onToggleFile: (file: LibraryFile) => void;
   onDeleteFile: (fileId: number) => void;
   onUploadFiles: (files: File[], tagsByFile: Record<string, string[]>) => Promise<void>;
@@ -47,9 +49,11 @@ export function LibraryPage({
   library,
   loading,
   error,
+  showOtherUsers,
   uploading,
   busyFileIds,
   onLoad,
+  onToggleShowOtherUsers,
   onToggleFile,
   onDeleteFile,
   onUploadFiles,
@@ -59,9 +63,9 @@ export function LibraryPage({
 
   useEffect(() => {
     if (library === null) {
-      onLoad();
+      onLoad(showOtherUsers);
     }
-  }, [library, onLoad]);
+  }, [library, onLoad, showOtherUsers]);
 
   const busySet = useMemo(() => new Set(busyFileIds), [busyFileIds]);
 
@@ -118,7 +122,18 @@ export function LibraryPage({
               <div className="library-table-body">
                 {library.files.map((file) => (
                   <div key={file.id} className="library-table-row">
-                    <div className="library-path">{file.file_name}</div>
+                    <div className="library-path">
+                      <strong>{file.file_name}</strong>
+                      <div className="library-owner-cell">
+                        {file.is_global ? <span className="library-tag-line">global</span> : null}
+                        {file.is_owned_by_current_user ? <span className="library-tag-line">owned by you</span> : null}
+                        {!file.is_global && !file.is_owned_by_current_user ? (
+                          <span className="library-tag-line muted">
+                            owner: {file.owner_displayname || file.owner_username || "unknown"}
+                          </span>
+                        ) : null}
+                      </div>
+                    </div>
                     <div className="library-status-cell">
                       <span className={`status-icon-pill ${file.is_enabled ? "enabled" : "disabled"}`}>
                         <Icon name={file.is_enabled ? "check" : "ban"} />
@@ -142,6 +157,7 @@ export function LibraryPage({
                         {file.extension || file.file_type}
                       </span>
                       {file.is_system ? <span className="library-tag-line">system</span> : null}
+                      {file.source_origin === "admin_upload" ? <span className="library-tag-line">admin upload</span> : null}
                     </div>
                     <div className="library-status-cell">
                       <span className={`status-icon-pill ${file.is_embedded ? "enabled" : "disabled"}`}>
@@ -156,7 +172,7 @@ export function LibraryPage({
                       <button
                         className="library-toggle-button"
                         type="button"
-                        disabled={busySet.has(file.id) || !file.can_toggle_enabled}
+                        disabled={busySet.has(file.id) || !file.can_disable}
                         onClick={() => onToggleFile(file)}
                         aria-label={file.is_enabled ? `Disable ${file.file_name}` : `Enable ${file.file_name}`}
                       >
@@ -179,6 +195,15 @@ export function LibraryPage({
           ) : null}
         </div>
         <div className="library-table-footer">
+          <label className="filter-switch" title="Show files uploaded by other users">
+            <input
+              type="checkbox"
+              checked={showOtherUsers}
+              onChange={(event) => onToggleShowOtherUsers(event.target.checked)}
+            />
+            <span className="filter-switch-slider" />
+            <span>Show other users' files</span>
+          </label>
           <button className="restart-button library-upload-button" type="button" onClick={() => setUploadOpen(true)}>
             Upload
           </button>

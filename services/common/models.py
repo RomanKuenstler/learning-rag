@@ -77,6 +77,8 @@ class FileRecord(Base):
     tags: Mapped[list[str]] = mapped_column(JSON, default=list)
     uploaded_by_user_id: Mapped[int | None] = mapped_column(ForeignKey("users.id", ondelete="SET NULL"), nullable=True)
     is_system: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
+    is_global: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
+    source_origin: Mapped[str] = mapped_column(String(32), nullable=False, default="unknown")
     last_processed_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, server_default=func.now())
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, server_default=func.now())
     updated_at: Mapped[datetime] = mapped_column(

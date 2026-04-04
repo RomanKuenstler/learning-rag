@@ -148,8 +148,15 @@ export type LibraryFile = {
   is_embedded: boolean;
   is_enabled: boolean;
   is_system: boolean;
+  is_global: boolean;
+  source_origin: string;
   uploaded_by_user_id: number | null;
+  owner_user_id: number | null;
+  owner_username: string | null;
+  owner_displayname: string | null;
+  is_owned_by_current_user: boolean;
   can_delete: boolean;
+  can_disable: boolean;
   can_toggle_enabled: boolean;
   processing_status: string;
   updated_at: string;

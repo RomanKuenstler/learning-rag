@@ -52,6 +52,16 @@ npm run build
 - frontend production build with GPT routes, editor state, and sidebar integration
 - live docker smoke checks for migration startup, GPT CRUD, preview, and persistent GPT chat
 
+## Step 13 Checks Covered
+
+- global file classification metadata (`is_global`, `source_origin`) for system/admin/user origins
+- owner-based default enablement for user-uploaded files (owner true, other users false)
+- retrieval exclusion for default-disabled other-user files
+- non-admin protection rules for global-file disable and delete actions
+- non-admin protection rules for deleting files owned by other users
+- library listing support for `include_other_users` query behavior
+- web library switch behavior for showing or hiding other users' files
+
 Recommended focused run:
 
 ```bash

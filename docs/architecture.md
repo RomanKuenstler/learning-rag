@@ -21,3 +21,23 @@ The system is intentionally split into small modules so later UI, multi-user, an
 8. The retriever embeds each user query and performs a cosine-similarity search in Qdrant.
 9. Chunks that meet the configured threshold are inserted into the RAG context and also rendered back to the CLI source section.
 10. The assistant response, chat history, and retrieval evidence are persisted in PostgreSQL.
+
+## Library Ownership Model
+
+Library files persist ownership and origin metadata in PostgreSQL:
+
+- `uploaded_by_user_id`: uploader/owner (nullable for system files)
+- `is_global`: global availability marker
+- `source_origin`: `system_data`, `admin_upload`, `user_upload`, or fallback `unknown`
+
+Effective user enablement is resolved server-side:
+
+- global files default to enabled for all users
+- user-owned files default to enabled for the owner
+- user-owned files default to disabled for non-owners
+
+Permission enforcement is also server-side:
+
+- non-admin users cannot disable global files
+- non-admin users cannot delete global files
+- non-admin users cannot delete files owned by other users
