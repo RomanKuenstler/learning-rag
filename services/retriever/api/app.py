@@ -44,6 +44,7 @@ from services.retriever.schemas.chat import (
     PersonalizationUpdateRequest,
     SettingsRead,
     SettingsUpdateRequest,
+    SystemStatusResponse,
 )
 from services.retriever.schemas.learning import (
     LearningLessonCreateRequest,
@@ -69,6 +70,19 @@ from services.retriever.schemas.learning_profile import (
     LearningProfileContextRead,
     LearningProfileContextUpdateRequest,
 )
+from services.retriever.schemas.diagnostics import (
+    DiagnosticAnswerUpsertRequest,
+    DiagnosticAttemptDetailsRead,
+    DiagnosticAttemptStartResponse,
+    DiagnosticAttemptSummaryRead,
+    DiagnosticCatalogRead,
+    DiagnosticDefinitionRead,
+    DiagnosticResultRead,
+    ExplanationFeedbackCreateRequest,
+    ExplanationFeedbackRead,
+    LearningStateCheckCreateRequest,
+    LearningStateCheckRead,
+)
 from services.retriever.services.library_manager import UploadFilePayload
 from services.retriever.services.retriever_service import RetrieverAppService
 
@@ -90,6 +104,13 @@ def create_app() -> FastAPI:
     @app.get("/api/health", response_model=HealthResponse)
     def health() -> HealthResponse:
         return HealthResponse(status="ok")
+
+    @app.get("/api/system/status", response_model=SystemStatusResponse)
+    def system_status(
+        auth: AuthContext = Depends(get_auth_context),
+        service: RetrieverAppService = Depends(get_retriever_service),
+    ) -> SystemStatusResponse:
+        return service.get_system_status(auth)
 
     @app.post("/api/auth/login", response_model=AuthLoginResponse, responses={401: {"model": ErrorResponse}})
     def login(
@@ -694,6 +715,119 @@ def create_app() -> FastAPI:
         if deleted is None:
             raise HTTPException(status_code=404, detail="Learning goal not found")
         return deleted
+
+    @app.get("/api/diagnostics/definitions", response_model=DiagnosticCatalogRead)
+    def list_diagnostic_definitions(
+        auth: AuthContext = Depends(get_app_auth_context),
+        service: RetrieverAppService = Depends(get_retriever_service),
+    ) -> DiagnosticCatalogRead:
+        _ = auth
+        return service.list_diagnostic_definitions()
+
+    @app.get("/api/diagnostics/definitions/{diagnostic_type}", response_model=DiagnosticDefinitionRead, responses={404: {"model": ErrorResponse}})
+    def get_diagnostic_definition(
+        diagnostic_type: str,
+        auth: AuthContext = Depends(get_app_auth_context),
+        service: RetrieverAppService = Depends(get_retriever_service),
+    ) -> DiagnosticDefinitionRead:
+        _ = auth
+        definition = service.get_diagnostic_definition(diagnostic_type.upper())
+        if definition is None:
+            raise HTTPException(status_code=404, detail="Diagnostic definition not found")
+        return definition
+
+    @app.post("/api/diagnostics/attempts", response_model=DiagnosticAttemptStartResponse)
+    def start_diagnostic_attempt(
+        auth: AuthContext = Depends(get_app_auth_context),
+        service: RetrieverAppService = Depends(get_retriever_service),
+    ) -> DiagnosticAttemptStartResponse:
+        return service.start_diagnostic_attempt(auth.user)
+
+    @app.get("/api/diagnostics/attempts", response_model=list[DiagnosticAttemptSummaryRead])
+    def list_diagnostic_attempts(
+        auth: AuthContext = Depends(get_app_auth_context),
+        service: RetrieverAppService = Depends(get_retriever_service),
+    ) -> list[DiagnosticAttemptSummaryRead]:
+        return service.list_diagnostic_attempts(auth.user)
+
+    @app.delete("/api/diagnostics/attempts/{attempt_id}", response_model=DiagnosticAttemptSummaryRead, responses={404: {"model": ErrorResponse}})
+    def delete_diagnostic_attempt(
+        attempt_id: str,
+        auth: AuthContext = Depends(get_app_auth_context),
+        service: RetrieverAppService = Depends(get_retriever_service),
+    ) -> DiagnosticAttemptSummaryRead:
+        deleted = service.delete_diagnostic_attempt(auth.user, attempt_id)
+        if deleted is None:
+            raise HTTPException(status_code=404, detail="Diagnostic attempt not found")
+        return deleted
+
+    @app.get("/api/diagnostics/attempts/latest", response_model=DiagnosticAttemptDetailsRead, responses={404: {"model": ErrorResponse}})
+    def get_latest_diagnostic_attempt(
+        auth: AuthContext = Depends(get_app_auth_context),
+        service: RetrieverAppService = Depends(get_retriever_service),
+    ) -> DiagnosticAttemptDetailsRead:
+        attempt = service.get_latest_diagnostic_attempt(auth.user)
+        if attempt is None:
+            raise HTTPException(status_code=404, detail="No diagnostic attempt found")
+        return attempt
+
+    @app.get("/api/diagnostics/attempts/{attempt_id}", response_model=DiagnosticAttemptDetailsRead, responses={404: {"model": ErrorResponse}})
+    def get_diagnostic_attempt(
+        attempt_id: str,
+        auth: AuthContext = Depends(get_app_auth_context),
+        service: RetrieverAppService = Depends(get_retriever_service),
+    ) -> DiagnosticAttemptDetailsRead:
+        attempt = service.get_diagnostic_attempt(auth.user, attempt_id)
+        if attempt is None:
+            raise HTTPException(status_code=404, detail="Diagnostic attempt not found")
+        return attempt
+
+    @app.put("/api/diagnostics/attempts/{attempt_id}/answers", response_model=DiagnosticAttemptDetailsRead, responses={404: {"model": ErrorResponse}})
+    def upsert_diagnostic_answers(
+        attempt_id: str,
+        payload: DiagnosticAnswerUpsertRequest,
+        auth: AuthContext = Depends(get_app_auth_context),
+        service: RetrieverAppService = Depends(get_retriever_service),
+    ) -> DiagnosticAttemptDetailsRead:
+        attempt = service.upsert_diagnostic_answers(auth.user, attempt_id, payload)
+        if attempt is None:
+            raise HTTPException(status_code=404, detail="Diagnostic attempt not found")
+        return attempt
+
+    @app.post("/api/diagnostics/attempts/{attempt_id}/complete", response_model=DiagnosticResultRead, responses={404: {"model": ErrorResponse}})
+    def complete_diagnostic_attempt(
+        attempt_id: str,
+        auth: AuthContext = Depends(get_app_auth_context),
+        service: RetrieverAppService = Depends(get_retriever_service),
+    ) -> DiagnosticResultRead:
+        result = service.complete_diagnostic_attempt(auth.user, attempt_id)
+        if result is None:
+            raise HTTPException(status_code=404, detail="Diagnostic attempt not found")
+        return result
+
+    @app.post("/api/learning-state-checks", response_model=LearningStateCheckRead)
+    def create_learning_state_check(
+        payload: LearningStateCheckCreateRequest,
+        auth: AuthContext = Depends(get_app_auth_context),
+        service: RetrieverAppService = Depends(get_retriever_service),
+    ) -> LearningStateCheckRead:
+        return service.create_learning_state_check(auth.user, payload)
+
+    @app.get("/api/learning-state-checks", response_model=list[LearningStateCheckRead])
+    def list_learning_state_checks(
+        limit: int = Query(default=20, ge=1, le=200),
+        auth: AuthContext = Depends(get_app_auth_context),
+        service: RetrieverAppService = Depends(get_retriever_service),
+    ) -> list[LearningStateCheckRead]:
+        return service.list_learning_state_checks(auth.user, limit=limit)
+
+    @app.post("/api/explanation-feedback", response_model=ExplanationFeedbackRead)
+    def create_explanation_feedback(
+        payload: ExplanationFeedbackCreateRequest,
+        auth: AuthContext = Depends(get_app_auth_context),
+        service: RetrieverAppService = Depends(get_retriever_service),
+    ) -> ExplanationFeedbackRead:
+        return service.create_explanation_feedback(auth.user, payload)
 
     @app.get("/api/user/files", response_model=FilterFileListResponse)
     def list_user_files(

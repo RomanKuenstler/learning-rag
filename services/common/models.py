@@ -387,12 +387,18 @@ class UserLearningProfile(Base):
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
     user_id: Mapped[int] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True)
-    education_background: Mapped[str] = mapped_column(Text, nullable=False, default="")
     current_skill_areas: Mapped[list[str]] = mapped_column(JSON, default=list)
     interests: Mapped[list[str]] = mapped_column(JSON, default=list)
-    professional_context: Mapped[str] = mapped_column(Text, nullable=False, default="")
+    skills: Mapped[list[str]] = mapped_column(JSON, default=list)
+    work_experience: Mapped[list[str]] = mapped_column(JSON, default=list)
+    education_history: Mapped[list[str]] = mapped_column(JSON, default=list)
     current_reason_for_learning: Mapped[str] = mapped_column(Text, nullable=False, default="")
     preferred_form_of_address: Mapped[str] = mapped_column(String(255), nullable=False, default="")
+    profile_display_name: Mapped[str] = mapped_column(String(255), nullable=False, default="")
+    about_me: Mapped[str] = mapped_column(Text, nullable=False, default="")
+    contact_location: Mapped[str] = mapped_column(String(255), nullable=False, default="")
+    general_title: Mapped[str] = mapped_column(String(255), nullable=False, default="")
+    date_of_birth: Mapped[str] = mapped_column(String(64), nullable=False, default="")
     learning_context_notes: Mapped[str] = mapped_column(Text, nullable=False, default="")
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, server_default=func.now())
     updated_at: Mapped[datetime] = mapped_column(
@@ -416,3 +422,155 @@ class UserLearningGoal(Base):
     updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), nullable=False, server_default=func.now(), onupdate=func.now()
     )
+
+
+class DiagnosticDefinition(Base):
+    __tablename__ = "diagnostic_definitions"
+    __table_args__ = (UniqueConstraint("diagnostic_type", name="uq_diagnostic_definitions_type"),)
+
+    id: Mapped[str] = mapped_column(String(128), primary_key=True)
+    diagnostic_type: Mapped[str] = mapped_column(String(16), nullable=False)
+    title: Mapped[str] = mapped_column(String(255), nullable=False, default="")
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, server_default=func.now())
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, server_default=func.now(), onupdate=func.now()
+    )
+
+
+class DiagnosticVersion(Base):
+    __tablename__ = "diagnostic_versions"
+    __table_args__ = (UniqueConstraint("definition_id", "version", name="uq_diagnostic_versions_definition_version"),)
+
+    id: Mapped[str] = mapped_column(String(128), primary_key=True, default=lambda: str(uuid.uuid4()))
+    definition_id: Mapped[str] = mapped_column(
+        ForeignKey("diagnostic_definitions.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    version: Mapped[str] = mapped_column(String(64), nullable=False)
+    source_document_name: Mapped[str] = mapped_column(String(512), nullable=False)
+    source_document_hash: Mapped[str] = mapped_column(String(64), nullable=False)
+    content_json: Mapped[dict] = mapped_column(JSON, default=dict)
+    is_active: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, server_default=func.now())
+
+
+class DiagnosticQuestion(Base):
+    __tablename__ = "diagnostic_questions"
+    __table_args__ = (UniqueConstraint("version_id", "question_key", name="uq_diagnostic_questions_version_question_key"),)
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    version_id: Mapped[str] = mapped_column(
+        ForeignKey("diagnostic_versions.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    question_key: Mapped[str] = mapped_column(String(128), nullable=False)
+    section_key: Mapped[str] = mapped_column(String(128), nullable=False, default="")
+    order_index: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    question_type: Mapped[str] = mapped_column(String(32), nullable=False)
+    question_text: Mapped[str] = mapped_column(Text, nullable=False)
+    scoring_json: Mapped[dict] = mapped_column(JSON, default=dict)
+    metadata_json: Mapped[dict] = mapped_column(JSON, default=dict)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, server_default=func.now())
+
+
+class DiagnosticOption(Base):
+    __tablename__ = "diagnostic_options"
+    __table_args__ = (UniqueConstraint("question_id", "option_key", name="uq_diagnostic_options_question_option_key"),)
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    question_id: Mapped[int] = mapped_column(
+        ForeignKey("diagnostic_questions.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    option_key: Mapped[str] = mapped_column(String(128), nullable=False)
+    order_index: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    label: Mapped[str] = mapped_column(Text, nullable=False)
+    value_text: Mapped[str] = mapped_column(String(128), nullable=False, default="")
+    scoring_json: Mapped[dict] = mapped_column(JSON, default=dict)
+    metadata_json: Mapped[dict] = mapped_column(JSON, default=dict)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, server_default=func.now())
+
+
+class DiagnosticScoringRule(Base):
+    __tablename__ = "diagnostic_scoring_rules"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    version_id: Mapped[str] = mapped_column(
+        ForeignKey("diagnostic_versions.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    rule_key: Mapped[str] = mapped_column(String(128), nullable=False)
+    rule_payload: Mapped[dict] = mapped_column(JSON, default=dict)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, server_default=func.now())
+
+
+class UserDiagnosticAttempt(Base):
+    __tablename__ = "user_diagnostic_attempts"
+
+    id: Mapped[str] = mapped_column(String(128), primary_key=True, default=lambda: str(uuid.uuid4()))
+    user_id: Mapped[int] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True)
+    definition_versions: Mapped[dict] = mapped_column(JSON, default=dict)
+    status: Mapped[str] = mapped_column(String(32), nullable=False, default="in_progress")
+    is_latest: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
+    started_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, server_default=func.now())
+    completed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, server_default=func.now())
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, server_default=func.now(), onupdate=func.now()
+    )
+
+
+class UserDiagnosticAnswer(Base):
+    __tablename__ = "user_diagnostic_answers"
+    __table_args__ = (UniqueConstraint("attempt_id", "diagnostic_type", "question_key", name="uq_user_diagnostic_answer"),)
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    attempt_id: Mapped[str] = mapped_column(
+        ForeignKey("user_diagnostic_attempts.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    diagnostic_type: Mapped[str] = mapped_column(String(16), nullable=False)
+    question_key: Mapped[str] = mapped_column(String(128), nullable=False)
+    answer_json: Mapped[dict] = mapped_column(JSON, default=dict)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, server_default=func.now())
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, server_default=func.now(), onupdate=func.now()
+    )
+
+
+class UserDiagnosticResult(Base):
+    __tablename__ = "user_diagnostic_results"
+    __table_args__ = (UniqueConstraint("attempt_id", name="uq_user_diagnostic_results_attempt"),)
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    attempt_id: Mapped[str] = mapped_column(
+        ForeignKey("user_diagnostic_attempts.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    result_json: Mapped[dict] = mapped_column(JSON, default=dict)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, server_default=func.now())
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, server_default=func.now(), onupdate=func.now()
+    )
+
+
+class LearningStateCheck(Base):
+    __tablename__ = "learning_state_checks"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    user_id: Mapped[int] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True)
+    chat_id: Mapped[str | None] = mapped_column(ForeignKey("chats.id", ondelete="SET NULL"), nullable=True, index=True)
+    mood: Mapped[str] = mapped_column(String(64), nullable=False, default="")
+    perceived_difficulty: Mapped[str] = mapped_column(String(64), nullable=False, default="")
+    needs_pause_or_input: Mapped[str] = mapped_column(String(64), nullable=False, default="")
+    preferred_format: Mapped[str] = mapped_column(String(64), nullable=False, default="")
+    notes: Mapped[str] = mapped_column(Text, nullable=False, default="")
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, server_default=func.now())
+
+
+class ExplanationFeedback(Base):
+    __tablename__ = "explanation_feedback"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    user_id: Mapped[int] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True)
+    message_id: Mapped[int | None] = mapped_column(
+        ForeignKey("chat_messages.id", ondelete="SET NULL"), nullable=True, index=True
+    )
+    rating: Mapped[int] = mapped_column(Integer, nullable=False, default=3)
+    feedback_text: Mapped[str] = mapped_column(Text, nullable=False, default="")
+    re_explain_requested: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, server_default=func.now())

@@ -17,11 +17,18 @@ from services.common.models import (
     ChatSession,
     ChatTagSetting,
     ChunkRecord,
+    DiagnosticDefinition,
+    DiagnosticOption,
+    DiagnosticQuestion,
+    DiagnosticScoringRule,
+    DiagnosticVersion,
+    ExplanationFeedback,
     FileRecord,
     GPTChatSession,
     GPTRecord,
     LearningLesson,
     LearningModule,
+    LearningStateCheck,
     LearningPath,
     LearningPathAllowedFile,
     LearningPathAllowedTag,
@@ -33,6 +40,9 @@ from services.common.models import (
     UserLearningProfile,
     UserAccount,
     UserFileSetting,
+    UserDiagnosticAnswer,
+    UserDiagnosticAttempt,
+    UserDiagnosticResult,
     UserTagSetting,
     UserSessionRecord,
 )
@@ -1436,6 +1446,329 @@ class PostgresClient:
                 .order_by(LearningPathAllowedTag.tag.asc())
             )
             return list(rows)
+
+    def get_diagnostic_definition(self, diagnostic_type: str) -> DiagnosticDefinition | None:
+        with self.session() as session:
+            return session.scalar(
+                select(DiagnosticDefinition).where(DiagnosticDefinition.diagnostic_type == diagnostic_type)
+            )
+
+    def upsert_diagnostic_definition(self, *, diagnostic_type: str, title: str) -> DiagnosticDefinition:
+        with self.session() as session:
+            record = session.scalar(
+                select(DiagnosticDefinition).where(DiagnosticDefinition.diagnostic_type == diagnostic_type)
+            )
+            if record is None:
+                record = DiagnosticDefinition(id=diagnostic_type.lower(), diagnostic_type=diagnostic_type, title=title)
+                session.add(record)
+            else:
+                record.title = title
+                record.updated_at = datetime.now(timezone.utc)
+            session.flush()
+            session.refresh(record)
+            return record
+
+    def get_diagnostic_version(self, *, definition_id: str, version: str) -> DiagnosticVersion | None:
+        with self.session() as session:
+            return session.scalar(
+                select(DiagnosticVersion).where(
+                    DiagnosticVersion.definition_id == definition_id,
+                    DiagnosticVersion.version == version,
+                )
+            )
+
+    def list_latest_diagnostic_versions(self) -> list[DiagnosticVersion]:
+        with self.session() as session:
+            rows = session.scalars(
+                select(DiagnosticVersion)
+                .where(DiagnosticVersion.is_active.is_(True))
+                .order_by(DiagnosticVersion.created_at.desc())
+            )
+            latest_by_type: dict[str, DiagnosticVersion] = {}
+            for row in rows:
+                if row.definition_id in latest_by_type:
+                    continue
+                latest_by_type[row.definition_id] = row
+            return list(latest_by_type.values())
+
+    def get_latest_diagnostic_version(self, diagnostic_type: str) -> DiagnosticVersion | None:
+        with self.session() as session:
+            definition = session.scalar(
+                select(DiagnosticDefinition).where(DiagnosticDefinition.diagnostic_type == diagnostic_type)
+            )
+            if definition is None:
+                return None
+            return session.scalar(
+                select(DiagnosticVersion)
+                .where(DiagnosticVersion.definition_id == definition.id, DiagnosticVersion.is_active.is_(True))
+                .order_by(DiagnosticVersion.created_at.desc())
+                .limit(1)
+            )
+
+    def create_diagnostic_version(
+        self,
+        *,
+        definition_id: str,
+        version: str,
+        source_document_name: str,
+        source_document_hash: str,
+        content_json: dict[str, object],
+    ) -> DiagnosticVersion:
+        with self.session() as session:
+            record = DiagnosticVersion(
+                definition_id=definition_id,
+                version=version,
+                source_document_name=source_document_name,
+                source_document_hash=source_document_hash,
+                content_json=content_json,
+                is_active=True,
+            )
+            session.add(record)
+            session.flush()
+            session.refresh(record)
+            return record
+
+    def update_diagnostic_version_content(
+        self,
+        *,
+        version_id: str,
+        source_document_name: str,
+        source_document_hash: str,
+        content_json: dict[str, object],
+    ) -> DiagnosticVersion | None:
+        with self.session() as session:
+            record = session.get(DiagnosticVersion, version_id)
+            if record is None:
+                return None
+            record.source_document_name = source_document_name
+            record.source_document_hash = source_document_hash
+            record.content_json = content_json
+            session.flush()
+            session.refresh(record)
+            return record
+
+    def replace_diagnostic_version_structure(self, *, version_id: str, definition: dict[str, object]) -> None:
+        with self.session() as session:
+            session.execute(delete(DiagnosticOption).where(DiagnosticOption.question_id.in_(
+                select(DiagnosticQuestion.id).where(DiagnosticQuestion.version_id == version_id)
+            )))
+            session.execute(delete(DiagnosticQuestion).where(DiagnosticQuestion.version_id == version_id))
+            session.execute(delete(DiagnosticScoringRule).where(DiagnosticScoringRule.version_id == version_id))
+            session.flush()
+
+            order = 0
+            for section in list(definition.get("sections") or []):
+                section_id = str(section.get("id") or "")
+                for question in list(section.get("questions") or []):
+                    question_row = DiagnosticQuestion(
+                        version_id=version_id,
+                        question_key=str(question.get("id") or ""),
+                        section_key=section_id,
+                        order_index=order,
+                        question_type=str(question.get("type") or "single_choice"),
+                        question_text=str(question.get("text") or ""),
+                        scoring_json=dict(question.get("scoring") or {}),
+                        metadata_json={
+                            "min_value": question.get("min_value"),
+                            "max_value": question.get("max_value"),
+                        },
+                    )
+                    session.add(question_row)
+                    session.flush()
+                    order += 1
+
+                    for option_index, option in enumerate(list(question.get("options") or [])):
+                        session.add(
+                            DiagnosticOption(
+                                question_id=question_row.id,
+                                option_key=str(option.get("key") or f"o{option_index + 1}"),
+                                order_index=option_index,
+                                label=str(option.get("label") or ""),
+                                value_text=str(option.get("value") or ""),
+                                scoring_json=dict(option.get("scoring") or {}),
+                                metadata_json={"allows_text": bool(option.get("allows_text", False))},
+                            )
+                        )
+
+            session.add(
+                DiagnosticScoringRule(
+                    version_id=version_id,
+                    rule_key="default",
+                    rule_payload=dict(definition.get("scoring_rules") or {}),
+                )
+            )
+
+    def create_user_diagnostic_attempt(self, *, user_id: int, definition_versions: dict[str, str]) -> UserDiagnosticAttempt:
+        now = datetime.now(timezone.utc)
+        with self.session() as session:
+            session.execute(
+                update(UserDiagnosticAttempt)
+                .where(UserDiagnosticAttempt.user_id == user_id)
+                .values(is_latest=False, updated_at=now)
+            )
+            record = UserDiagnosticAttempt(
+                user_id=user_id,
+                definition_versions=definition_versions,
+                status="in_progress",
+                is_latest=True,
+                started_at=now,
+                updated_at=now,
+            )
+            session.add(record)
+            session.flush()
+            session.refresh(record)
+            return record
+
+    def get_user_diagnostic_attempt(self, *, user_id: int, attempt_id: str) -> UserDiagnosticAttempt | None:
+        with self.session() as session:
+            return session.scalar(
+                select(UserDiagnosticAttempt).where(
+                    UserDiagnosticAttempt.id == attempt_id, UserDiagnosticAttempt.user_id == user_id
+                )
+            )
+
+    def get_latest_user_diagnostic_attempt(self, *, user_id: int) -> UserDiagnosticAttempt | None:
+        with self.session() as session:
+            return session.scalar(
+                select(UserDiagnosticAttempt)
+                .where(UserDiagnosticAttempt.user_id == user_id, UserDiagnosticAttempt.is_latest.is_(True))
+                .order_by(UserDiagnosticAttempt.started_at.desc())
+                .limit(1)
+            )
+
+    def list_user_diagnostic_attempts(self, *, user_id: int) -> list[UserDiagnosticAttempt]:
+        with self.session() as session:
+            rows = session.scalars(
+                select(UserDiagnosticAttempt)
+                .where(UserDiagnosticAttempt.user_id == user_id)
+                .order_by(UserDiagnosticAttempt.started_at.desc())
+            )
+            return list(rows)
+
+    def delete_user_diagnostic_attempt(self, *, user_id: int, attempt_id: str) -> UserDiagnosticAttempt | None:
+        with self.session() as session:
+            record = session.scalar(
+                select(UserDiagnosticAttempt).where(
+                    UserDiagnosticAttempt.id == attempt_id,
+                    UserDiagnosticAttempt.user_id == user_id,
+                )
+            )
+            if record is None:
+                return None
+            was_latest = bool(record.is_latest)
+            session.delete(record)
+            session.flush()
+            if was_latest:
+                fallback = session.scalar(
+                    select(UserDiagnosticAttempt)
+                    .where(UserDiagnosticAttempt.user_id == user_id)
+                    .order_by(UserDiagnosticAttempt.started_at.desc())
+                    .limit(1)
+                )
+                if fallback is not None:
+                    fallback.is_latest = True
+                    fallback.updated_at = datetime.now(timezone.utc)
+            return record
+
+    def upsert_user_diagnostic_answer(
+        self,
+        *,
+        attempt_id: str,
+        diagnostic_type: str,
+        question_key: str,
+        answer_json: dict[str, object],
+    ) -> UserDiagnosticAnswer:
+        with self.session() as session:
+            record = session.scalar(
+                select(UserDiagnosticAnswer).where(
+                    UserDiagnosticAnswer.attempt_id == attempt_id,
+                    UserDiagnosticAnswer.diagnostic_type == diagnostic_type,
+                    UserDiagnosticAnswer.question_key == question_key,
+                )
+            )
+            if record is None:
+                record = UserDiagnosticAnswer(
+                    attempt_id=attempt_id,
+                    diagnostic_type=diagnostic_type,
+                    question_key=question_key,
+                    answer_json=answer_json,
+                )
+                session.add(record)
+            else:
+                record.answer_json = answer_json
+                record.updated_at = datetime.now(timezone.utc)
+            session.flush()
+            session.refresh(record)
+            return record
+
+    def list_user_diagnostic_answers(self, *, attempt_id: str) -> list[UserDiagnosticAnswer]:
+        with self.session() as session:
+            rows = session.scalars(
+                select(UserDiagnosticAnswer)
+                .where(UserDiagnosticAnswer.attempt_id == attempt_id)
+                .order_by(UserDiagnosticAnswer.id.asc())
+            )
+            return list(rows)
+
+    def upsert_user_diagnostic_result(self, *, attempt_id: str, result_json: dict[str, object]) -> UserDiagnosticResult:
+        with self.session() as session:
+            record = session.scalar(
+                select(UserDiagnosticResult).where(UserDiagnosticResult.attempt_id == attempt_id)
+            )
+            if record is None:
+                record = UserDiagnosticResult(attempt_id=attempt_id, result_json=result_json)
+                session.add(record)
+            else:
+                record.result_json = result_json
+                record.updated_at = datetime.now(timezone.utc)
+            session.flush()
+            session.refresh(record)
+            return record
+
+    def get_user_diagnostic_result(self, *, attempt_id: str) -> UserDiagnosticResult | None:
+        with self.session() as session:
+            return session.scalar(
+                select(UserDiagnosticResult).where(UserDiagnosticResult.attempt_id == attempt_id)
+            )
+
+    def mark_user_diagnostic_attempt_completed(self, *, attempt_id: str) -> UserDiagnosticAttempt | None:
+        with self.session() as session:
+            record = session.get(UserDiagnosticAttempt, attempt_id)
+            if record is None:
+                return None
+            now = datetime.now(timezone.utc)
+            record.status = "completed"
+            record.completed_at = now
+            record.updated_at = now
+            session.flush()
+            session.refresh(record)
+            return record
+
+    def create_learning_state_check(self, payload: dict[str, object]) -> LearningStateCheck:
+        with self.session() as session:
+            record = LearningStateCheck(**payload)
+            session.add(record)
+            session.flush()
+            session.refresh(record)
+            return record
+
+    def list_learning_state_checks(self, *, user_id: int, limit: int = 20) -> list[LearningStateCheck]:
+        with self.session() as session:
+            rows = session.scalars(
+                select(LearningStateCheck)
+                .where(LearningStateCheck.user_id == user_id)
+                .order_by(LearningStateCheck.created_at.desc())
+                .limit(limit)
+            )
+            return list(rows)
+
+    def create_explanation_feedback(self, payload: dict[str, object]) -> ExplanationFeedback:
+        with self.session() as session:
+            record = ExplanationFeedback(**payload)
+            session.add(record)
+            session.flush()
+            session.refresh(record)
+            return record
 
     def _default_user_file_enabled(self, record: FileRecord, *, user_id: int) -> bool:
         if record.is_global:

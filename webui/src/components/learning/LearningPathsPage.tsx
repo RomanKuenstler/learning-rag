@@ -1,5 +1,10 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { useLocation } from "react-router-dom";
 import type {
+  DiagnosticAttemptDetails,
+  DiagnosticAttemptSummary,
+  DiagnosticDefinition,
+  DiagnosticResult,
   LearningGoal,
   LearningLesson,
   LearningModule,
@@ -7,23 +12,13 @@ import type {
   LearningProfileBundle,
   LearningProfileContext,
   LearningPreferences,
+  LearningStateCheck,
   LibraryFile,
   Role,
 } from "../../types/chat";
-import { Icon } from "../common/Icons";
+import { DiagnosticPanel } from "./DiagnosticPanel";
 import { LearningProfilePanel } from "./LearningProfilePanel";
-
-type LearningPathDraft = {
-  scope: "global" | "user";
-  title: string;
-  description: string;
-  subject: string;
-  difficulty_level: string;
-  estimated_duration_minutes: string;
-  status: "draft" | "published" | "archived";
-  allowed_file_ids: number[];
-  allowed_tags: string;
-};
+import { Icon } from "../common/Icons";
 
 type LearningPathsPageProps = {
   role: Role;
@@ -39,6 +34,7 @@ type LearningPathsPageProps = {
   learningProfileSaving: boolean;
   learningProfileError: string | null;
   learningProfileSuccess: string | null;
+  currentUserDisplayName: string;
   onLoadLearningProfile: () => void;
   onSaveLearningPreferences: (payload: Partial<Omit<LearningPreferences, "updated_at">>) => Promise<unknown>;
   onSaveLearningContext: (payload: Partial<Omit<LearningProfileContext, "updated_at">>) => Promise<unknown>;
@@ -53,6 +49,29 @@ type LearningPathsPageProps = {
   }) => Promise<unknown>;
   onUpdateLearningGoal: (goalId: string, payload: Partial<Omit<LearningGoal, "id" | "created_at" | "updated_at">>) => Promise<unknown>;
   onDeleteLearningGoal: (goalId: string) => Promise<unknown>;
+  diagnosticDefinitions: Record<"LAA" | "MOA" | "LTA", DiagnosticDefinition | null>;
+  diagnosticAttempt: DiagnosticAttemptDetails | null;
+  diagnosticAttempts: DiagnosticAttemptSummary[];
+  diagnosticResult: DiagnosticResult | null;
+  diagnosticLoading: boolean;
+  diagnosticSaving: boolean;
+  diagnosticError: string | null;
+  learningStateChecks: LearningStateCheck[];
+  learningStateSaving: boolean;
+  learningStateError: string | null;
+  onLoadDiagnostics: () => Promise<unknown>;
+  onStartDiagnosticAttempt: () => Promise<unknown>;
+  onSaveDiagnosticAnswers: (attemptId: string, diagnosticType: "LAA" | "MOA" | "LTA", answers: Array<{ question_id: string; value: unknown }>) => Promise<unknown>;
+  onCompleteDiagnosticAttempt: (attemptId: string) => Promise<unknown>;
+  onDeleteDiagnosticAttempt: (attemptId: string) => Promise<unknown>;
+  onOpenDiagnosticAttempt: (attemptId: string) => Promise<DiagnosticAttemptDetails>;
+  onCreateLearningStateCheck: (payload: {
+    mood: string;
+    perceived_difficulty: string;
+    needs_pause_or_input: string;
+    preferred_format: string;
+    notes: string;
+  }) => Promise<unknown>;
   onCreatePath: (payload: {
     scope: "global" | "user";
     title: string;
@@ -101,657 +120,282 @@ type LearningPathsPageProps = {
   onReorderLessons: (pathId: string, moduleId: string, lessons: LearningLesson[]) => Promise<unknown>;
 };
 
-const EMPTY_DRAFT: LearningPathDraft = {
-  scope: "user",
-  title: "",
-  description: "",
-  subject: "",
-  difficulty_level: "",
-  estimated_duration_minutes: "",
-  status: "draft",
-  allowed_file_ids: [],
-  allowed_tags: "",
-};
+type LearningTab = "profile" | "preferences" | "paths";
 
 export function LearningPathsPage({
-  role,
   paths,
-  libraryFiles,
   loading,
-  saving,
   error,
-  canAuthor,
-  onLoad,
   learningProfile,
   learningProfileLoading,
   learningProfileSaving,
   learningProfileError,
   learningProfileSuccess,
+  currentUserDisplayName,
+  onLoad,
   onLoadLearningProfile,
   onSaveLearningPreferences,
   onSaveLearningContext,
   onCreateLearningGoal,
   onUpdateLearningGoal,
   onDeleteLearningGoal,
-  onCreatePath,
-  onUpdatePath,
-  onDeletePath,
-  onCreateModule,
-  onUpdateModule,
-  onDeleteModule,
-  onReorderModules,
-  onCreateLesson,
-  onUpdateLesson,
-  onDeleteLesson,
-  onReorderLessons,
+  diagnosticDefinitions,
+  diagnosticAttempt,
+  diagnosticAttempts,
+  diagnosticResult,
+  diagnosticLoading,
+  diagnosticSaving,
+  diagnosticError,
+  learningStateChecks,
+  learningStateSaving,
+  learningStateError,
+  onLoadDiagnostics,
+  onStartDiagnosticAttempt,
+  onSaveDiagnosticAnswers,
+  onCompleteDiagnosticAttempt,
+  onDeleteDiagnosticAttempt,
+  onOpenDiagnosticAttempt,
+  onCreateLearningStateCheck,
 }: LearningPathsPageProps) {
-  const [draft, setDraft] = useState<LearningPathDraft>(EMPTY_DRAFT);
+  const location = useLocation();
+  const [activeTab, setActiveTab] = useState<LearningTab>("profile");
   const [selectedPathId, setSelectedPathId] = useState<string | null>(null);
+  const [showScrollTop, setShowScrollTop] = useState(false);
+  const detailsRef = useRef<HTMLElement | null>(null);
 
   useEffect(() => {
-    void onLoad();
-    // This load is mount-scoped; the parent currently passes a new callback each render.
+    onLoad();
+    // mount-scoped
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  const selectedPath = useMemo(() => paths.find((item) => item.id === selectedPathId) ?? null, [paths, selectedPathId]);
+  useEffect(() => {
+    const params = new URLSearchParams(location.search);
+    const tab = params.get("tab");
+    if (tab === "profile" || tab === "preferences" || tab === "paths") {
+      setActiveTab(tab);
+    }
+  }, [location.search]);
 
   useEffect(() => {
-    if (!selectedPathId && paths.length > 0) {
-      setSelectedPathId(paths[0].id);
+    if (activeTab !== "paths") {
+      setShowScrollTop(false);
+      return;
     }
-  }, [paths, selectedPathId]);
+    function handleScroll() {
+      setShowScrollTop(window.scrollY > 180);
+    }
+    handleScroll();
+    window.addEventListener("scroll", handleScroll, { passive: true });
+    return () => window.removeEventListener("scroll", handleScroll);
+  }, [activeTab]);
+
+  const selectedPath = useMemo(
+    () => paths.find((path) => path.id === selectedPathId) ?? null,
+    [paths, selectedPathId],
+  );
+
+  function openPathDetails(pathId: string) {
+    setSelectedPathId(pathId);
+    window.requestAnimationFrame(() => {
+      window.setTimeout(() => {
+        detailsRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+      }, 30);
+    });
+  }
 
   return (
     <section className="chat-column library-column">
       {error ? <p className="chat-error chat-error-banner">{error}</p> : null}
-      <LearningProfilePanel
-        profile={learningProfile}
-        loading={learningProfileLoading}
-        saving={learningProfileSaving}
-        error={learningProfileError}
-        success={learningProfileSuccess}
-        onLoad={onLoadLearningProfile}
-        onSavePreferences={onSaveLearningPreferences}
-        onSaveContext={onSaveLearningContext}
-        onCreateGoal={onCreateLearningGoal}
-        onUpdateGoal={onUpdateLearningGoal}
-        onDeleteGoal={onDeleteLearningGoal}
-      />
-      <section className="info-group-card library-table-card">
-        <div className="library-table-header">
-          <h4>Learning paths</h4>
-        </div>
-        <div className="library-table learning-paths-table">
-          {loading ? <div className="empty-state">Loading learning paths...</div> : null}
-          {!loading ? (
-            <>
-              <div className="library-table-head learning-paths-head">
-                <span>Title</span>
-                <span>Scope</span>
-                <span>Subject</span>
-                <span>Status</span>
-                <span>Modules</span>
-                <span>Open</span>
-              </div>
-              <div className="library-table-body">
-              {paths.length === 0 ? <div className="empty-state">No learning paths yet.</div> : null}
-              {paths.map((path) => (
-                <div key={path.id} className={`library-table-row learning-paths-row${selectedPathId === path.id ? " active" : ""}`}>
-                  <span className="learning-paths-title">
-                    <strong>{path.title}</strong>
-                    <small>{path.description || "No description yet."}</small>
-                  </span>
-                  <span>{path.scope === "global" ? "Global" : "User"}</span>
-                  <span>{path.subject || "-"}</span>
-                  <span className={`learning-path-status learning-path-status-${path.status}`}>{path.status}</span>
-                  <span>{path.modules.length}</span>
-                  <span>
-                    <button className="secondary-button" type="button" onClick={() => setSelectedPathId(path.id)}>
-                      {selectedPathId === path.id ? "Selected" : "Open"}
-                    </button>
-                  </span>
-                </div>
-              ))}
-              </div>
-            </>
-          ) : null}
+
+      <section className="info-group-card learning-tabs-card">
+        <div className="learning-tabs" role="tablist" aria-label="Learning page tabs">
+          <button className={`learning-tab${activeTab === "profile" ? " active" : ""}`} type="button" role="tab" aria-selected={activeTab === "profile"} onClick={() => setActiveTab("profile")}>Profile</button>
+          <button className={`learning-tab${activeTab === "preferences" ? " active" : ""}`} type="button" role="tab" aria-selected={activeTab === "preferences"} onClick={() => setActiveTab("preferences")}>Preferences</button>
+          <button className={`learning-tab${activeTab === "paths" ? " active" : ""}`} type="button" role="tab" aria-selected={activeTab === "paths"} onClick={() => setActiveTab("paths")}>Paths</button>
         </div>
       </section>
 
-      {canAuthor ? (
-        <section className="info-group-card">
-          <h4>Create learning path</h4>
-          <div className="settings-grid">
-            <label>
-              <span>Title</span>
-              <input value={draft.title} onChange={(event) => setDraft((current) => ({ ...current, title: event.target.value }))} />
-            </label>
-            <label>
-              <span>Description</span>
-              <textarea value={draft.description} onChange={(event) => setDraft((current) => ({ ...current, description: event.target.value }))} />
-            </label>
-            <label>
-              <span>Subject</span>
-              <input value={draft.subject} onChange={(event) => setDraft((current) => ({ ...current, subject: event.target.value }))} />
-            </label>
-            <label>
-              <span>Difficulty</span>
-              <input value={draft.difficulty_level} onChange={(event) => setDraft((current) => ({ ...current, difficulty_level: event.target.value }))} />
-            </label>
-            <label>
-              <span>Duration minutes</span>
-              <input
-                type="number"
-                min={1}
-                value={draft.estimated_duration_minutes}
-                onChange={(event) => setDraft((current) => ({ ...current, estimated_duration_minutes: event.target.value }))}
-              />
-            </label>
-            <label>
-              <span>Status</span>
-              <select value={draft.status} onChange={(event) => setDraft((current) => ({ ...current, status: event.target.value as LearningPathDraft["status"] }))}>
-                <option value="draft">Draft</option>
-                <option value="published">Published</option>
-                <option value="archived">Archived</option>
-              </select>
-            </label>
-            {role === "admin" ? (
-              <label>
-                <span>Scope</span>
-                <select value={draft.scope} onChange={(event) => setDraft((current) => ({ ...current, scope: event.target.value as LearningPathDraft["scope"] }))}>
-                  <option value="user">User</option>
-                  <option value="global">Global</option>
-                </select>
-              </label>
-            ) : null}
-            <label>
-              <span>Allowed tags (comma-separated)</span>
-              <input value={draft.allowed_tags} onChange={(event) => setDraft((current) => ({ ...current, allowed_tags: event.target.value }))} />
-            </label>
-            <div>
-              <span>Allowed files</span>
-              <div className="archive-list">
-                {libraryFiles.map((file) => {
-                  const checked = draft.allowed_file_ids.includes(file.id);
-                  return (
-                    <label key={file.id} className="archive-row">
-                      <input
-                        type="checkbox"
-                        checked={checked}
-                        onChange={(event) => {
-                          setDraft((current) => ({
-                            ...current,
-                            allowed_file_ids: event.target.checked
-                              ? [...current.allowed_file_ids, file.id]
-                              : current.allowed_file_ids.filter((item) => item !== file.id),
-                          }));
-                        }}
-                      />
-                      <span>{file.file_name}</span>
-                    </label>
-                  );
-                })}
-              </div>
+      {activeTab === "profile" ? (
+        <>
+          <LearningProfilePanel
+            profile={learningProfile}
+            loading={learningProfileLoading}
+            saving={learningProfileSaving}
+            error={learningProfileError}
+            success={learningProfileSuccess}
+            currentUserDisplayName={currentUserDisplayName}
+            onLoad={onLoadLearningProfile}
+            onSavePreferences={onSaveLearningPreferences}
+            onSaveContext={onSaveLearningContext}
+            onCreateGoal={onCreateLearningGoal}
+            onUpdateGoal={onUpdateLearningGoal}
+            onDeleteGoal={onDeleteLearningGoal}
+            showPreferences={false}
+            showContext
+            showGoals
+          />
+        </>
+      ) : null}
+
+      {activeTab === "preferences" ? (
+        <>
+          <LearningProfilePanel
+            profile={learningProfile}
+            loading={learningProfileLoading}
+            saving={learningProfileSaving}
+            error={learningProfileError}
+            success={learningProfileSuccess}
+            currentUserDisplayName={currentUserDisplayName}
+            onLoad={onLoadLearningProfile}
+            onSavePreferences={onSaveLearningPreferences}
+            onSaveContext={onSaveLearningContext}
+            onCreateGoal={onCreateLearningGoal}
+            onUpdateGoal={onUpdateLearningGoal}
+            onDeleteGoal={onDeleteLearningGoal}
+            showPreferences
+            showContext={false}
+            showGoals={false}
+          />
+          <DiagnosticPanel
+            definitions={diagnosticDefinitions}
+            attempt={diagnosticAttempt}
+            attempts={diagnosticAttempts}
+            result={diagnosticResult}
+            loading={diagnosticLoading}
+            saving={diagnosticSaving}
+            error={diagnosticError}
+            stateChecks={learningStateChecks}
+            stateSaving={learningStateSaving}
+            stateError={learningStateError}
+            onLoad={onLoadDiagnostics}
+            onStart={onStartDiagnosticAttempt}
+            onSaveAnswers={onSaveDiagnosticAnswers}
+            onComplete={onCompleteDiagnosticAttempt}
+            onDeleteAttempt={onDeleteDiagnosticAttempt}
+            onOpenAttempt={onOpenDiagnosticAttempt}
+            onCreateStateCheck={onCreateLearningStateCheck}
+            showStateCheck={false}
+          />
+        </>
+      ) : null}
+
+      {activeTab === "paths" ? (
+        <>
+          <section className="info-group-card library-table-card">
+            <div className="library-table-header">
+              <h4>Learning paths</h4>
             </div>
-          </div>
-          <div className="library-table-footer">
+            <div className="library-table learning-paths-table">
+              {loading ? <div className="empty-state">Loading learning paths...</div> : null}
+              {!loading ? (
+                <>
+                  <div className="library-table-head learning-paths-head">
+                    <span>Title</span>
+                    <span>Scope</span>
+                    <span>Subject</span>
+                    <span>Status</span>
+                    <span>Modules</span>
+                    <span>Actions</span>
+                  </div>
+                  <div className="library-table-body">
+                    {paths.length === 0 ? <div className="empty-state">No learning paths yet.</div> : null}
+                    {paths.map((path) => {
+                      const isSelected = selectedPathId === path.id;
+                      return (
+                        <div key={path.id} className={`library-table-row learning-paths-row${isSelected ? " active" : ""}`}>
+                          <span className="learning-paths-title">
+                            <strong>{path.title}</strong>
+                            <small>{path.description || "No description yet."}</small>
+                          </span>
+                          <span>{path.scope === "global" ? "Global" : "User"}</span>
+                          <span>{path.subject || "-"}</span>
+                          <span className={`learning-path-status learning-path-status-${path.status}`}>{path.status}</span>
+                          <span>{path.modules.length}</span>
+                          <span className="learning-path-actions">
+                            <button className="learning-path-action-button" type="button" onClick={() => openPathDetails(path.id)} title="Details" aria-label="Show details">
+                              <Icon name="info" />
+                            </button>
+                            <button className="learning-path-action-button primary" type="button" onClick={() => openPathDetails(path.id)} title={isSelected ? "Continue learning" : "Start learning"} aria-label={isSelected ? "Continue learning" : "Start learning"}>
+                              <Icon name="play" />
+                            </button>
+                          </span>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </>
+              ) : null}
+            </div>
+          </section>
+
+          {selectedPath ? (
+            <section ref={detailsRef} className="info-group-card learning-path-details-card">
+              <div className="learning-path-details-header">
+                <h4>{selectedPath.title}</h4>
+                <p>{selectedPath.description || "No description available."}</p>
+                <div className="learning-path-details-meta">
+                  <span>{selectedPath.subject || "General"}</span>
+                  <span>{selectedPath.difficulty_level || "Mixed level"}</span>
+                </div>
+                <div className="learning-path-details-stats">
+                  <div className="learning-path-stat-card">
+                    <strong>{selectedPath.modules.length}</strong>
+                    <small>Modules</small>
+                  </div>
+                  <div className="learning-path-stat-card">
+                    <strong>{selectedPath.modules.reduce((count, module) => count + module.lessons.length, 0)}</strong>
+                    <small>Lessons</small>
+                  </div>
+                </div>
+              </div>
+
+              <div className="library-table learning-path-structure-table">
+                <div className="library-table-body">
+                {selectedPath.modules
+                  .slice()
+                  .sort((left, right) => left.order_index - right.order_index)
+                  .map((module) => (
+                    <article key={module.id} className="learning-path-module-block">
+                      <div className="library-table-row learning-path-module-row">
+                        <span className="learning-path-module-title-cell">
+                          <strong>{module.title}</strong>
+                          {module.description ? <small>{module.description}</small> : null}
+                        </span>
+                        <span>{module.lessons.length} Lessons</span>
+                      </div>
+                      {module.lessons
+                        .slice()
+                        .sort((left, right) => left.order_index - right.order_index)
+                        .map((lesson) => (
+                          <div key={lesson.id} className="library-table-row learning-path-lesson-row">
+                            <span className="learning-path-lesson-title-cell">
+                              <Icon name="chalkboard" className="learning-path-lesson-icon" />
+                              <span className="learning-path-lesson-title">{lesson.title}</span>
+                            </span>
+                            <span className="learning-path-lesson-type" aria-hidden="true">&nbsp;</span>
+                          </div>
+                        ))}
+                    </article>
+                  ))}
+                </div>
+              </div>
+            </section>
+          ) : null}
+
+          {showScrollTop ? (
             <button
-              className="primary-button"
-              disabled={saving || !draft.title.trim()}
-              onClick={async () => {
-                await onCreatePath({
-                  scope: draft.scope,
-                  title: draft.title.trim(),
-                  description: draft.description.trim(),
-                  subject: draft.subject.trim(),
-                  difficulty_level: draft.difficulty_level.trim(),
-                  estimated_duration_minutes: draft.estimated_duration_minutes ? Number(draft.estimated_duration_minutes) : null,
-                  status: draft.status,
-                  allowed_file_ids: draft.allowed_file_ids,
-                  allowed_tags: draft.allowed_tags.split(",").map((item) => item.trim()).filter(Boolean),
-                });
-                setDraft(EMPTY_DRAFT);
-              }}
+              type="button"
+              className="learning-path-scroll-top"
+              onClick={() => window.scrollTo({ top: 0, behavior: "smooth" })}
+              aria-label="Scroll to top"
+              title="Scroll to top"
             >
-              Create
-            </button>
-          </div>
-        </section>
-      ) : null}
-
-      {selectedPath ? (
-        <LearningPathEditor
-          path={selectedPath}
-          libraryFiles={libraryFiles}
-          saving={saving}
-          onUpdatePath={onUpdatePath}
-          onDeletePath={onDeletePath}
-          onCreateModule={onCreateModule}
-          onUpdateModule={onUpdateModule}
-          onDeleteModule={onDeleteModule}
-          onReorderModules={onReorderModules}
-          onCreateLesson={onCreateLesson}
-          onUpdateLesson={onUpdateLesson}
-          onDeleteLesson={onDeleteLesson}
-          onReorderLessons={onReorderLessons}
-        />
-      ) : null}
-    </section>
-  );
-}
-
-function LearningPathEditor({
-  path,
-  libraryFiles,
-  saving,
-  onUpdatePath,
-  onDeletePath,
-  onCreateModule,
-  onUpdateModule,
-  onDeleteModule,
-  onReorderModules,
-  onCreateLesson,
-  onUpdateLesson,
-  onDeleteLesson,
-  onReorderLessons,
-}: {
-  path: LearningPath;
-  libraryFiles: LibraryFile[];
-  saving: boolean;
-  onUpdatePath: LearningPathsPageProps["onUpdatePath"];
-  onDeletePath: LearningPathsPageProps["onDeletePath"];
-  onCreateModule: LearningPathsPageProps["onCreateModule"];
-  onUpdateModule: LearningPathsPageProps["onUpdateModule"];
-  onDeleteModule: LearningPathsPageProps["onDeleteModule"];
-  onReorderModules: LearningPathsPageProps["onReorderModules"];
-  onCreateLesson: LearningPathsPageProps["onCreateLesson"];
-  onUpdateLesson: LearningPathsPageProps["onUpdateLesson"];
-  onDeleteLesson: LearningPathsPageProps["onDeleteLesson"];
-  onReorderLessons: LearningPathsPageProps["onReorderLessons"];
-}) {
-  const [title, setTitle] = useState(path.title);
-  const [description, setDescription] = useState(path.description);
-  const [subject, setSubject] = useState(path.subject);
-  const [difficulty, setDifficulty] = useState(path.difficulty_level);
-  const [duration, setDuration] = useState(path.estimated_duration_minutes?.toString() ?? "");
-  const [status, setStatus] = useState(path.status as "draft" | "published" | "archived");
-  const [allowedTags, setAllowedTags] = useState(path.allowed_tags.join(", "));
-  const [allowedFiles, setAllowedFiles] = useState<number[]>(path.allowed_file_ids);
-  const [newModuleTitle, setNewModuleTitle] = useState("");
-
-  useEffect(() => {
-    setTitle(path.title);
-    setDescription(path.description);
-    setSubject(path.subject);
-    setDifficulty(path.difficulty_level);
-    setDuration(path.estimated_duration_minutes?.toString() ?? "");
-    setStatus(path.status as "draft" | "published" | "archived");
-    setAllowedTags(path.allowed_tags.join(", "));
-    setAllowedFiles(path.allowed_file_ids);
-  }, [path]);
-
-  return (
-    <section className="info-group-card learning-path-editor-card">
-      <div className="learning-path-editor-header">
-        <h4>{path.title}</h4>
-        <div className="learning-path-editor-meta">
-          <span className={`learning-path-status learning-path-status-${path.status}`}>{path.status}</span>
-          <span className="learning-path-editor-chip">{path.subject || "General"}</span>
-          <span className="learning-path-editor-chip">{path.modules.length} modules</span>
-        </div>
-      </div>
-      <p className="learning-path-editor-description">{path.description || "No description yet."}</p>
-      <div className="settings-grid learning-path-editor-grid">
-        <label>
-          <span>Title</span>
-          <input value={title} disabled={!path.can_edit} onChange={(event) => setTitle(event.target.value)} />
-        </label>
-        <label>
-          <span>Description</span>
-          <textarea value={description} disabled={!path.can_edit} onChange={(event) => setDescription(event.target.value)} />
-        </label>
-        <label>
-          <span>Subject</span>
-          <input value={subject} disabled={!path.can_edit} onChange={(event) => setSubject(event.target.value)} />
-        </label>
-        <label>
-          <span>Difficulty</span>
-          <input value={difficulty} disabled={!path.can_edit} onChange={(event) => setDifficulty(event.target.value)} />
-        </label>
-        <label>
-          <span>Duration minutes</span>
-          <input type="number" min={1} value={duration} disabled={!path.can_edit} onChange={(event) => setDuration(event.target.value)} />
-        </label>
-        <label>
-          <span>Status</span>
-          <select value={status} disabled={!path.can_edit} onChange={(event) => setStatus(event.target.value as "draft" | "published" | "archived")}>
-            <option value="draft">Draft</option>
-            <option value="published">Published</option>
-            <option value="archived">Archived</option>
-          </select>
-        </label>
-        <label>
-          <span>Allowed tags</span>
-          <input value={allowedTags} disabled={!path.can_edit} onChange={(event) => setAllowedTags(event.target.value)} />
-        </label>
-        <div className="learning-path-editor-files">
-          <span>Allowed files</span>
-          <div className="archive-list">
-            {libraryFiles.map((file) => (
-              <label key={file.id} className="archive-row">
-                <input
-                  type="checkbox"
-                  checked={allowedFiles.includes(file.id)}
-                  disabled={!path.can_edit}
-                  onChange={(event) => {
-                    if (!path.can_edit) {
-                      return;
-                    }
-                    setAllowedFiles((current) =>
-                      event.target.checked ? [...current, file.id] : current.filter((item) => item !== file.id),
-                    );
-                  }}
-                />
-                <span>{file.file_name}</span>
-              </label>
-            ))}
-          </div>
-        </div>
-      </div>
-      {path.can_edit ? (
-        <div className="library-table-footer">
-          <button
-            className="primary-button"
-            disabled={saving}
-            onClick={() =>
-              void onUpdatePath(path.id, {
-                title: title.trim(),
-                description: description.trim(),
-                subject: subject.trim(),
-                difficulty_level: difficulty.trim(),
-                estimated_duration_minutes: duration ? Number(duration) : null,
-                status,
-                allowed_file_ids: allowedFiles,
-                allowed_tags: allowedTags.split(",").map((item) => item.trim()).filter(Boolean),
-              })
-            }
-          >
-            Save path
-          </button>
-          {path.can_delete ? (
-            <button className="danger-button" disabled={saving} onClick={() => void onDeletePath(path.id)}>
-              Delete path
+              <Icon name="arrow-up" />
             </button>
           ) : null}
-        </div>
-      ) : null}
-
-      <div className="library-table-header learning-path-modules-header">
-        <h4>Modules</h4>
-      </div>
-      <div className="library-table-body learning-modules-list">
-        {path.modules.map((module, moduleIndex) => (
-          <LearningModuleEditor
-            key={module.id}
-            pathId={path.id}
-            module={module}
-            moduleIndex={moduleIndex}
-            moduleCount={path.modules.length}
-            canEdit={path.can_edit}
-            saving={saving}
-            onUpdateModule={onUpdateModule}
-            onDeleteModule={onDeleteModule}
-            onReorderModules={() => onReorderModules(path.id, path.modules)}
-            onCreateLesson={onCreateLesson}
-            onUpdateLesson={onUpdateLesson}
-            onDeleteLesson={onDeleteLesson}
-            onReorderLessons={onReorderLessons}
-            onMoveUp={() => {
-              const next = [...path.modules];
-              [next[moduleIndex - 1], next[moduleIndex]] = [next[moduleIndex], next[moduleIndex - 1]];
-              void onReorderModules(path.id, next);
-            }}
-            onMoveDown={() => {
-              const next = [...path.modules];
-              [next[moduleIndex + 1], next[moduleIndex]] = [next[moduleIndex], next[moduleIndex + 1]];
-              void onReorderModules(path.id, next);
-            }}
-          />
-        ))}
-      </div>
-      {path.can_edit ? (
-        <div className="library-table-footer">
-          <input value={newModuleTitle} placeholder="New module title" onChange={(event) => setNewModuleTitle(event.target.value)} />
-          <button
-            className="secondary-button"
-            disabled={saving || !newModuleTitle.trim()}
-            onClick={async () => {
-              await onCreateModule(path.id, { title: newModuleTitle.trim(), description: "", learning_objectives: [] });
-              setNewModuleTitle("");
-            }}
-          >
-            Add module
-          </button>
-        </div>
+        </>
       ) : null}
     </section>
-  );
-}
-
-function LearningModuleEditor({
-  pathId,
-  module,
-  moduleIndex,
-  moduleCount,
-  canEdit,
-  saving,
-  onUpdateModule,
-  onDeleteModule,
-  onCreateLesson,
-  onUpdateLesson,
-  onDeleteLesson,
-  onReorderLessons,
-  onMoveUp,
-  onMoveDown,
-}: {
-  pathId: string;
-  module: LearningModule;
-  moduleIndex: number;
-  moduleCount: number;
-  canEdit: boolean;
-  saving: boolean;
-  onUpdateModule: LearningPathsPageProps["onUpdateModule"];
-  onDeleteModule: LearningPathsPageProps["onDeleteModule"];
-  onReorderModules: () => Promise<unknown>;
-  onCreateLesson: LearningPathsPageProps["onCreateLesson"];
-  onUpdateLesson: LearningPathsPageProps["onUpdateLesson"];
-  onDeleteLesson: LearningPathsPageProps["onDeleteLesson"];
-  onReorderLessons: LearningPathsPageProps["onReorderLessons"];
-  onMoveUp: () => void;
-  onMoveDown: () => void;
-}) {
-  const [title, setTitle] = useState(module.title);
-  const [description, setDescription] = useState(module.description);
-  const [objectives, setObjectives] = useState(module.learning_objectives.join(", "));
-  const [newLessonTitle, setNewLessonTitle] = useState("");
-
-  useEffect(() => {
-    setTitle(module.title);
-    setDescription(module.description);
-    setObjectives(module.learning_objectives.join(", "));
-  }, [module]);
-
-  return (
-    <div className="archive-row learning-module-card">
-      <div className="archive-row-main learning-module-head">
-        <strong className="learning-module-title">Module {moduleIndex + 1}: {module.title}</strong>
-        <div className="archive-row-actions">
-          {canEdit ? (
-            <>
-              <button className="secondary-button" disabled={saving || moduleIndex === 0} onClick={onMoveUp}>
-                <Icon name="arrow-up" />
-              </button>
-              <button className="secondary-button" disabled={saving || moduleIndex >= moduleCount - 1} onClick={onMoveDown}>
-                <Icon name="arrow-up" className="rotate-180" />
-              </button>
-            </>
-          ) : null}
-        </div>
-      </div>
-      {module.description ? <p className="learning-module-summary">{module.description}</p> : null}
-      {module.learning_objectives.length > 0 ? (
-        <p className="learning-module-objectives-preview">Objectives: {module.learning_objectives.join(" • ")}</p>
-      ) : null}
-      <div className="settings-grid learning-module-grid">
-        <input value={title} disabled={!canEdit} onChange={(event) => setTitle(event.target.value)} />
-        <textarea value={description} disabled={!canEdit} onChange={(event) => setDescription(event.target.value)} />
-        <input value={objectives} disabled={!canEdit} onChange={(event) => setObjectives(event.target.value)} placeholder="Objectives comma-separated" />
-      </div>
-      {canEdit ? (
-        <div className="archive-row-actions">
-          <button
-            className="secondary-button"
-            disabled={saving}
-            onClick={() =>
-              void onUpdateModule(pathId, module.id, {
-                title: title.trim(),
-                description: description.trim(),
-                learning_objectives: objectives.split(",").map((item) => item.trim()).filter(Boolean),
-              })
-            }
-          >
-            Save module
-          </button>
-          <button className="danger-button" disabled={saving} onClick={() => void onDeleteModule(pathId, module.id)}>
-            Delete module
-          </button>
-        </div>
-      ) : null}
-
-      <div className="archive-list learning-lessons-list">
-        {module.lessons.map((lesson, lessonIndex) => (
-          <LearningLessonEditor
-            key={lesson.id}
-            pathId={pathId}
-            moduleId={module.id}
-            lesson={lesson}
-            lessonIndex={lessonIndex}
-            lessonCount={module.lessons.length}
-            canEdit={canEdit}
-            saving={saving}
-            onUpdateLesson={onUpdateLesson}
-            onDeleteLesson={onDeleteLesson}
-            onMoveUp={() => {
-              const next = [...module.lessons];
-              [next[lessonIndex - 1], next[lessonIndex]] = [next[lessonIndex], next[lessonIndex - 1]];
-              void onReorderLessons(pathId, module.id, next);
-            }}
-            onMoveDown={() => {
-              const next = [...module.lessons];
-              [next[lessonIndex + 1], next[lessonIndex]] = [next[lessonIndex], next[lessonIndex + 1]];
-              void onReorderLessons(pathId, module.id, next);
-            }}
-          />
-        ))}
-      </div>
-      {canEdit ? (
-        <div className="archive-row-actions learning-module-add-lesson">
-          <input value={newLessonTitle} placeholder="New lesson title" onChange={(event) => setNewLessonTitle(event.target.value)} />
-          <button
-            className="secondary-button"
-            disabled={saving || !newLessonTitle.trim()}
-            onClick={async () => {
-              await onCreateLesson(pathId, module.id, {
-                title: newLessonTitle.trim(),
-                description: "",
-                objectives: [],
-                teaching_notes: "",
-              });
-              setNewLessonTitle("");
-            }}
-          >
-            Add lesson
-          </button>
-        </div>
-      ) : null}
-    </div>
-  );
-}
-
-function LearningLessonEditor({
-  pathId,
-  moduleId,
-  lesson,
-  lessonIndex,
-  lessonCount,
-  canEdit,
-  saving,
-  onUpdateLesson,
-  onDeleteLesson,
-  onMoveUp,
-  onMoveDown,
-}: {
-  pathId: string;
-  moduleId: string;
-  lesson: LearningLesson;
-  lessonIndex: number;
-  lessonCount: number;
-  canEdit: boolean;
-  saving: boolean;
-  onUpdateLesson: LearningPathsPageProps["onUpdateLesson"];
-  onDeleteLesson: LearningPathsPageProps["onDeleteLesson"];
-  onMoveUp: () => void;
-  onMoveDown: () => void;
-}) {
-  const [title, setTitle] = useState(lesson.title);
-  const [description, setDescription] = useState(lesson.description);
-  const [objectives, setObjectives] = useState(lesson.objectives.join(", "));
-  const [notes, setNotes] = useState(lesson.teaching_notes);
-
-  useEffect(() => {
-    setTitle(lesson.title);
-    setDescription(lesson.description);
-    setObjectives(lesson.objectives.join(", "));
-    setNotes(lesson.teaching_notes);
-  }, [lesson]);
-
-  return (
-    <div className="archive-row learning-lesson-card">
-      <strong className="learning-lesson-title">Lesson {lessonIndex + 1}: {lesson.title}</strong>
-      <div className="settings-grid learning-lesson-grid">
-        <input value={title} disabled={!canEdit} onChange={(event) => setTitle(event.target.value)} />
-        <textarea value={description} disabled={!canEdit} onChange={(event) => setDescription(event.target.value)} />
-        <input value={objectives} disabled={!canEdit} onChange={(event) => setObjectives(event.target.value)} placeholder="Objectives comma-separated" />
-        <textarea value={notes} disabled={!canEdit} onChange={(event) => setNotes(event.target.value)} placeholder="Teaching notes" />
-      </div>
-      {canEdit ? (
-        <div className="archive-row-actions">
-          <button className="secondary-button" disabled={saving || lessonIndex === 0} onClick={onMoveUp}>
-            <Icon name="arrow-up" />
-          </button>
-          <button className="secondary-button" disabled={saving || lessonIndex >= lessonCount - 1} onClick={onMoveDown}>
-            <Icon name="arrow-up" className="rotate-180" />
-          </button>
-          <button
-            className="secondary-button"
-            disabled={saving}
-            onClick={() =>
-              void onUpdateLesson(pathId, moduleId, lesson.id, {
-                title: title.trim(),
-                description: description.trim(),
-                objectives: objectives.split(",").map((item) => item.trim()).filter(Boolean),
-                teaching_notes: notes.trim(),
-              })
-            }
-          >
-            Save lesson
-          </button>
-          <button className="danger-button" disabled={saving} onClick={() => void onDeleteLesson(pathId, moduleId, lesson.id)}>
-            Delete lesson
-          </button>
-        </div>
-      ) : null}
-    </div>
   );
 }

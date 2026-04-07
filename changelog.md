@@ -1,5 +1,22 @@
 # Changelog
 
+## 2026-04-04 20:15 UTC
+
+- Implemented Step B.1 diagnostic system driven by source `.docx` files (`LAA`, `MOA`, `LTA`) under `data/diagnostics/source`.
+- Added migration `20260404_0009` with versioned diagnostics, attempts, answers, results, learning-state checks, and explanation feedback tables.
+- Added docx parser/import pipeline and deterministic scoring engine (`services/retriever/services/diagnostic_definitions.py`, `diagnostic_scoring.py`).
+- Added diagnostics/state/feedback API routes:
+  - `/api/diagnostics/*`
+  - `/api/learning-state-checks`
+  - `/api/explanation-feedback`
+- Extended learning profile bundle to include active diagnostics status (`not_started|in_progress|completed`).
+- Added dynamic Step B.1 learning-page UI with backend-driven rendering, step flow, persistence, chart visualization, and attempt history.
+- Added message-level explanation feedback actions in chat UI.
+- Added Step B.1 parser/scoring and API tests:
+  - `tests/test_stepb1_diagnostics_parser_and_scoring.py`
+  - `tests/test_stepb1_diagnostics_api.py`
+- Updated docs (`README.md`, `docs/architecture.md`, `docs/api.md`, `docs/learning.md`).
+
 ## 2026-04-04 17:45 UTC
 
 - Implemented Step B declared learning profile layer with dedicated persistence for:

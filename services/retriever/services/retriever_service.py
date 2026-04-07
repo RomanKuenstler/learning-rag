@@ -2,8 +2,12 @@ from __future__ import annotations
 
 import json
 import logging
+from datetime import datetime, timezone
 from dataclasses import dataclass
 from pathlib import Path
+
+import httpx
+from sqlalchemy import text
 
 from services.common.config import Settings
 from services.common.models import (
@@ -45,6 +49,8 @@ from services.retriever.schemas.chat import (
     PersonalizationUpdateRequest,
     SettingsRead,
     SettingsUpdateRequest,
+    SystemStatusResponse,
+    SystemServiceStatusRead,
 )
 from services.retriever.schemas.learning import (
     LearningLessonCreateRequest,
@@ -70,6 +76,21 @@ from services.retriever.schemas.learning_profile import (
     LearningProfileContextRead,
     LearningProfileContextUpdateRequest,
 )
+from services.retriever.schemas.diagnostics import (
+    DiagnosticAnswerUpsertRequest,
+    DiagnosticAttemptDetailsRead,
+    DiagnosticAttemptStartResponse,
+    DiagnosticAttemptSummaryRead,
+    DiagnosticCatalogRead,
+    DiagnosticDefinitionRead,
+    DiagnosticResultRead,
+    ExplanationFeedbackCreateRequest,
+    ExplanationFeedbackRead,
+    LearningStateCheckCreateRequest,
+    LearningStateCheckRead,
+)
+from services.retriever.services.diagnostic_definitions import load_parsed_sources
+from services.retriever.services.diagnostic_scoring import score_attempt
 from services.retriever.services.chat_naming import generate_chat_name
 from services.retriever.services.library_manager import LibraryManager, UploadFilePayload
 from services.retriever.services.message_mapper import map_attachment, map_chat, map_filter_file, map_filter_tag, map_gpt, map_message, map_source
@@ -113,10 +134,16 @@ LEARNING_PREFERENCE_DEFAULTS = {
 }
 
 LEARNING_CONTEXT_DEFAULTS = {
-    "education_background": "",
+    "profile_display_name": "",
+    "about_me": "",
+    "contact_location": "",
+    "general_title": "",
+    "date_of_birth": "",
     "current_skill_areas": [],
+    "skills": [],
     "interests": [],
-    "professional_context": "",
+    "work_experience": [],
+    "education_history": [],
     "current_reason_for_learning": "",
     "preferred_form_of_address": "",
     "learning_context_notes": "",
@@ -125,6 +152,8 @@ LEARNING_CONTEXT_DEFAULTS = {
 SUPPORTED_ROLES = {"admin", "user", "student"}
 EXAMPLE_LEARNING_PATH_TITLE = "Example: Docker Fundamentals"
 EXAMPLE_LEARNING_PATH_TITLE_SECOND = "Example: Python Learning Sprint"
+DIAGNOSTIC_DOC_SOURCE_SUBDIR = "diagnostics/source"
+DIAGNOSTIC_PAGES_FALLBACK_SUBDIR = "prds"
 logger = logging.getLogger(__name__)
 
 
@@ -155,6 +184,7 @@ class RetrieverAppService:
         if self.auth_manager is not None:
             self.auth_manager.bootstrap_users()
         self._ensure_example_learning_path()
+        self._ensure_diagnostic_definitions()
 
     def login(self, username: str, password: str) -> AuthLoginResponse:
         assert self.auth_manager is not None
@@ -175,6 +205,114 @@ class RetrieverAppService:
             current_password=current_password,
             new_password=new_password,
             confirm_password=confirm_password,
+        )
+
+    def get_system_status(self, auth: AuthContext) -> SystemStatusResponse:
+        services: list[SystemServiceStatusRead] = []
+
+        services.append(
+            SystemServiceStatusRead(
+                key="webui",
+                label="WebUI",
+                description="Frontend application session and API connectivity.",
+                status="ok",
+                detail=f"Session active for {auth.user.username}.",
+            )
+        )
+
+        services.append(
+            SystemServiceStatusRead(
+                key="retriever",
+                label="Retriever",
+                description="Retrieval, prompt assembly, and answer generation service.",
+                status="ok",
+                detail="Retriever API is running.",
+            )
+        )
+
+        services.append(self._check_database_status())
+        services.append(self._check_embedder_status())
+        services.append(self._check_knowledge_base_status(auth.user))
+
+        return SystemStatusResponse(checked_at=datetime.now(timezone.utc), services=services)
+
+    def _check_database_status(self) -> SystemServiceStatusRead:
+        try:
+            with self.chat_repository.postgres_client.engine.connect() as connection:
+                connection.execute(text("SELECT 1"))
+            return SystemServiceStatusRead(
+                key="database",
+                label="Database",
+                description="PostgreSQL storage for users, chats, settings, and diagnostic data.",
+                status="ok",
+                detail="Connection successful.",
+            )
+        except Exception as error:
+            return SystemServiceStatusRead(
+                key="database",
+                label="Database",
+                description="PostgreSQL storage for users, chats, settings, and diagnostic data.",
+                status="error",
+                detail=f"Connection failed: {error}",
+            )
+
+    def _check_embedder_status(self) -> SystemServiceStatusRead:
+        try:
+            response = httpx.get(f"{self.settings.embedder_service_url.rstrip('/')}/health", timeout=4.0)
+            response.raise_for_status()
+            payload = response.json() if response.content else {}
+            status_value = str(payload.get("status", "ok"))
+            return SystemServiceStatusRead(
+                key="embedder",
+                label="Embedder",
+                description="File processing and embedding pipeline service.",
+                status="ok" if status_value.lower() == "ok" else "warn",
+                detail=f"Embedder health returned: {status_value}.",
+            )
+        except Exception as error:
+            return SystemServiceStatusRead(
+                key="embedder",
+                label="Embedder",
+                description="File processing and embedding pipeline service.",
+                status="error",
+                detail=f"Embedder unreachable: {error}",
+            )
+
+    def _check_knowledge_base_status(self, user: UserAccount) -> SystemServiceStatusRead:
+        detail_segments: list[str] = []
+        status = "ok"
+        try:
+            library = self.library_manager.list_files(user, include_other_users=False)
+            files = list(getattr(library, "files", []) or [])
+            summary = getattr(library, "summary", None)
+            total_files = int(getattr(summary, "total_files", len(files)) if summary is not None else len(files))
+            embedded_files = int(
+                getattr(summary, "embedded_files", sum(1 for file in files if getattr(file, "is_embedded", False)))
+                if summary is not None
+                else sum(1 for file in files if getattr(file, "is_embedded", False))
+            )
+            enabled_files = sum(1 for file in files if getattr(file, "is_enabled", False))
+            detail_segments.append(f"{embedded_files}/{total_files} embedded")
+            detail_segments.append(f"{enabled_files}/{total_files} enabled")
+        except Exception as error:
+            status = "error"
+            detail_segments.append(f"Library index failed: {error}")
+
+        try:
+            collection_exists = bool(self.retrieval_service.qdrant_store.collection_exists())
+            detail_segments.append(f"vector index {'ready' if collection_exists else 'not initialized'}")
+            if status != "error" and not collection_exists:
+                status = "warn"
+        except Exception as error:
+            status = "error"
+            detail_segments.append(f"vector index check failed: {error}")
+
+        return SystemServiceStatusRead(
+            key="knowledge_base",
+            label="Knowledge Base",
+            description="Library files and vector index used for grounded retrieval.",
+            status=status,
+            detail="; ".join(detail_segments) if detail_segments else "No details available.",
         )
 
     def list_admin_users(self, auth: AuthContext) -> list[AdminUserRead]:
@@ -587,10 +725,16 @@ class RetrieverAppService:
         preference = self.chat_repository.get_user_learning_preference(user.id)
         profile = self.chat_repository.get_user_learning_profile(user.id)
         goals = self.chat_repository.list_user_learning_goals(user.id)
+        latest_attempt_getter = getattr(self.chat_repository, "get_latest_user_diagnostic_attempt", None)
+        latest_attempt = latest_attempt_getter(user_id=user.id) if callable(latest_attempt_getter) else None
+        diagnostics_status = "not_started"
+        if latest_attempt is not None:
+            diagnostics_status = "completed" if latest_attempt.status == "completed" else "in_progress"
         return LearningProfileBundleRead(
             preferences=self._build_learning_preferences_read(preference),
             context=self._build_learning_context_read(profile),
             goals=[self._build_learning_goal_read(goal) for goal in goals],
+            diagnostics_status=diagnostics_status,
         )
 
     def update_learning_preferences(self, user: UserAccount, payload: LearningPreferencesUpdateRequest) -> LearningPreferencesRead:
@@ -629,11 +773,20 @@ class RetrieverAppService:
         }
         if "current_skill_areas" in next_values:
             next_values["current_skill_areas"] = self._normalize_string_list(next_values["current_skill_areas"])
+        if "skills" in next_values:
+            next_values["skills"] = self._normalize_string_list(next_values["skills"])
         if "interests" in next_values:
             next_values["interests"] = self._normalize_string_list(next_values["interests"])
+        if "work_experience" in next_values:
+            next_values["work_experience"] = self._normalize_string_list(next_values["work_experience"])
+        if "education_history" in next_values:
+            next_values["education_history"] = self._normalize_string_list(next_values["education_history"])
         for field_name in {
-            "education_background",
-            "professional_context",
+            "profile_display_name",
+            "about_me",
+            "contact_location",
+            "general_title",
+            "date_of_birth",
             "current_reason_for_learning",
             "preferred_form_of_address",
             "learning_context_notes",
@@ -642,10 +795,16 @@ class RetrieverAppService:
         updated = self.chat_repository.upsert_user_learning_profile(
             user.id,
             fields={
-                "education_background": next_values["education_background"],
+                "profile_display_name": next_values["profile_display_name"],
+                "about_me": next_values["about_me"],
+                "contact_location": next_values["contact_location"],
+                "general_title": next_values["general_title"],
+                "date_of_birth": next_values["date_of_birth"],
                 "current_skill_areas": next_values["current_skill_areas"],
+                "skills": next_values["skills"],
                 "interests": next_values["interests"],
-                "professional_context": next_values["professional_context"],
+                "work_experience": next_values["work_experience"],
+                "education_history": next_values["education_history"],
                 "current_reason_for_learning": next_values["current_reason_for_learning"],
                 "preferred_form_of_address": next_values["preferred_form_of_address"],
                 "learning_context_notes": next_values["learning_context_notes"],
@@ -683,6 +842,137 @@ class RetrieverAppService:
         if deleted is None:
             return None
         return self._build_learning_goal_read(deleted)
+
+    def list_diagnostic_definitions(self) -> DiagnosticCatalogRead:
+        definitions: list[DiagnosticDefinitionRead] = []
+        for record in self.chat_repository.list_latest_diagnostic_versions():
+            content = dict(record.content_json or {})
+            definitions.append(self._build_diagnostic_definition_read(content))
+        return DiagnosticCatalogRead(definitions=sorted(definitions, key=lambda item: item.type))
+
+    def get_diagnostic_definition(self, diagnostic_type: str) -> DiagnosticDefinitionRead | None:
+        record = self.chat_repository.get_latest_diagnostic_version(diagnostic_type)
+        if record is None:
+            return None
+        return self._build_diagnostic_definition_read(dict(record.content_json or {}))
+
+    def start_diagnostic_attempt(self, user: UserAccount) -> DiagnosticAttemptStartResponse:
+        definition_versions: dict[str, str] = {}
+        for diagnostic_type in ("LAA", "MOA", "LTA"):
+            version = self.chat_repository.get_latest_diagnostic_version(diagnostic_type)
+            if version is not None:
+                definition_versions[diagnostic_type] = version.version
+        attempt = self.chat_repository.create_user_diagnostic_attempt(
+            user_id=user.id,
+            definition_versions=definition_versions,
+        )
+        return DiagnosticAttemptStartResponse(
+            attempt_id=attempt.id,
+            status=attempt.status,
+            definition_versions=dict(attempt.definition_versions or {}),
+            started_at=attempt.started_at,
+        )
+
+    def list_diagnostic_attempts(self, user: UserAccount) -> list[DiagnosticAttemptSummaryRead]:
+        attempts = self.chat_repository.list_user_diagnostic_attempts(user_id=user.id)
+        return [self._build_diagnostic_attempt_summary(item) for item in attempts]
+
+    def delete_diagnostic_attempt(self, user: UserAccount, attempt_id: str) -> DiagnosticAttemptSummaryRead | None:
+        deleted = self.chat_repository.delete_user_diagnostic_attempt(user_id=user.id, attempt_id=attempt_id)
+        if deleted is None:
+            return None
+        return self._build_diagnostic_attempt_summary(deleted)
+
+    def get_latest_diagnostic_attempt(self, user: UserAccount) -> DiagnosticAttemptDetailsRead | None:
+        attempt = self.chat_repository.get_latest_user_diagnostic_attempt(user_id=user.id)
+        if attempt is None:
+            return None
+        return self.get_diagnostic_attempt(user, attempt.id)
+
+    def get_diagnostic_attempt(self, user: UserAccount, attempt_id: str) -> DiagnosticAttemptDetailsRead | None:
+        attempt = self.chat_repository.get_user_diagnostic_attempt(user_id=user.id, attempt_id=attempt_id)
+        if attempt is None:
+            return None
+        answers = self.chat_repository.list_user_diagnostic_answers(attempt_id=attempt.id)
+        grouped_answers: dict[str, dict[str, object]] = {"LAA": {}, "MOA": {}, "LTA": {}}
+        for answer in answers:
+            grouped_answers.setdefault(answer.diagnostic_type, {})[answer.question_key] = answer.answer_json.get("value")
+        result = self.chat_repository.get_user_diagnostic_result(attempt_id=attempt.id)
+        return DiagnosticAttemptDetailsRead(
+            attempt=self._build_diagnostic_attempt_summary(attempt),
+            answers=grouped_answers,
+            result=dict(result.result_json or {}) if result else None,
+        )
+
+    def upsert_diagnostic_answers(
+        self,
+        user: UserAccount,
+        attempt_id: str,
+        payload: DiagnosticAnswerUpsertRequest,
+    ) -> DiagnosticAttemptDetailsRead | None:
+        attempt = self.chat_repository.get_user_diagnostic_attempt(user_id=user.id, attempt_id=attempt_id)
+        if attempt is None:
+            return None
+        for item in payload.answers:
+            self.chat_repository.upsert_user_diagnostic_answer(
+                attempt_id=attempt.id,
+                diagnostic_type=payload.diagnostic_type,
+                question_key=item.question_id,
+                answer_json={"value": item.value},
+            )
+        return self.get_diagnostic_attempt(user, attempt.id)
+
+    def complete_diagnostic_attempt(self, user: UserAccount, attempt_id: str) -> DiagnosticResultRead | None:
+        attempt = self.chat_repository.get_user_diagnostic_attempt(user_id=user.id, attempt_id=attempt_id)
+        if attempt is None:
+            return None
+        answers = self.chat_repository.list_user_diagnostic_answers(attempt_id=attempt.id)
+        answers_by_type: dict[str, dict[str, object]] = {"LAA": {}, "MOA": {}, "LTA": {}}
+        for answer in answers:
+            answers_by_type.setdefault(answer.diagnostic_type, {})[answer.question_key] = answer.answer_json.get("value")
+
+        definitions: dict[str, dict[str, object]] = {}
+        for diagnostic_type in ("LAA", "MOA", "LTA"):
+            version = self.chat_repository.get_latest_diagnostic_version(diagnostic_type)
+            if version is not None:
+                definitions[diagnostic_type] = dict(version.content_json or {})
+
+        computed = score_attempt(definitions, answers_by_type)
+        persisted = self.chat_repository.upsert_user_diagnostic_result(attempt_id=attempt.id, result_json=computed)
+        self.chat_repository.mark_user_diagnostic_attempt_completed(attempt_id=attempt.id)
+        return DiagnosticResultRead(attempt_id=attempt.id, result=dict(persisted.result_json or {}))
+
+    def create_learning_state_check(self, user: UserAccount, payload: LearningStateCheckCreateRequest) -> LearningStateCheckRead:
+        record = self.chat_repository.create_learning_state_check(
+            {
+                "user_id": user.id,
+                "chat_id": payload.chat_id,
+                "mood": payload.mood.strip(),
+                "perceived_difficulty": payload.perceived_difficulty.strip(),
+                "needs_pause_or_input": payload.needs_pause_or_input.strip(),
+                "preferred_format": payload.preferred_format.strip(),
+                "notes": payload.notes.strip(),
+            }
+        )
+        return self._build_learning_state_check_read(record)
+
+    def list_learning_state_checks(self, user: UserAccount, limit: int = 20) -> list[LearningStateCheckRead]:
+        return [
+            self._build_learning_state_check_read(item)
+            for item in self.chat_repository.list_learning_state_checks(user_id=user.id, limit=max(1, min(200, limit)))
+        ]
+
+    def create_explanation_feedback(self, user: UserAccount, payload: ExplanationFeedbackCreateRequest) -> ExplanationFeedbackRead:
+        record = self.chat_repository.create_explanation_feedback(
+            {
+                "user_id": user.id,
+                "message_id": payload.message_id,
+                "rating": payload.rating,
+                "feedback_text": payload.feedback_text.strip(),
+                "re_explain_requested": payload.re_explain_requested,
+            }
+        )
+        return self._build_explanation_feedback_read(record)
 
     def list_learning_paths(self, user: UserAccount) -> LearningPathListResponse:
         paths = self.chat_repository.list_learning_paths(user_id=user.id, role=user.role)
@@ -1453,6 +1743,111 @@ class RetrieverAppService:
         except Exception:
             logger.exception("Failed to ensure example learning path")
 
+    def _ensure_diagnostic_definitions(self) -> None:
+        try:
+            source_dirs = [
+                Path(__file__).resolve().parents[3] / DIAGNOSTIC_PAGES_FALLBACK_SUBDIR,
+                Path(self.settings.data_dir) / DIAGNOSTIC_DOC_SOURCE_SUBDIR,
+            ]
+            parsed_sources = []
+            for source_dir in source_dirs:
+                candidate_sources = load_parsed_sources(source_dir)
+                if self._has_minimum_diagnostic_coverage(candidate_sources):
+                    parsed_sources = candidate_sources
+                    break
+            for source in parsed_sources:
+                definition = self.chat_repository.upsert_diagnostic_definition(
+                    diagnostic_type=source.diagnostic_type,
+                    title=str(source.definition.get("title") or source.diagnostic_type),
+                )
+                existing = self.chat_repository.get_diagnostic_version(
+                    definition_id=definition.id,
+                    version=source.version,
+                )
+                if existing is not None and existing.source_document_hash == source.file_hash:
+                    continue
+                if existing is not None:
+                    version = self.chat_repository.update_diagnostic_version_content(
+                        version_id=existing.id,
+                        source_document_name=source.file_name,
+                        source_document_hash=source.file_hash,
+                        content_json=source.definition,
+                    )
+                    if version is None:
+                        continue
+                else:
+                    version = self.chat_repository.create_diagnostic_version(
+                        definition_id=definition.id,
+                        version=source.version,
+                        source_document_name=source.file_name,
+                        source_document_hash=source.file_hash,
+                        content_json=source.definition,
+                    )
+                self.chat_repository.replace_diagnostic_version_structure(
+                    version_id=version.id,
+                    definition=source.definition,
+                )
+        except Exception:
+            logger.exception("Failed to ensure diagnostic definitions from source documents")
+
+    def _has_minimum_diagnostic_coverage(self, parsed_sources: list) -> bool:
+        if not parsed_sources:
+            return False
+        by_type = {item.diagnostic_type: item for item in parsed_sources}
+        if {"LAA", "MOA", "LTA"} - set(by_type):
+            return False
+        for diagnostic_type in ("LAA", "MOA", "LTA"):
+            definition = dict(getattr(by_type[diagnostic_type], "definition", {}) or {})
+            question_count = sum(len(section.get("questions") or []) for section in definition.get("sections") or [])
+            if question_count < 5:
+                return False
+        return True
+
+    def _build_diagnostic_definition_read(self, content: dict[str, object]) -> DiagnosticDefinitionRead:
+        return DiagnosticDefinitionRead.model_validate(
+            {
+                "id": str(content.get("id") or ""),
+                "type": str(content.get("type") or "LAA"),
+                "title": str(content.get("title") or ""),
+                "version": str(content.get("version") or "v1"),
+                "sections": content.get("sections") or [],
+            }
+        )
+
+    def _build_diagnostic_attempt_summary(self, attempt) -> DiagnosticAttemptSummaryRead:
+        return DiagnosticAttemptSummaryRead(
+            attempt_id=attempt.id,
+            status=attempt.status,
+            definition_versions=dict(attempt.definition_versions or {}),
+            started_at=attempt.started_at,
+            completed_at=attempt.completed_at,
+            is_latest=attempt.is_latest,
+        )
+
+    def _build_learning_state_check_read(self, record) -> LearningStateCheckRead:
+        return LearningStateCheckRead(
+            id=record.id,
+            user_id=record.user_id,
+            chat_id=record.chat_id,
+            mood=record.mood or "",
+            perceived_difficulty=record.perceived_difficulty or "",
+            needs_pause_or_input=record.needs_pause_or_input or "",
+            preferred_format=record.preferred_format or "",
+            notes=record.notes or "",
+            created_at=record.created_at,
+        )
+
+    def _build_explanation_feedback_read(self, record) -> ExplanationFeedbackRead:
+        return ExplanationFeedbackRead(
+            id=record.id,
+            user_id=record.user_id,
+            message_id=record.message_id,
+            rating=record.rating,
+            feedback_text=record.feedback_text or "",
+            re_explain_requested=record.re_explain_requested,
+            created_at=record.created_at,
+        )
+
     def _normalize_string_list(self, values: list[str]) -> list[str]:
         return list(dict.fromkeys(str(item).strip() for item in values if str(item).strip()))
 
@@ -1472,10 +1867,16 @@ class RetrieverAppService:
 
     def _serialize_learning_profile(self, profile: UserLearningProfile) -> dict[str, object]:
         return {
-            "education_background": profile.education_background or "",
+            "profile_display_name": profile.profile_display_name or "",
+            "about_me": profile.about_me or "",
+            "contact_location": profile.contact_location or "",
+            "general_title": profile.general_title or "",
+            "date_of_birth": profile.date_of_birth or "",
             "current_skill_areas": list(profile.current_skill_areas or []),
+            "skills": list(profile.skills or []),
             "interests": list(profile.interests or []),
-            "professional_context": profile.professional_context or "",
+            "work_experience": list(profile.work_experience or []),
+            "education_history": list(profile.education_history or []),
             "current_reason_for_learning": profile.current_reason_for_learning or "",
             "preferred_form_of_address": profile.preferred_form_of_address or "",
             "learning_context_notes": profile.learning_context_notes or "",
@@ -1502,10 +1903,16 @@ class RetrieverAppService:
         if profile is None:
             return LearningProfileContextRead(**LEARNING_CONTEXT_DEFAULTS, updated_at=None)
         return LearningProfileContextRead(
-            education_background=profile.education_background or "",
+            profile_display_name=profile.profile_display_name or "",
+            about_me=profile.about_me or "",
+            contact_location=profile.contact_location or "",
+            general_title=profile.general_title or "",
+            date_of_birth=profile.date_of_birth or "",
             current_skill_areas=list(profile.current_skill_areas or []),
+            skills=list(profile.skills or []),
             interests=list(profile.interests or []),
-            professional_context=profile.professional_context or "",
+            work_experience=list(profile.work_experience or []),
+            education_history=list(profile.education_history or []),
             current_reason_for_learning=profile.current_reason_for_learning or "",
             preferred_form_of_address=profile.preferred_form_of_address or "",
             learning_context_notes=profile.learning_context_notes or "",

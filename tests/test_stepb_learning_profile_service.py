@@ -28,10 +28,16 @@ class LearningProfileRecord:
     def __init__(self, user_id: int, **fields) -> None:
         self.user_id = user_id
         self.updated_at = "2026-04-04T00:00:00Z"
-        self.education_background = fields.get("education_background", "")
+        self.profile_display_name = fields.get("profile_display_name", "")
+        self.about_me = fields.get("about_me", "")
+        self.contact_location = fields.get("contact_location", "")
+        self.general_title = fields.get("general_title", "")
+        self.date_of_birth = fields.get("date_of_birth", "")
         self.current_skill_areas = fields.get("current_skill_areas", [])
+        self.skills = fields.get("skills", [])
         self.interests = fields.get("interests", [])
-        self.professional_context = fields.get("professional_context", "")
+        self.work_experience = fields.get("work_experience", [])
+        self.education_history = fields.get("education_history", [])
         self.current_reason_for_learning = fields.get("current_reason_for_learning", "")
         self.preferred_form_of_address = fields.get("preferred_form_of_address", "")
         self.learning_context_notes = fields.get("learning_context_notes", "")

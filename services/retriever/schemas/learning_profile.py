@@ -45,10 +45,16 @@ class LearningPreferencesUpdateRequest(BaseModel):
 
 
 class LearningProfileContextRead(BaseModel):
-    education_background: str = ""
+    profile_display_name: str = ""
+    about_me: str = ""
+    contact_location: str = ""
+    general_title: str = ""
+    date_of_birth: str = ""
     current_skill_areas: list[str] = Field(default_factory=list)
+    skills: list[str] = Field(default_factory=list)
     interests: list[str] = Field(default_factory=list)
-    professional_context: str = ""
+    work_experience: list[str] = Field(default_factory=list)
+    education_history: list[str] = Field(default_factory=list)
     current_reason_for_learning: str = ""
     preferred_form_of_address: str = ""
     learning_context_notes: str = ""
@@ -56,15 +62,21 @@ class LearningProfileContextRead(BaseModel):
 
 
 class LearningProfileContextUpdateRequest(BaseModel):
-    education_background: str | None = Field(default=None, max_length=4000)
+    profile_display_name: str | None = Field(default=None, max_length=255)
+    about_me: str | None = Field(default=None, max_length=4000)
+    contact_location: str | None = Field(default=None, max_length=255)
+    general_title: str | None = Field(default=None, max_length=255)
+    date_of_birth: str | None = Field(default=None, max_length=64)
     current_skill_areas: list[str] | None = None
+    skills: list[str] | None = None
     interests: list[str] | None = None
-    professional_context: str | None = Field(default=None, max_length=4000)
+    work_experience: list[str] | None = None
+    education_history: list[str] | None = None
     current_reason_for_learning: str | None = Field(default=None, max_length=4000)
     preferred_form_of_address: str | None = Field(default=None, max_length=255)
     learning_context_notes: str | None = Field(default=None, max_length=4000)
 
-    @field_validator("current_skill_areas", "interests")
+    @field_validator("current_skill_areas", "skills", "interests", "work_experience", "education_history")
     @classmethod
     def validate_string_list_size(cls, value: list[str] | None) -> list[str] | None:
         if value is None:
@@ -111,4 +123,4 @@ class LearningProfileBundleRead(BaseModel):
     preferences: LearningPreferencesRead
     context: LearningProfileContextRead
     goals: list[LearningGoalRead] = Field(default_factory=list)
-    diagnostics_status: Literal["not_started"] = "not_started"
+    diagnostics_status: Literal["not_started", "in_progress", "completed"] = "not_started"

@@ -3,9 +3,13 @@ from __future__ import annotations
 from services.common.models import (
     ChatMessage,
     ChatSession,
+    DiagnosticDefinition,
+    DiagnosticVersion,
+    ExplanationFeedback,
     GPTChatSession,
     GPTRecord,
     LearningLesson,
+    LearningStateCheck,
     LearningModule,
     LearningPath,
     LearningPathAllowedFile,
@@ -16,6 +20,9 @@ from services.common.models import (
     UserLearningGoal,
     UserLearningPreference,
     UserLearningProfile,
+    UserDiagnosticAnswer,
+    UserDiagnosticAttempt,
+    UserDiagnosticResult,
     UserAccount,
     UserSessionRecord,
 )
@@ -355,3 +362,104 @@ class ChatRepository:
 
     def list_learning_path_allowed_tags(self, learning_path_id: str) -> list[LearningPathAllowedTag]:
         return self.postgres_client.list_learning_path_allowed_tags(learning_path_id)
+
+    def get_diagnostic_definition(self, diagnostic_type: str) -> DiagnosticDefinition | None:
+        return self.postgres_client.get_diagnostic_definition(diagnostic_type)
+
+    def upsert_diagnostic_definition(self, *, diagnostic_type: str, title: str) -> DiagnosticDefinition:
+        return self.postgres_client.upsert_diagnostic_definition(diagnostic_type=diagnostic_type, title=title)
+
+    def get_diagnostic_version(self, *, definition_id: str, version: str) -> DiagnosticVersion | None:
+        return self.postgres_client.get_diagnostic_version(definition_id=definition_id, version=version)
+
+    def list_latest_diagnostic_versions(self) -> list[DiagnosticVersion]:
+        return self.postgres_client.list_latest_diagnostic_versions()
+
+    def get_latest_diagnostic_version(self, diagnostic_type: str) -> DiagnosticVersion | None:
+        return self.postgres_client.get_latest_diagnostic_version(diagnostic_type)
+
+    def create_diagnostic_version(
+        self,
+        *,
+        definition_id: str,
+        version: str,
+        source_document_name: str,
+        source_document_hash: str,
+        content_json: dict[str, object],
+    ) -> DiagnosticVersion:
+        return self.postgres_client.create_diagnostic_version(
+            definition_id=definition_id,
+            version=version,
+            source_document_name=source_document_name,
+            source_document_hash=source_document_hash,
+            content_json=content_json,
+        )
+
+    def update_diagnostic_version_content(
+        self,
+        *,
+        version_id: str,
+        source_document_name: str,
+        source_document_hash: str,
+        content_json: dict[str, object],
+    ) -> DiagnosticVersion | None:
+        return self.postgres_client.update_diagnostic_version_content(
+            version_id=version_id,
+            source_document_name=source_document_name,
+            source_document_hash=source_document_hash,
+            content_json=content_json,
+        )
+
+    def replace_diagnostic_version_structure(self, *, version_id: str, definition: dict[str, object]) -> None:
+        self.postgres_client.replace_diagnostic_version_structure(version_id=version_id, definition=definition)
+
+    def create_user_diagnostic_attempt(self, *, user_id: int, definition_versions: dict[str, str]) -> UserDiagnosticAttempt:
+        return self.postgres_client.create_user_diagnostic_attempt(user_id=user_id, definition_versions=definition_versions)
+
+    def get_user_diagnostic_attempt(self, *, user_id: int, attempt_id: str) -> UserDiagnosticAttempt | None:
+        return self.postgres_client.get_user_diagnostic_attempt(user_id=user_id, attempt_id=attempt_id)
+
+    def get_latest_user_diagnostic_attempt(self, *, user_id: int) -> UserDiagnosticAttempt | None:
+        return self.postgres_client.get_latest_user_diagnostic_attempt(user_id=user_id)
+
+    def list_user_diagnostic_attempts(self, *, user_id: int) -> list[UserDiagnosticAttempt]:
+        return self.postgres_client.list_user_diagnostic_attempts(user_id=user_id)
+
+    def delete_user_diagnostic_attempt(self, *, user_id: int, attempt_id: str) -> UserDiagnosticAttempt | None:
+        return self.postgres_client.delete_user_diagnostic_attempt(user_id=user_id, attempt_id=attempt_id)
+
+    def upsert_user_diagnostic_answer(
+        self,
+        *,
+        attempt_id: str,
+        diagnostic_type: str,
+        question_key: str,
+        answer_json: dict[str, object],
+    ) -> UserDiagnosticAnswer:
+        return self.postgres_client.upsert_user_diagnostic_answer(
+            attempt_id=attempt_id,
+            diagnostic_type=diagnostic_type,
+            question_key=question_key,
+            answer_json=answer_json,
+        )
+
+    def list_user_diagnostic_answers(self, *, attempt_id: str) -> list[UserDiagnosticAnswer]:
+        return self.postgres_client.list_user_diagnostic_answers(attempt_id=attempt_id)
+
+    def upsert_user_diagnostic_result(self, *, attempt_id: str, result_json: dict[str, object]) -> UserDiagnosticResult:
+        return self.postgres_client.upsert_user_diagnostic_result(attempt_id=attempt_id, result_json=result_json)
+
+    def get_user_diagnostic_result(self, *, attempt_id: str) -> UserDiagnosticResult | None:
+        return self.postgres_client.get_user_diagnostic_result(attempt_id=attempt_id)
+
+    def mark_user_diagnostic_attempt_completed(self, *, attempt_id: str) -> UserDiagnosticAttempt | None:
+        return self.postgres_client.mark_user_diagnostic_attempt_completed(attempt_id=attempt_id)
+
+    def create_learning_state_check(self, payload: dict[str, object]) -> LearningStateCheck:
+        return self.postgres_client.create_learning_state_check(payload)
+
+    def list_learning_state_checks(self, *, user_id: int, limit: int = 20) -> list[LearningStateCheck]:
+        return self.postgres_client.list_learning_state_checks(user_id=user_id, limit=limit)
+
+    def create_explanation_feedback(self, payload: dict[str, object]) -> ExplanationFeedback:
+        return self.postgres_client.create_explanation_feedback(payload)

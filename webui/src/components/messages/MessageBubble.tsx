@@ -8,6 +8,7 @@ import { SourcesPanel } from "../sources/SourcesPanel";
 
 type MessageBubbleProps = {
   message: Message;
+  onFeedback?: (payload: { message_id: number | null; rating: number; feedback_text: string; re_explain_requested: boolean }) => Promise<void> | void;
 };
 
 function attachmentTone(fileName: string) {
@@ -19,7 +20,7 @@ function attachmentTone(fileName: string) {
   return "is-green";
 }
 
-export function MessageBubble({ message }: MessageBubbleProps) {
+export function MessageBubble({ message, onFeedback }: MessageBubbleProps) {
   const [sourcesOpen, setSourcesOpen] = useState(false);
   const isAssistant = message.role === "assistant";
   const attachments = message.attachments.length > 0 ? (
@@ -75,6 +76,31 @@ export function MessageBubble({ message }: MessageBubbleProps) {
             <small>Sources</small>
           </button>
           <SourcesPanel open={sourcesOpen} onClose={() => setSourcesOpen(false)} sources={message.sources} />
+        </div>
+      ) : null}
+      {isAssistant ? (
+        <div className="library-table-footer">
+          {[1, 2, 3, 4, 5].map((rating) => (
+            <button
+              key={rating}
+              className="secondary-button"
+              type="button"
+              onClick={() => {
+                if (!onFeedback) return;
+                const feedbackText = window.prompt("Optional feedback");
+                const wantsReExplain = window.confirm("Request re-explanation?");
+                const parsedMessageId = Number(message.id);
+                void onFeedback({
+                  message_id: Number.isFinite(parsedMessageId) ? parsedMessageId : null,
+                  rating,
+                  feedback_text: feedbackText ?? "",
+                  re_explain_requested: wantsReExplain,
+                });
+              }}
+            >
+              {rating}
+            </button>
+          ))}
         </div>
       ) : null}
     </article>

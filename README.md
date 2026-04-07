@@ -4,7 +4,7 @@ Local, containerized Retrieval-Augmented Generation for indexing your own files 
 
 ## Step B Scope
 
-This repository includes the learning foundation and declared learning profile layer:
+This repository includes the learning foundation, declared learning profile layer, and Step B.1 diagnostics:
 
 - JWT-based authentication with forced password change flow
 - role model: `admin`, `user`, `student`
@@ -16,11 +16,17 @@ This repository includes the learning foundation and declared learning profile l
 - user-scoped declared learning preferences
 - user-scoped learner context/background profile
 - user-scoped structured learning goals
+- versioned docx-driven diagnostic definitions (LAA, MOA, LTA)
+- deterministic diagnostic scoring engine (non-LLM)
+- diagnostic attempt history with persisted answers and results
+- real-time learning state check persistence
+- explanation feedback persistence (rating, text, re-explain flag)
+- dynamic frontend diagnostic flow and backend-driven charts
 - dedicated learning UI sections for preferences, context, and goals
 - web UI learning-path management page and sidebar navigation entry
 - future learning-chat foundation fields (`chat_type`, `learning_path_id`)
 
-Step B only stores explicit learner input. Diagnostic/inferred profiling is not part of this step and is reserved for Step B.1.
+Step B (declared preferences) remains separate from Step B.1 (diagnosed preferences and runtime signals).
 
 ## Quick Start
 

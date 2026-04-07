@@ -3,6 +3,13 @@ import type {
   AssistantMode,
   AuthSession,
   Chat,
+  DiagnosticAttemptDetails,
+  DiagnosticAttemptStart,
+  DiagnosticAttemptSummary,
+  DiagnosticCatalog,
+  DiagnosticDefinition,
+  DiagnosticResult,
+  ExplanationFeedback,
   ChatDownload,
   ChatUpdate,
   CurrentUser,
@@ -27,12 +34,14 @@ import type {
   LearningPreferences,
   LearningPath,
   LearningPathResponse,
+  LearningStateCheck,
   Message,
   MessageResponse,
   Personalization,
   PersonalizationUpdate,
   Settings,
   SettingsUpdate,
+  SystemStatus,
 } from "../types/chat";
 
 const API_BASE_URL = (import.meta.env.VITE_API_BASE_URL as string | undefined)?.replace(/\/$/, "") ?? "http://localhost:8000";
@@ -135,6 +144,9 @@ export const apiClient = {
   getMe() {
     return request<{ user: CurrentUser; expires_at: string; max_expires_at: string }>("/api/auth/me");
   },
+  getSystemStatus() {
+    return request<SystemStatus>("/api/system/status");
+  },
   changePassword(currentPassword: string | null, newPassword: string, confirmPassword: string) {
     return request<AuthSession>("/api/auth/change-password", {
       method: "POST",
@@ -212,6 +224,63 @@ export const apiClient = {
   deleteLearningGoal(goalId: string) {
     return request<LearningGoal>(`/api/learning-profile/goals/${goalId}`, {
       method: "DELETE",
+    });
+  },
+  listDiagnosticDefinitions() {
+    return request<DiagnosticCatalog>("/api/diagnostics/definitions");
+  },
+  getDiagnosticDefinition(diagnosticType: "LAA" | "MOA" | "LTA") {
+    return request<DiagnosticDefinition>(`/api/diagnostics/definitions/${diagnosticType}`);
+  },
+  startDiagnosticAttempt() {
+    return request<DiagnosticAttemptStart>("/api/diagnostics/attempts", { method: "POST" });
+  },
+  listDiagnosticAttempts() {
+    return request<DiagnosticAttemptSummary[]>("/api/diagnostics/attempts");
+  },
+  deleteDiagnosticAttempt(attemptId: string) {
+    return request<DiagnosticAttemptSummary>(`/api/diagnostics/attempts/${attemptId}`, { method: "DELETE" });
+  },
+  getLatestDiagnosticAttempt() {
+    return request<DiagnosticAttemptDetails>("/api/diagnostics/attempts/latest");
+  },
+  getDiagnosticAttempt(attemptId: string) {
+    return request<DiagnosticAttemptDetails>(`/api/diagnostics/attempts/${attemptId}`);
+  },
+  upsertDiagnosticAnswers(attemptId: string, payload: { diagnostic_type: "LAA" | "MOA" | "LTA"; answers: Array<{ question_id: string; value: unknown }> }) {
+    return request<DiagnosticAttemptDetails>(`/api/diagnostics/attempts/${attemptId}/answers`, {
+      method: "PUT",
+      body: JSON.stringify(payload),
+    });
+  },
+  completeDiagnosticAttempt(attemptId: string) {
+    return request<DiagnosticResult>(`/api/diagnostics/attempts/${attemptId}/complete`, { method: "POST" });
+  },
+  createLearningStateCheck(payload: {
+    chat_id?: string | null;
+    mood: string;
+    perceived_difficulty: string;
+    needs_pause_or_input: string;
+    preferred_format: string;
+    notes: string;
+  }) {
+    return request<LearningStateCheck>("/api/learning-state-checks", {
+      method: "POST",
+      body: JSON.stringify(payload),
+    });
+  },
+  listLearningStateChecks(limit = 20) {
+    return request<LearningStateCheck[]>(`/api/learning-state-checks?limit=${limit}`);
+  },
+  createExplanationFeedback(payload: {
+    message_id?: number | null;
+    rating: number;
+    feedback_text: string;
+    re_explain_requested: boolean;
+  }) {
+    return request<ExplanationFeedback>("/api/explanation-feedback", {
+      method: "POST",
+      body: JSON.stringify(payload),
     });
   },
   createLearningPath(payload: {

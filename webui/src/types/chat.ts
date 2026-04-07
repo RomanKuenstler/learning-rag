@@ -351,10 +351,16 @@ export type LearningPreferences = {
 };
 
 export type LearningProfileContext = {
-  education_background: string;
+  profile_display_name: string;
+  about_me: string;
+  contact_location: string;
+  general_title: string;
+  date_of_birth: string;
   current_skill_areas: string[];
+  skills: string[];
   interests: string[];
-  professional_context: string;
+  work_experience: string[];
+  education_history: string[];
   current_reason_for_learning: string;
   preferred_form_of_address: string;
   learning_context_notes: string;
@@ -378,5 +384,103 @@ export type LearningProfileBundle = {
   preferences: LearningPreferences;
   context: LearningProfileContext;
   goals: LearningGoal[];
-  diagnostics_status: "not_started";
+  diagnostics_status: "not_started" | "in_progress" | "completed";
+};
+
+export type DiagnosticQuestionType = "single_choice" | "multi_choice" | "likert" | "slider" | "text";
+
+export type DiagnosticOption = {
+  key: string;
+  label: string;
+  value: string | null;
+  allows_text: boolean;
+};
+
+export type DiagnosticQuestion = {
+  id: string;
+  text: string;
+  type: DiagnosticQuestionType;
+  options: DiagnosticOption[];
+  min_value: number | null;
+  max_value: number | null;
+};
+
+export type DiagnosticSection = {
+  id: string;
+  title: string;
+  questions: DiagnosticQuestion[];
+};
+
+export type DiagnosticDefinition = {
+  id: string;
+  type: "LAA" | "MOA" | "LTA";
+  title: string;
+  version: string;
+  sections: DiagnosticSection[];
+};
+
+export type DiagnosticCatalog = {
+  definitions: DiagnosticDefinition[];
+};
+
+export type DiagnosticAttemptStart = {
+  attempt_id: string;
+  status: string;
+  definition_versions: Record<string, string>;
+  started_at: string;
+};
+
+export type DiagnosticAttemptSummary = {
+  attempt_id: string;
+  status: string;
+  definition_versions: Record<string, string>;
+  started_at: string;
+  completed_at: string | null;
+  is_latest: boolean;
+};
+
+export type DiagnosticAttemptDetails = {
+  attempt: DiagnosticAttemptSummary;
+  answers: Record<string, Record<string, unknown>>;
+  result: Record<string, unknown> | null;
+};
+
+export type DiagnosticResult = {
+  attempt_id: string;
+  result: Record<string, unknown>;
+};
+
+export type LearningStateCheck = {
+  id: number;
+  user_id: number;
+  chat_id: string | null;
+  mood: string;
+  perceived_difficulty: string;
+  needs_pause_or_input: string;
+  preferred_format: string;
+  notes: string;
+  created_at: string;
+};
+
+export type ExplanationFeedback = {
+  id: number;
+  user_id: number;
+  message_id: number | null;
+  rating: number;
+  feedback_text: string;
+  re_explain_requested: boolean;
+  created_at: string;
+};
+
+export type SystemServiceStatus = {
+  key: "webui" | "retriever" | "embedder" | "knowledge_base" | "database" | string;
+  label: string;
+  description: string;
+  status: "ok" | "warn" | "error" | string;
+  detail: string;
+};
+
+export type SystemStatus = {
+  checked_at: string;
+  services: SystemServiceStatus[];
 };

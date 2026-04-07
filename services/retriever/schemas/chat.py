@@ -318,3 +318,16 @@ class ErrorResponse(BaseModel):
 
 class HealthResponse(BaseModel):
     status: str
+
+
+class SystemServiceStatusRead(BaseModel):
+    key: str
+    label: str
+    description: str
+    status: str
+    detail: str
+
+
+class SystemStatusResponse(BaseModel):
+    checked_at: datetime
+    services: list[SystemServiceStatusRead] = Field(default_factory=list)

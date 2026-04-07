@@ -183,7 +183,7 @@ Returns the current user bundle:
 - `preferences` (declared learning preferences)
 - `context` (learner background/context)
 - `goals` (structured learning goals)
-- `diagnostics_status` (currently `not_started`)
+- `diagnostics_status` (`not_started|in_progress|completed`)
 
 ### `PATCH /api/learning-profile/preferences`
 
@@ -224,6 +224,56 @@ Partially updates one user-owned goal (`404` when not owned or missing).
 ### `DELETE /api/learning-profile/goals/{goal_id}`
 
 Deletes one user-owned goal (`404` when not owned or missing).
+
+## Diagnostics (Step B.1)
+
+### `GET /api/diagnostics/definitions`
+
+Returns active diagnostic definitions loaded from source `.docx`.
+
+### `GET /api/diagnostics/definitions/{diagnostic_type}`
+
+Returns one definition for `LAA|MOA|LTA`.
+
+### `POST /api/diagnostics/attempts`
+
+Starts a new user attempt and snapshots active definition versions.
+
+### `GET /api/diagnostics/attempts`
+
+Returns all attempts for the current user (latest first).
+
+### `GET /api/diagnostics/attempts/latest`
+
+Returns latest attempt with grouped answers and optional result.
+
+### `GET /api/diagnostics/attempts/{attempt_id}`
+
+Returns one user-owned attempt with answers and result.
+
+### `PUT /api/diagnostics/attempts/{attempt_id}/answers`
+
+Upserts answers for one diagnostic step (`LAA|MOA|LTA`).
+
+### `POST /api/diagnostics/attempts/{attempt_id}/complete`
+
+Runs deterministic scoring and persists the result payload.
+
+## Learning State Checks
+
+### `POST /api/learning-state-checks`
+
+Persists a lightweight runtime learning state signal (`mood`, `perceived_difficulty`, `needs_pause_or_input`, `preferred_format`, `notes`, optional `chat_id`).
+
+### `GET /api/learning-state-checks`
+
+Lists latest state checks for the authenticated user.
+
+## Explanation Feedback
+
+### `POST /api/explanation-feedback`
+
+Persists message-level feedback (`message_id`, `rating 1..5`, optional text, `re_explain_requested` flag).
 
 Multipart request:
 

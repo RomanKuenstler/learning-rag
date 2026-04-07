@@ -6,6 +6,12 @@ import type {
   AttachmentMeta,
   AuthSession,
   Chat,
+  DiagnosticAttemptDetails,
+  DiagnosticAttemptSummary,
+  DiagnosticCatalog,
+  DiagnosticDefinition,
+  DiagnosticResult,
+  ExplanationFeedback,
   FilterFile,
   FilterTag,
   Gpt,
@@ -21,6 +27,7 @@ import type {
   LearningPreferences,
   LearningModule,
   LearningPath,
+  LearningStateCheck,
   Message,
   Personalization,
   PersonalizationUpdate,
@@ -143,6 +150,19 @@ export function useChatApp() {
   const [learningProfileSaving, setLearningProfileSaving] = useState(false);
   const [learningProfileError, setLearningProfileError] = useState<string | null>(null);
   const [learningProfileSuccess, setLearningProfileSuccess] = useState<string | null>(null);
+  const [diagnosticCatalog, setDiagnosticCatalog] = useState<DiagnosticCatalog | null>(null);
+  const [diagnosticDefinitions, setDiagnosticDefinitions] = useState<Record<"LAA" | "MOA" | "LTA", DiagnosticDefinition | null>>({ LAA: null, MOA: null, LTA: null });
+  const [diagnosticAttempt, setDiagnosticAttempt] = useState<DiagnosticAttemptDetails | null>(null);
+  const [diagnosticAttempts, setDiagnosticAttempts] = useState<DiagnosticAttemptSummary[]>([]);
+  const [diagnosticResult, setDiagnosticResult] = useState<DiagnosticResult | null>(null);
+  const [diagnosticLoading, setDiagnosticLoading] = useState(false);
+  const [diagnosticSaving, setDiagnosticSaving] = useState(false);
+  const [diagnosticError, setDiagnosticError] = useState<string | null>(null);
+  const [learningStateChecks, setLearningStateChecks] = useState<LearningStateCheck[]>([]);
+  const [learningStateSaving, setLearningStateSaving] = useState(false);
+  const [learningStateError, setLearningStateError] = useState<string | null>(null);
+  const [feedbackSaving, setFeedbackSaving] = useState(false);
+  const [feedbackError, setFeedbackError] = useState<string | null>(null);
   const [archivedChats, setArchivedChats] = useState<Chat[]>([]);
   const [messagesByChat, setMessagesByChat] = useState<Record<string, Message[]>>({});
   const [gptChatsById, setGptChatsById] = useState<Record<string, GptChat>>({});
@@ -239,7 +259,7 @@ export function useChatApp() {
     setAppError(null);
     try {
       const isStudent = session.user.role === "student";
-      const [chatList, archivedList, runtimeSettings, personalizationSettings, gptList, learning, declaredLearningProfile] = await Promise.all([
+      const [chatList, archivedList, runtimeSettings, personalizationSettings, gptList, learning, declaredLearningProfile, diagnostics, attempts, stateChecks] = await Promise.all([
         isStudent ? Promise.resolve([]) : apiClient.listChats(),
         isStudent ? Promise.resolve([]) : apiClient.listArchivedChats(),
         apiClient.getSettings(),
@@ -247,11 +267,30 @@ export function useChatApp() {
         isStudent ? Promise.resolve([]) : apiClient.listGpts(),
         apiClient.listLearningPaths(),
         apiClient.getLearningProfile(),
+        apiClient.listDiagnosticDefinitions(),
+        apiClient.listDiagnosticAttempts(),
+        apiClient.listLearningStateChecks(),
       ]);
       setChats(sortChats(chatList));
       setGpts(gptList);
       setLearningPaths(learning.paths);
       setLearningProfile(declaredLearningProfile);
+      setDiagnosticCatalog(diagnostics);
+      setDiagnosticDefinitions({
+        LAA: diagnostics.definitions.find((item) => item.type === "LAA") ?? null,
+        MOA: diagnostics.definitions.find((item) => item.type === "MOA") ?? null,
+        LTA: diagnostics.definitions.find((item) => item.type === "LTA") ?? null,
+      });
+      setDiagnosticAttempts(attempts);
+      setLearningStateChecks(stateChecks);
+      if (attempts.length > 0) {
+        const latest = await apiClient.getDiagnosticAttempt(attempts[0].attempt_id);
+        setDiagnosticAttempt(latest);
+        setDiagnosticResult(latest.result ? { attempt_id: latest.attempt.attempt_id, result: latest.result } : null);
+      } else {
+        setDiagnosticAttempt(null);
+        setDiagnosticResult(null);
+      }
       setArchivedChats(sortChats(archivedList));
       setSettings(runtimeSettings);
       setSettingsDraft({
@@ -292,6 +331,19 @@ export function useChatApp() {
     setLearningProfileSaving(false);
     setLearningProfileError(null);
     setLearningProfileSuccess(null);
+    setDiagnosticCatalog(null);
+    setDiagnosticDefinitions({ LAA: null, MOA: null, LTA: null });
+    setDiagnosticAttempt(null);
+    setDiagnosticAttempts([]);
+    setDiagnosticResult(null);
+    setDiagnosticLoading(false);
+    setDiagnosticSaving(false);
+    setDiagnosticError(null);
+    setLearningStateChecks([]);
+    setLearningStateSaving(false);
+    setLearningStateError(null);
+    setFeedbackSaving(false);
+    setFeedbackError(null);
     setArchivedChats([]);
     setMessagesByChat({});
     setGptChatsById({});
@@ -928,10 +980,16 @@ export function useChatApp() {
           return {
             preferences: updated,
             context: {
-              education_background: "",
+              profile_display_name: "",
+              about_me: "",
+              contact_location: "",
+              general_title: "",
+              date_of_birth: "",
               current_skill_areas: [],
+              skills: [],
               interests: [],
-              professional_context: "",
+              work_experience: [],
+              education_history: [],
               current_reason_for_learning: "",
               preferred_form_of_address: "",
               learning_context_notes: "",
@@ -1023,10 +1081,16 @@ export function useChatApp() {
               updated_at: null,
             },
             context: {
-              education_background: "",
+              profile_display_name: "",
+              about_me: "",
+              contact_location: "",
+              general_title: "",
+              date_of_birth: "",
               current_skill_areas: [],
+              skills: [],
               interests: [],
-              professional_context: "",
+              work_experience: [],
+              education_history: [],
               current_reason_for_learning: "",
               preferred_form_of_address: "",
               learning_context_notes: "",
@@ -1078,6 +1142,191 @@ export function useChatApp() {
       throw error;
     } finally {
       setLearningProfileSaving(false);
+    }
+  }
+
+  async function loadDiagnosticCatalog() {
+    setDiagnosticLoading(true);
+    setDiagnosticError(null);
+    try {
+      const catalog = await apiClient.listDiagnosticDefinitions();
+      setDiagnosticCatalog(catalog);
+      setDiagnosticDefinitions({
+        LAA: catalog.definitions.find((item) => item.type === "LAA") ?? null,
+        MOA: catalog.definitions.find((item) => item.type === "MOA") ?? null,
+        LTA: catalog.definitions.find((item) => item.type === "LTA") ?? null,
+      });
+      return catalog;
+    } catch (error) {
+      setDiagnosticError(error instanceof Error ? error.message : "Failed to load diagnostics");
+      throw error;
+    } finally {
+      setDiagnosticLoading(false);
+    }
+  }
+
+  async function loadDiagnosticAttempts() {
+    setDiagnosticLoading(true);
+    setDiagnosticError(null);
+    try {
+      const attempts = await apiClient.listDiagnosticAttempts();
+      setDiagnosticAttempts(attempts);
+      if (attempts.length === 0) {
+        setDiagnosticAttempt(null);
+        setDiagnosticResult(null);
+        return attempts;
+      }
+
+      const inProgress = attempts.find((item) => item.status !== "completed");
+      const activeAttemptId = inProgress?.attempt_id ?? attempts[0].attempt_id;
+      const activeAttempt = await apiClient.getDiagnosticAttempt(activeAttemptId);
+      setDiagnosticAttempt(activeAttempt);
+
+      const latestCompleted = attempts.find((item) => item.status === "completed");
+      if (latestCompleted) {
+        const completedDetails = await apiClient.getDiagnosticAttempt(latestCompleted.attempt_id);
+        setDiagnosticResult(completedDetails.result ? { attempt_id: completedDetails.attempt.attempt_id, result: completedDetails.result } : null);
+      } else {
+        setDiagnosticResult(null);
+      }
+      return attempts;
+    } catch (error) {
+      setDiagnosticError(error instanceof Error ? error.message : "Failed to load attempts");
+      throw error;
+    } finally {
+      setDiagnosticLoading(false);
+    }
+  }
+
+  async function startDiagnosticAttempt() {
+    setDiagnosticSaving(true);
+    setDiagnosticError(null);
+    try {
+      const started = await apiClient.startDiagnosticAttempt();
+      const details = await apiClient.getDiagnosticAttempt(started.attempt_id);
+      setDiagnosticAttempt(details);
+      setDiagnosticResult(null);
+      await loadDiagnosticAttempts();
+      await loadLearningProfile();
+      return details;
+    } catch (error) {
+      setDiagnosticError(error instanceof Error ? error.message : "Failed to start diagnostic attempt");
+      throw error;
+    } finally {
+      setDiagnosticSaving(false);
+    }
+  }
+
+  async function saveDiagnosticAnswers(
+    attemptId: string,
+    diagnosticType: "LAA" | "MOA" | "LTA",
+    answers: Array<{ question_id: string; value: unknown }>,
+  ) {
+    setDiagnosticSaving(true);
+    setDiagnosticError(null);
+    try {
+      const updated = await apiClient.upsertDiagnosticAnswers(attemptId, { diagnostic_type: diagnosticType, answers });
+      setDiagnosticAttempt(updated);
+      return updated;
+    } catch (error) {
+      setDiagnosticError(error instanceof Error ? error.message : "Failed to save diagnostic answers");
+      throw error;
+    } finally {
+      setDiagnosticSaving(false);
+    }
+  }
+
+  async function completeDiagnosticAttempt(attemptId: string) {
+    setDiagnosticSaving(true);
+    setDiagnosticError(null);
+    try {
+      const result = await apiClient.completeDiagnosticAttempt(attemptId);
+      setDiagnosticResult(result);
+      await loadDiagnosticAttempts();
+      await loadLearningProfile();
+      return result;
+    } catch (error) {
+      setDiagnosticError(error instanceof Error ? error.message : "Failed to complete diagnostic");
+      throw error;
+    } finally {
+      setDiagnosticSaving(false);
+    }
+  }
+
+  async function deleteDiagnosticAttempt(attemptId: string) {
+    setDiagnosticSaving(true);
+    setDiagnosticError(null);
+    try {
+      await apiClient.deleteDiagnosticAttempt(attemptId);
+      await loadDiagnosticAttempts();
+      await loadLearningProfile();
+    } catch (error) {
+      setDiagnosticError(error instanceof Error ? error.message : "Failed to delete diagnostic attempt");
+      throw error;
+    } finally {
+      setDiagnosticSaving(false);
+    }
+  }
+
+  async function openDiagnosticAttempt(attemptId: string) {
+    setDiagnosticSaving(true);
+    setDiagnosticError(null);
+    try {
+      const details = await apiClient.getDiagnosticAttempt(attemptId);
+      setDiagnosticAttempt(details);
+      return details;
+    } catch (error) {
+      setDiagnosticError(error instanceof Error ? error.message : "Failed to open diagnostic attempt");
+      throw error;
+    } finally {
+      setDiagnosticSaving(false);
+    }
+  }
+
+  async function createLearningStateCheck(payload: {
+    chat_id?: string | null;
+    mood: string;
+    perceived_difficulty: string;
+    needs_pause_or_input: string;
+    preferred_format: string;
+    notes: string;
+  }) {
+    setLearningStateSaving(true);
+    setLearningStateError(null);
+    try {
+      const created = await apiClient.createLearningStateCheck(payload);
+      setLearningStateChecks((current) => [created, ...current]);
+      return created;
+    } catch (error) {
+      setLearningStateError(error instanceof Error ? error.message : "Failed to save learning state");
+      throw error;
+    } finally {
+      setLearningStateSaving(false);
+    }
+  }
+
+  async function loadLearningStateChecks(limit = 20) {
+    setLearningStateError(null);
+    const checks = await apiClient.listLearningStateChecks(limit);
+    setLearningStateChecks(checks);
+    return checks;
+  }
+
+  async function submitExplanationFeedback(payload: {
+    message_id?: number | null;
+    rating: number;
+    feedback_text: string;
+    re_explain_requested: boolean;
+  }) {
+    setFeedbackSaving(true);
+    setFeedbackError(null);
+    try {
+      return await apiClient.createExplanationFeedback(payload);
+    } catch (error) {
+      setFeedbackError(error instanceof Error ? error.message : "Failed to save feedback");
+      throw error;
+    } finally {
+      setFeedbackSaving(false);
     }
   }
 
@@ -1554,6 +1803,19 @@ export function useChatApp() {
     learningProfileSaving,
     learningProfileError,
     learningProfileSuccess,
+    diagnosticCatalog,
+    diagnosticDefinitions,
+    diagnosticAttempt,
+    diagnosticAttempts,
+    diagnosticResult,
+    diagnosticLoading,
+    diagnosticSaving,
+    diagnosticError,
+    learningStateChecks,
+    learningStateSaving,
+    learningStateError,
+    feedbackSaving,
+    feedbackError,
     archivedChats,
     gptChatsById,
     activeChatId,
@@ -1628,6 +1890,16 @@ export function useChatApp() {
     createLearningGoal,
     updateLearningGoal,
     deleteLearningGoal,
+    loadDiagnosticCatalog,
+    loadDiagnosticAttempts,
+    startDiagnosticAttempt,
+    saveDiagnosticAnswers,
+    completeDiagnosticAttempt,
+    deleteDiagnosticAttempt,
+    openDiagnosticAttempt,
+    createLearningStateCheck,
+    loadLearningStateChecks,
+    submitExplanationFeedback,
     createLearningPath,
     updateLearningPath,
     deleteLearningPath,

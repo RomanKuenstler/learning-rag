@@ -80,3 +80,30 @@ This layer stores only learner-provided inputs and is designed for future compos
 - Step B.1 diagnosed profile signals
 - future real-time learning-state feedback
 - future mastery/progress systems
+
+## Step B.1 Diagnostic Model
+
+Step B.1 adds source-of-truth diagnostics loaded from `.docx`:
+
+- source files: `data/diagnostics/source/MythriQ-*.docx`
+- parser pipeline: docx XML extraction -> structured diagnostic JSON (`LAA`, `MOA`, `LTA`)
+- immutable/versioned diagnostic storage per definition version
+- deterministic scoring from persisted answers (no LLM scoring)
+
+Added persistence entities:
+
+- `diagnostic_definitions`
+- `diagnostic_versions`
+- `diagnostic_questions`
+- `diagnostic_options`
+- `diagnostic_scoring_rules`
+- `user_diagnostic_attempts`
+- `user_diagnostic_answers`
+- `user_diagnostic_results`
+- `learning_state_checks`
+- `explanation_feedback`
+
+Design intent:
+
+- Step B declared preferences remain separate from Step B.1 diagnosed profiles
+- final composition target is `LearningContext = declared_preferences + diagnostic_profile + state_signals + feedback_signals`
