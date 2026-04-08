@@ -11,6 +11,8 @@ import type {
   LearningPreferences,
   LearningStateCheck,
   KSAProfile,
+  KsaAssessmentAttempt,
+  KsaAssessmentDefinition,
 } from "../../types/chat";
 import { DiagnosticPanel } from "./DiagnosticPanel";
 import { KsaPanel } from "./KsaPanel";
@@ -27,9 +29,17 @@ type LearningPathsPageProps = {
   ksaProfile: KSAProfile | null;
   ksaLoading: boolean;
   ksaError: string | null;
+  ksaAssessmentDefinition: KsaAssessmentDefinition | null;
+  ksaAssessmentAttempt: KsaAssessmentAttempt | null;
+  ksaAssessmentSaving: boolean;
   currentUserDisplayName: string;
   onLoadLearningProfile: () => void;
-  onLoadKsaProfile: () => void;
+  onLoadKsaProfile: () => Promise<unknown> | void;
+  onLoadKsaAssessmentDefinition: () => Promise<unknown>;
+  onLoadLatestKsaAssessmentAttempt: () => Promise<unknown>;
+  onStartKsaAssessment: () => Promise<unknown>;
+  onSaveKsaAssessmentAnswers: (attemptId: string, answers: Record<string, unknown>) => Promise<unknown>;
+  onCompleteKsaAssessment: (attemptId: string) => Promise<unknown>;
   onSaveLearningPreferences: (payload: Partial<Omit<LearningPreferences, "updated_at">>) => Promise<unknown>;
   onSaveLearningContext: (payload: Partial<Omit<LearningProfileContext, "updated_at">>) => Promise<unknown>;
   onCreateLearningGoal: (payload: {
@@ -80,10 +90,18 @@ export function LearningPathsPage({
   ksaProfile,
   ksaLoading,
   ksaError,
+  ksaAssessmentDefinition,
+  ksaAssessmentAttempt,
+  ksaAssessmentSaving,
   currentUserDisplayName,
   onLoad,
   onLoadLearningProfile,
   onLoadKsaProfile,
+  onLoadKsaAssessmentDefinition,
+  onLoadLatestKsaAssessmentAttempt,
+  onStartKsaAssessment,
+  onSaveKsaAssessmentAnswers,
+  onCompleteKsaAssessment,
   onSaveLearningPreferences,
   onSaveLearningContext,
   onCreateLearningGoal,
@@ -205,7 +223,15 @@ export function LearningPathsPage({
           profile={ksaProfile}
           loading={ksaLoading}
           error={ksaError}
+          definition={ksaAssessmentDefinition}
+          attempt={ksaAssessmentAttempt}
+          saving={ksaAssessmentSaving}
           onReload={onLoadKsaProfile}
+          onLoadDefinition={onLoadKsaAssessmentDefinition}
+          onLoadLatestAttempt={onLoadLatestKsaAssessmentAttempt}
+          onStartAssessment={onStartKsaAssessment}
+          onSaveAnswers={onSaveKsaAssessmentAnswers}
+          onCompleteAssessment={onCompleteKsaAssessment}
         />
       ) : null}
     </section>

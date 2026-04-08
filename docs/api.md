@@ -256,6 +256,55 @@ Partially updates one user-owned goal (`404` when not owned or missing).
 
 Deletes one user-owned goal (`404` when not owned or missing).
 
+## KSA
+
+### `GET /api/learning-profile/ksa`
+
+Returns the KSA profile used by the Learning-page big-map.
+
+Profile source modes:
+
+- `student_default_baseline` (no completed assessment yet)
+- `placeholder_baseline` (no completed assessment yet, non-student)
+- `assessment` (persisted scored result)
+
+### `GET /api/ksa/assessment/definition`
+
+Returns the current assessment definition:
+
+- phase 1 sliders
+- knowledge question bank
+- skill scenarios
+- ability tasks + time limit
+
+Knowledge definitions intentionally do not expose correct answers.
+
+### `POST /api/ksa/assessment/attempts`
+
+Starts a new assessment attempt for the authenticated user.
+
+### `GET /api/ksa/assessment/attempts/latest`
+
+Returns the latest attempt for the authenticated user (`404` if none).
+
+### `GET /api/ksa/assessment/attempts/{attempt_id}`
+
+Returns one user-owned assessment attempt (`404` if missing).
+
+### `PUT /api/ksa/assessment/attempts/{attempt_id}/answers`
+
+Upserts staged answers payload for the attempt.
+
+### `POST /api/ksa/assessment/attempts/{attempt_id}/complete`
+
+Runs deterministic scoring, persists the result, and upserts the user KSA profile.
+
+Persisted scoring behavior:
+
+- knowledge: `FS = slider * multiplier` with levels mapped into `1..3`, plus topic status (`verified|uncharted`)
+- skills: `A -> level 1`, `B -> level 3`
+- abilities: `capacity = correctness*0.7 + time_bonus*0.3`, mapped into display `1..5`
+
 ## Diagnostics (Step B.1)
 
 ### `GET /api/diagnostics/definitions`

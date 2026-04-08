@@ -10,14 +10,14 @@ The Learning page now contains:
 
 The old `Paths` tab has been removed. Course/path management moved to the dedicated Courses page.
 
-## KSA Big-Map (Step Foundation)
+## KSA Big-Map
 
-The `KSA` tab now renders a first real capability overview:
+The `KSA` tab renders the capability overview with:
 
 - top-right `Start Assessment` button
 - 3-column radar layout (`Knowledge`, `Skills`, `Abilities`)
 - each radar uses a 1-5 Dreyfus scale (`Novice`, `Advanced`, `Competent`, `Proficient`, `Expert`)
-- a placeholder `KSA Assessment` dialog shell using the diagnostic modal style
+- a real multi-phase `KSA Assessment` flow dialog
 - a deep-dive placeholder section below the charts
 
 Authoritative radar axes:
@@ -26,12 +26,39 @@ Authoritative radar axes:
 - Skills: `Literacy & Numeracy`, `Digital Craft`, `Strategic Execution`, `Operational Skills`, `Relational Skills`, `Research & Inquiry`
 - Abilities: `Quantitative Reasoning`, `Verbal Comprehension`, `Spatial Visualization`, `Executive Function`, `Sensory-Perceptual`, `Social-Emotional Capacity`, `Divergent Thinking`
 
-Profile source behavior in this step:
+KSA profile source behavior:
 
 - endpoint: `GET /api/learning-profile/ksa`
-- student users receive a non-persisted default baseline profile (sample values, no completed assessment yet)
-- non-student users receive a neutral placeholder baseline profile
-- this is intentionally structured so real assessment persistence can replace defaults later without UI refactors
+- if no completed assessment exists:
+  - student users receive non-persisted default baseline values
+  - non-student users receive neutral baseline values
+- once the initial assessment is completed:
+  - profile source becomes `assessment`
+  - persisted assessment values are returned
+  - baseline defaults are no longer used for that user
+
+## KSA Initial Assessment Flow
+
+The onboarding assessment is implemented as a deterministic 4-phase flow:
+
+- Phase 1: broad sieve sliders (`1..10`) decide which knowledge and skill topics are validated in this run.
+- Phase 2: knowledge bank (easy + hard checks) with `FS = S * V` where:
+  - fail easy => `V=0.5`
+  - pass easy, fail hard => `V=1.0`
+  - pass both => `V=1.5`
+- Phase 3: skill scenarios:
+  - choice `A` => level 1
+  - choice `B` => level 3
+- Phase 4: timed ability tasks using:
+  - `capacity = (correctness * 0.7) + (time_bonus * 0.3)`
+  - 30s target window
+
+Untriggered knowledge/skill topics are persisted as `uncharted`.
+
+Derived values currently include:
+
+- `logic_quantitative_index` (`executive_function` + `quantitative_reasoning` capacity)
+- `learning_speed_multiplier` => `1.5` when index `> 1.6`, otherwise `1.0`
 
 ## Courses Page
 

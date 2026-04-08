@@ -87,6 +87,12 @@ from services.retriever.schemas.diagnostics import (
     LearningStateCheckRead,
 )
 from services.retriever.schemas.ksa import KSAProfileRead
+from services.retriever.schemas.ksa_assessment import (
+    KSAAssessmentAttemptRead,
+    KSAAssessmentAnswersUpsertRequest,
+    KSAAssessmentDefinitionRead,
+    KSAAssessmentStartResponse,
+)
 from services.retriever.services.library_manager import UploadFilePayload
 from services.retriever.services.retriever_service import RetrieverAppService
 
@@ -721,6 +727,64 @@ def create_app() -> FastAPI:
         service: RetrieverAppService = Depends(get_retriever_service),
     ) -> KSAProfileRead:
         return service.get_ksa_profile(auth.user)
+
+    @app.get("/api/ksa/assessment/definition", response_model=KSAAssessmentDefinitionRead)
+    def get_ksa_assessment_definition(
+        auth: AuthContext = Depends(get_app_auth_context),
+        service: RetrieverAppService = Depends(get_retriever_service),
+    ) -> KSAAssessmentDefinitionRead:
+        return service.get_ksa_assessment_definition(auth.user)
+
+    @app.post("/api/ksa/assessment/attempts", response_model=KSAAssessmentStartResponse)
+    def start_ksa_assessment(
+        auth: AuthContext = Depends(get_app_auth_context),
+        service: RetrieverAppService = Depends(get_retriever_service),
+    ) -> KSAAssessmentStartResponse:
+        return service.start_ksa_assessment(auth.user)
+
+    @app.get("/api/ksa/assessment/attempts/latest", response_model=KSAAssessmentAttemptRead, responses={404: {"model": ErrorResponse}})
+    def get_latest_ksa_assessment_attempt(
+        auth: AuthContext = Depends(get_app_auth_context),
+        service: RetrieverAppService = Depends(get_retriever_service),
+    ) -> KSAAssessmentAttemptRead:
+        attempt = service.get_latest_ksa_assessment_attempt(auth.user)
+        if attempt is None:
+            raise HTTPException(status_code=404, detail="KSA assessment attempt not found")
+        return attempt
+
+    @app.get("/api/ksa/assessment/attempts/{attempt_id}", response_model=KSAAssessmentAttemptRead, responses={404: {"model": ErrorResponse}})
+    def get_ksa_assessment_attempt(
+        attempt_id: str,
+        auth: AuthContext = Depends(get_app_auth_context),
+        service: RetrieverAppService = Depends(get_retriever_service),
+    ) -> KSAAssessmentAttemptRead:
+        attempt = service.get_ksa_assessment_attempt(auth.user, attempt_id)
+        if attempt is None:
+            raise HTTPException(status_code=404, detail="KSA assessment attempt not found")
+        return attempt
+
+    @app.put("/api/ksa/assessment/attempts/{attempt_id}/answers", response_model=KSAAssessmentAttemptRead, responses={404: {"model": ErrorResponse}})
+    def upsert_ksa_assessment_answers(
+        attempt_id: str,
+        payload: KSAAssessmentAnswersUpsertRequest,
+        auth: AuthContext = Depends(get_app_auth_context),
+        service: RetrieverAppService = Depends(get_retriever_service),
+    ) -> KSAAssessmentAttemptRead:
+        attempt = service.upsert_ksa_assessment_answers(auth.user, attempt_id, payload)
+        if attempt is None:
+            raise HTTPException(status_code=404, detail="KSA assessment attempt not found")
+        return attempt
+
+    @app.post("/api/ksa/assessment/attempts/{attempt_id}/complete", response_model=KSAProfileRead, responses={404: {"model": ErrorResponse}})
+    def complete_ksa_assessment(
+        attempt_id: str,
+        auth: AuthContext = Depends(get_app_auth_context),
+        service: RetrieverAppService = Depends(get_retriever_service),
+    ) -> KSAProfileRead:
+        profile = service.complete_ksa_assessment(auth.user, attempt_id)
+        if profile is None:
+            raise HTTPException(status_code=404, detail="KSA assessment attempt not found")
+        return profile
 
     @app.patch("/api/learning-profile/preferences", response_model=LearningPreferencesRead)
     def update_learning_preferences(

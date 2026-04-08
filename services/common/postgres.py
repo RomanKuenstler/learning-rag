@@ -36,6 +36,8 @@ from services.common.models import (
     RetrievalLog,
     SettingRecord,
     UserLearningGoal,
+    UserKSAAssessmentAttempt,
+    UserKSAProfile,
     UserLearningPreference,
     UserLearningProfile,
     UserAccount,
@@ -1062,6 +1064,170 @@ class PostgresClient:
                     return None
                 session.delete(record)
                 return record
+
+    def get_user_ksa_profile(self, *, user_id: int) -> UserKSAProfile | None:
+        try:
+            with self.session() as session:
+                return session.scalar(select(UserKSAProfile).where(UserKSAProfile.user_id == user_id))
+        except Exception as error:
+            if "does not exist" not in str(error).lower():
+                raise
+            run_migrations(self.database_url, force=True)
+            with self.session() as session:
+                return session.scalar(select(UserKSAProfile).where(UserKSAProfile.user_id == user_id))
+
+    def upsert_user_ksa_profile(
+        self,
+        *,
+        user_id: int,
+        has_assessment: bool,
+        assessment_version: str,
+        profile_json: dict[str, object],
+    ) -> UserKSAProfile:
+        try:
+            with self.session() as session:
+                record = session.scalar(select(UserKSAProfile).where(UserKSAProfile.user_id == user_id))
+                if record is None:
+                    record = UserKSAProfile(
+                        user_id=user_id,
+                        has_assessment=has_assessment,
+                        assessment_version=assessment_version,
+                        profile_json=profile_json,
+                    )
+                    session.add(record)
+                else:
+                    record.has_assessment = has_assessment
+                    record.assessment_version = assessment_version
+                    record.profile_json = profile_json
+                    record.updated_at = datetime.now(timezone.utc)
+                session.flush()
+                session.refresh(record)
+                return record
+        except Exception as error:
+            if "does not exist" not in str(error).lower():
+                raise
+            run_migrations(self.database_url, force=True)
+            with self.session() as session:
+                record = session.scalar(select(UserKSAProfile).where(UserKSAProfile.user_id == user_id))
+                if record is None:
+                    record = UserKSAProfile(
+                        user_id=user_id,
+                        has_assessment=has_assessment,
+                        assessment_version=assessment_version,
+                        profile_json=profile_json,
+                    )
+                    session.add(record)
+                else:
+                    record.has_assessment = has_assessment
+                    record.assessment_version = assessment_version
+                    record.profile_json = profile_json
+                    record.updated_at = datetime.now(timezone.utc)
+                session.flush()
+                session.refresh(record)
+                return record
+
+    def create_user_ksa_assessment_attempt(
+        self,
+        *,
+        user_id: int,
+        assessment_version: str,
+    ) -> UserKSAAssessmentAttempt:
+        try:
+            with self.session() as session:
+                record = UserKSAAssessmentAttempt(
+                    user_id=user_id,
+                    assessment_version=assessment_version,
+                    status="in_progress",
+                    answers_json={},
+                    result_json=None,
+                    started_at=datetime.now(timezone.utc),
+                )
+                session.add(record)
+                session.flush()
+                session.refresh(record)
+                return record
+        except Exception as error:
+            if "does not exist" not in str(error).lower():
+                raise
+            run_migrations(self.database_url, force=True)
+            with self.session() as session:
+                record = UserKSAAssessmentAttempt(
+                    user_id=user_id,
+                    assessment_version=assessment_version,
+                    status="in_progress",
+                    answers_json={},
+                    result_json=None,
+                    started_at=datetime.now(timezone.utc),
+                )
+                session.add(record)
+                session.flush()
+                session.refresh(record)
+                return record
+
+    def get_user_ksa_assessment_attempt(self, *, user_id: int, attempt_id: str) -> UserKSAAssessmentAttempt | None:
+        with self.session() as session:
+            return session.scalar(
+                select(UserKSAAssessmentAttempt).where(
+                    UserKSAAssessmentAttempt.id == attempt_id,
+                    UserKSAAssessmentAttempt.user_id == user_id,
+                )
+            )
+
+    def get_latest_user_ksa_assessment_attempt(self, *, user_id: int) -> UserKSAAssessmentAttempt | None:
+        with self.session() as session:
+            return session.scalar(
+                select(UserKSAAssessmentAttempt)
+                .where(UserKSAAssessmentAttempt.user_id == user_id)
+                .order_by(UserKSAAssessmentAttempt.started_at.desc())
+                .limit(1)
+            )
+
+    def upsert_user_ksa_assessment_answers(
+        self,
+        *,
+        user_id: int,
+        attempt_id: str,
+        answers_json: dict[str, object],
+    ) -> UserKSAAssessmentAttempt | None:
+        with self.session() as session:
+            record = session.scalar(
+                select(UserKSAAssessmentAttempt).where(
+                    UserKSAAssessmentAttempt.id == attempt_id,
+                    UserKSAAssessmentAttempt.user_id == user_id,
+                )
+            )
+            if record is None:
+                return None
+            record.answers_json = answers_json
+            record.updated_at = datetime.now(timezone.utc)
+            session.flush()
+            session.refresh(record)
+            return record
+
+    def complete_user_ksa_assessment_attempt(
+        self,
+        *,
+        user_id: int,
+        attempt_id: str,
+        result_json: dict[str, object],
+    ) -> UserKSAAssessmentAttempt | None:
+        with self.session() as session:
+            record = session.scalar(
+                select(UserKSAAssessmentAttempt).where(
+                    UserKSAAssessmentAttempt.id == attempt_id,
+                    UserKSAAssessmentAttempt.user_id == user_id,
+                )
+            )
+            if record is None:
+                return None
+            now = datetime.now(timezone.utc)
+            record.result_json = result_json
+            record.status = "completed"
+            record.completed_at = now
+            record.updated_at = now
+            session.flush()
+            session.refresh(record)
+            return record
 
     def get_user_by_id(self, user_id: int) -> UserAccount | None:
         with self.session() as session:

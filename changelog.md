@@ -1,5 +1,28 @@
 # Changelog
 
+## 2026-04-08 10:30 UTC
+
+- Implemented the first real KSA assessment system end-to-end (definition, flow, scoring, persistence, and chart data integration).
+- Added KSA persistence tables and migration:
+  - `user_ksa_profiles`
+  - `user_ksa_assessment_attempts`
+- Added new KSA assessment APIs:
+  - `GET /api/ksa/assessment/definition`
+  - `POST /api/ksa/assessment/attempts`
+  - `GET /api/ksa/assessment/attempts/latest`
+  - `GET /api/ksa/assessment/attempts/{attempt_id}`
+  - `PUT /api/ksa/assessment/attempts/{attempt_id}/answers`
+  - `POST /api/ksa/assessment/attempts/{attempt_id}/complete`
+- Implemented deterministic 4-phase assessment logic with authoritative question banks and scoring:
+  - sieve-triggered topic selection
+  - knowledge `FS = S * V` multiplier scoring with uncharted status handling
+  - skill scenario mapping (`A -> level 1`, `B -> level 3`)
+  - ability weighted capacity scoring (`correctness*0.7 + time_bonus*0.3`) and derived `learning_speed_multiplier`
+- Wired web UI to run the full assessment dialog flow and refresh persisted KSA profile on completion.
+- Updated KSA chart header to use one global Dreyfus legend and removed the old extra tag pills.
+- Improved assessment-definition security by removing `correct` answers from the frontend definition payload.
+- Added scoring-focused tests in `tests/test_step20_ksa_assessment_scoring.py` and extended learning API tests for new KSA routes.
+
 ## 2026-04-07 22:55 UTC
 
 - Implemented first real Learning-page KSA tab with a 3-column big-map radar visualization (`Knowledge`, `Skills`, `Abilities`).

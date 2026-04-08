@@ -356,9 +356,17 @@ function AppRoutes() {
                   ksaProfile={app.ksaProfile}
                   ksaLoading={app.ksaLoading}
                   ksaError={app.ksaError}
+                  ksaAssessmentDefinition={app.ksaAssessmentDefinition}
+                  ksaAssessmentAttempt={app.ksaAssessmentAttempt}
+                  ksaAssessmentSaving={app.ksaAssessmentSaving}
                   currentUserDisplayName={app.currentUser.displayname}
                   onLoadLearningProfile={() => void app.loadLearningProfile()}
-                  onLoadKsaProfile={() => void app.loadKsaProfile()}
+                  onLoadKsaProfile={() => app.loadKsaProfile()}
+                  onLoadKsaAssessmentDefinition={() => app.loadKsaAssessmentDefinition()}
+                  onLoadLatestKsaAssessmentAttempt={() => app.loadLatestKsaAssessmentAttempt()}
+                  onStartKsaAssessment={() => app.startKsaAssessment()}
+                  onSaveKsaAssessmentAnswers={(attemptId, answers) => app.saveKsaAssessmentAnswers(attemptId, answers)}
+                  onCompleteKsaAssessment={(attemptId) => app.completeKsaAssessment(attemptId)}
                   onSaveLearningPreferences={(payload) => app.saveLearningPreferences(payload).then(() => undefined)}
                   onSaveLearningContext={(payload) => app.saveLearningContext(payload).then(() => undefined)}
                   onCreateLearningGoal={(payload) => app.createLearningGoal(payload).then(() => undefined)}
@@ -611,7 +619,7 @@ function AppRoutes() {
               <ul className="help-list">
                 <li>`Profile` tab: maintain learning context and goals.</li>
                 <li>`Preferences` tab: set learning preferences and run diagnostics (LAA/MOA/LTA).</li>
-                <li>`KSA` tab: placeholder area for Knowledge, Skills, and Abilities.</li>
+                <li>`KSA` tab: review the big-map and run the full initial KSA assessment flow.</li>
               </ul>
             </section>
 

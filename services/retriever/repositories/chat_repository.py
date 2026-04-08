@@ -18,6 +18,8 @@ from services.common.models import (
     RetrievalLog,
     SettingRecord,
     UserLearningGoal,
+    UserKSAAssessmentAttempt,
+    UserKSAProfile,
     UserLearningPreference,
     UserLearningProfile,
     UserDiagnosticAnswer,
@@ -139,6 +141,62 @@ class ChatRepository:
 
     def delete_user_learning_goal(self, user_id: int, goal_id: str) -> UserLearningGoal | None:
         return self.postgres_client.delete_user_learning_goal(user_id=user_id, goal_id=goal_id)
+
+    def get_user_ksa_profile(self, user_id: int) -> UserKSAProfile | None:
+        return self.postgres_client.get_user_ksa_profile(user_id=user_id)
+
+    def upsert_user_ksa_profile(
+        self,
+        user_id: int,
+        *,
+        has_assessment: bool,
+        assessment_version: str,
+        profile_json: dict[str, object],
+    ) -> UserKSAProfile:
+        return self.postgres_client.upsert_user_ksa_profile(
+            user_id=user_id,
+            has_assessment=has_assessment,
+            assessment_version=assessment_version,
+            profile_json=profile_json,
+        )
+
+    def create_user_ksa_assessment_attempt(self, *, user_id: int, assessment_version: str) -> UserKSAAssessmentAttempt:
+        return self.postgres_client.create_user_ksa_assessment_attempt(
+            user_id=user_id,
+            assessment_version=assessment_version,
+        )
+
+    def get_user_ksa_assessment_attempt(self, *, user_id: int, attempt_id: str) -> UserKSAAssessmentAttempt | None:
+        return self.postgres_client.get_user_ksa_assessment_attempt(user_id=user_id, attempt_id=attempt_id)
+
+    def get_latest_user_ksa_assessment_attempt(self, *, user_id: int) -> UserKSAAssessmentAttempt | None:
+        return self.postgres_client.get_latest_user_ksa_assessment_attempt(user_id=user_id)
+
+    def upsert_user_ksa_assessment_answers(
+        self,
+        *,
+        user_id: int,
+        attempt_id: str,
+        answers_json: dict[str, object],
+    ) -> UserKSAAssessmentAttempt | None:
+        return self.postgres_client.upsert_user_ksa_assessment_answers(
+            user_id=user_id,
+            attempt_id=attempt_id,
+            answers_json=answers_json,
+        )
+
+    def complete_user_ksa_assessment_attempt(
+        self,
+        *,
+        user_id: int,
+        attempt_id: str,
+        result_json: dict[str, object],
+    ) -> UserKSAAssessmentAttempt | None:
+        return self.postgres_client.complete_user_ksa_assessment_attempt(
+            user_id=user_id,
+            attempt_id=attempt_id,
+            result_json=result_json,
+        )
 
     def list_user_file_filters(self, user_id: int, *, is_admin: bool):
         return self.postgres_client.list_user_file_filters(user_id=user_id, is_admin=is_admin)

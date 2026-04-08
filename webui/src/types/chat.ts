@@ -480,7 +480,54 @@ export type KSAProfile = {
   knowledge: KSAKnowledge;
   skills: KSASkills;
   abilities: KSAAbilities;
+  assessment_details?: Record<string, unknown> | null;
+  learning_speed_multiplier?: number | null;
   updated_at: string | null;
+};
+
+export type KsaAssessmentDefinition = {
+  version: string;
+  time_limit_seconds: number;
+  phase1_sliders: Array<{
+    id: string;
+    key: string;
+    topic: string;
+    prompt: string;
+    min: number;
+    max: number;
+    triggers: string[];
+  }>;
+  knowledge_questions: Array<{
+    id: string;
+    topic: string;
+    difficulty: "easy" | "hard" | string;
+    question: string;
+    options: string[];
+  }>;
+  skill_questions: Array<{
+    id: string;
+    topic: string;
+    scenario: string;
+    choice_a: string;
+    choice_b: string;
+  }>;
+  ability_questions: Array<{
+    id: string;
+    topic: string;
+    task: string;
+    expected: string;
+    open_ended: boolean;
+  }>;
+};
+
+export type KsaAssessmentAttempt = {
+  attempt_id: string;
+  status: "in_progress" | "completed";
+  version: string;
+  started_at: string;
+  completed_at: string | null;
+  answers: Record<string, unknown>;
+  result: Record<string, unknown> | null;
 };
 
 export type DiagnosticQuestionType = "single_choice" | "multi_choice" | "likert" | "slider" | "text";

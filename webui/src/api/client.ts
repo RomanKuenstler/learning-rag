@@ -34,6 +34,8 @@ import type {
   LearningGoal,
   LearningGoalPriority,
   LearningProfileBundle,
+  KsaAssessmentAttempt,
+  KsaAssessmentDefinition,
   KSAProfile,
   LearningProfileContext,
   LearningPreferences,
@@ -225,6 +227,30 @@ export const apiClient = {
   },
   getKsaProfile() {
     return request<KSAProfile>("/api/learning-profile/ksa");
+  },
+  getKsaAssessmentDefinition() {
+    return request<KsaAssessmentDefinition>("/api/ksa/assessment/definition");
+  },
+  startKsaAssessment() {
+    return request<{ attempt_id: string; status: "in_progress" | "completed"; version: string; started_at: string }>(
+      "/api/ksa/assessment/attempts",
+      { method: "POST" },
+    );
+  },
+  getLatestKsaAssessmentAttempt() {
+    return request<KsaAssessmentAttempt>("/api/ksa/assessment/attempts/latest");
+  },
+  getKsaAssessmentAttempt(attemptId: string) {
+    return request<KsaAssessmentAttempt>(`/api/ksa/assessment/attempts/${attemptId}`);
+  },
+  upsertKsaAssessmentAnswers(attemptId: string, answers: Record<string, unknown>) {
+    return request<KsaAssessmentAttempt>(`/api/ksa/assessment/attempts/${attemptId}/answers`, {
+      method: "PUT",
+      body: JSON.stringify({ answers }),
+    });
+  },
+  completeKsaAssessment(attemptId: string) {
+    return request<KSAProfile>(`/api/ksa/assessment/attempts/${attemptId}/complete`, { method: "POST" });
   },
   updateLearningPreferences(payload: Partial<Omit<LearningPreferences, "updated_at">>) {
     return request<LearningPreferences>("/api/learning-profile/preferences", {

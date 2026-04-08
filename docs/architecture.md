@@ -119,23 +119,43 @@ Design intent:
 - Step B declared preferences remain separate from Step B.1 diagnosed profiles
 - final composition target is `LearningContext = declared_preferences + diagnostic_profile + state_signals + feedback_signals`
 
-## KSA Profile Foundation
+## KSA Assessment And Profile Model
 
 KSA is modeled as a separate concept from Step B preferences and Step B.1 diagnostics.
 
-- API endpoint: `GET /api/learning-profile/ksa`
-- schema module: `services/retriever/schemas/ksa.py`
-- service assembly: `RetrieverAppService.get_ksa_profile`
+- Profile endpoint: `GET /api/learning-profile/ksa`
+- Assessment endpoints: `/api/ksa/assessment/*`
+- Schema modules:
+  - `services/retriever/schemas/ksa.py`
+  - `services/retriever/schemas/ksa_assessment.py`
+- Scoring/definition module:
+  - `services/retriever/services/ksa_assessment.py`
 
-Current source model in this step:
+Persistence entities:
 
-- `student_default_baseline`: non-persisted sample values for student users
-- `placeholder_baseline`: neutral non-persisted baseline for non-student users
-- future `assessment`: reserved for persisted post-assessment scores
+- `user_ksa_profiles`
+- `user_ksa_assessment_attempts`
+
+Source model:
+
+- `student_default_baseline`: non-persisted baseline for students before first completion
+- `placeholder_baseline`: non-persisted neutral fallback before first completion
+- `assessment`: persisted scored result after completion
 
 Scale model:
 
 - numeric `1..5` values mapped to Dreyfus levels (`Novice` -> `Expert`)
-- identical scale across `knowledge`, `skills`, and `abilities`
+- chart display uses the same `1..5` scale across `knowledge`, `skills`, and `abilities`
 
-This keeps the KSA read model stable now while allowing future assessment persistence and deep-dive scoring without breaking the frontend contract.
+Initial assessment architecture:
+
+- Phase 1 sieve controls which knowledge and skill topics are assessed now.
+- Untriggered topics are persisted as `uncharted`.
+- Knowledge uses `FS = slider * multiplier` (`0.5`, `1.0`, `1.5`) and maps to levels `1..3`.
+- Skills use deterministic scenario mapping (`A -> 1`, `B -> 3`).
+- Abilities use deterministic weighted capacity:
+  - `capacity = correctness*0.7 + time_bonus*0.3`
+  - mapped to display levels `1..5`
+- Derived values include `learning_speed_multiplier` based on quantitative + executive-function capacity.
+
+This keeps assessment scoring deterministic and separated from presentation mapping, so future mini-assessments and deep-dive views can extend the system without replacing the current API contract.

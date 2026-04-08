@@ -1,0 +1,316 @@
+{
+  "knowledge_nodes": [
+    {
+      "parent": "STEM Fundamentals",
+      "subtopics": [
+        {
+          "name": "Calculus & Linear Algebra",
+          "archetypes": {
+            "reverse_definition": "A self-driving car needs to determine its exact rate of change in position at a specific millisecond. Which concept is being applied?",
+            "spot_the_flaw": "A student solves for a local maximum by finding where the derivative is zero but forgets to check the second derivative. What is the risk?",
+            "power_sprint": "What is the derivative of 5x squared? (Answer in 10s)",
+            "analogy_match": "A 'Derivative' in Calculus is to a curve as a 'Speedometer' is to a moving vehicle."
+          }
+        },
+        {
+          "name": "Molecular Biology",
+          "archetypes": {
+            "reverse_definition": "A cell is failing to produce proteins despite having the correct DNA instructions. Which part of the transcription/translation process is likely broken?",
+            "spot_the_flaw": "A researcher attempts to use an antibiotic that targets cell walls to treat a viral infection. Why will this fail?",
+            "power_sprint": "Which base pairs with Cytosine in a DNA strand?",
+            "analogy_match": "The 'Ribosome' in a cell is to protein synthesis as a 'Factory' is to manufacturing goods."
+          }
+        }
+      ]
+    },
+    {
+      "parent": "Information Technology",
+      "subtopics": [
+        {
+          "name": "Cloud Architecture",
+          "archetypes": {
+            "reverse_definition": "A website's traffic doubles in minutes, and the server automatically adds three more instances to handle the load. This is an example of...?",
+            "spot_the_flaw": "An architect stores all sensitive database backups on the same physical server as the live site to save latency. What is the flaw?",
+            "power_sprint": "Does 'Horizontal Scaling' involve adding more RAM to one machine or adding more machines?",
+            "analogy_match": "A 'Serverless Function' is to computing as a 'Vending Machine' is to snacks (pay only for what you use)."
+          }
+        },
+        {
+          "name": "Artificial Intelligence & ML",
+          "archetypes": {
+            "reverse_definition": "An image recognition model correctly identifies dogs in photos it has seen before but fails on every new photo. What occurred?",
+            "spot_the_flaw": "A team uses data from only sunny days to train a self-driving car's vision. Why is the model biased?",
+            "power_sprint": "In 'Supervised Learning', do you provide the model with labeled data or raw data?",
+            "analogy_match": "A 'Neural Network Weight' is to a decision as 'Volume' is to a speaker (it determines the strength of the signal)."
+          }
+        }
+      ]
+    },
+    {
+      "parent": "Humanities & Social Sciences",
+      "subtopics": [
+        {
+          "name": "Macro/Microeconomics",
+          "archetypes": {
+            "reverse_definition": "A central bank increases interest rates to slow down rapid price increases across the country. Which economic phenomenon are they fighting?",
+            "spot_the_flaw": "A politician claims that putting a 'Price Ceiling' on bread below market cost will permanently end hunger without any side effects. What is the likely hidden flaw?",
+            "power_sprint": "Does a 'Recession' typically mean GDP is growing or shrinking?",
+            "analogy_match": "The 'Invisible Hand' in Economics is to the market as 'Gravity' is to the solar system (unseen but keeping everything in place)."
+          }
+        },
+        {
+          "name": "Cognitive Psychology",
+          "archetypes": {
+            "reverse_definition": "A person remembers the first and last items on a grocery list but forgets the middle. Which effect explains this?",
+            "spot_the_flaw": "An interviewer thinks they are being objective but only remembers the candidate's mistakes that confirm their initial bad impression. Which bias is this?",
+            "power_sprint": "Is 'Short-term Memory' usually limited to about 7 items or 70 items?",
+            "analogy_match": "A 'Mental Schema' is to information as a 'File Folder' is to a cabinet."
+          }
+        }
+      ]
+    },
+    {
+      "parent": "Languages & Linguistics",
+      "subtopics": [
+        {
+          "name": "Semantic Analysis",
+          "archetypes": {
+            "reverse_definition": "An AI translates 'The spirit is willing, but the flesh is weak' into 'The vodka is good, but the meat is spoiled.' Which linguistic layer failed?",
+            "spot_the_flaw": "A writer uses the word 'infamous' to describe a hero they admire. Why is this a semantic error?",
+            "power_sprint": "Which word is a 'Synonym' for 'Obdurate'? A) Flexible, B) Stubborn, C) Soft.",
+            "analogy_match": "A 'Morpheme' in Linguistics is to a word as a 'Brick' is to a wall."
+          }
+        },
+        {
+          "name": "Intercultural Communication",
+          "archetypes": {
+            "reverse_definition": "In a business meeting, a manager from a 'High-Context' culture feels insulted because a partner from a 'Low-Context' culture was too blunt. What caused the gap?",
+            "spot_the_flaw": "A company launches a 'thumbs up' emoji campaign in a region where that gesture is a vulgar insult. What was the flaw in their strategy?",
+            "power_sprint": "True or False: 'Ethnocentrism' is the belief that one's own culture is the correct standard.",
+            "analogy_match": "A 'Cultural Filter' is to communication as 'Tinted Glasses' are to vision."
+          }
+        }
+      ]
+    },
+    {
+      "parent": "Business & Commerce",
+      "subtopics": [
+        {
+          "name": "Corporate Finance",
+          "archetypes": {
+            "reverse_definition": "A company chooses to fund a new factory by issuing bonds instead of selling more stock to avoid diluting ownership. This is a decision regarding...?",
+            "spot_the_flaw": "A startup celebrates 'Record Revenues' while their 'Burn Rate' is triple their cash on hand. Why is this a dangerous flaw in their reporting?",
+            "power_sprint": "If Net Income is $10k and Total Assets are $100k, what is the ROA %?",
+            "analogy_match": "Cash Flow is to a Business as 'Oxygen' is to a Diver."
+          }
+        },
+        {
+          "name": "Growth Marketing",
+          "archetypes": {
+            "reverse_definition": "A social media app gives users a bonus for inviting five friends, creating a self-sustaining loop of new signups. This is called a...?",
+            "spot_the_flaw": "A marketer spends $50 in ads to acquire a customer who only spends $20 over their entire lifetime. What is the fundamental flaw?",
+            "power_sprint": "In the AARRR funnel, does 'Retention' come before or after 'Acquisition'?",
+            "analogy_match": "An 'A/B Test' in Marketing is to a campaign as a 'Clinical Trial' is to a new medicine."
+          }
+        }
+      ]
+    },
+    {
+      "parent": "Legal & Ethics",
+      "subtopics": [
+        {
+          "name": "Intellectual Property",
+          "archetypes": {
+            "reverse_definition": "A musician uses a three-second clip of a famous song without permission in their own track. Which legal protection are they potentially violating?",
+            "spot_the_flaw": "An inventor shares the full blueprints of their new engine on a public blog and then tries to file for a patent a year later. Why will this fail?",
+            "power_sprint": "Does a 'Copyright' protect an idea or the specific expression of that idea?",
+            "analogy_match": "A 'Trademark' is to a brand as a 'Fingerprint' is to a human."
+          }
+        },
+        {
+          "name": "Data Privacy (GDPR/CCPA)",
+          "archetypes": {
+            "reverse_definition": "A website allows users to view, edit, and delete every piece of personal data the company has stored on them. This fulfills which primary GDPR right?",
+            "spot_the_flaw": "A company hides their data-sharing policy inside a 50-page 'Terms of Service' written in tiny gray text. How does this violate 'Transparency'?",
+            "power_sprint": "True or False: Under GDPR, 'Consent' must be as easy to withdraw as it was to give.",
+            "analogy_match": "An 'Encryption Key' is to data privacy as a 'Physical Safe' is to jewelry."
+          }
+        }
+      ]
+    },
+    {
+      "parent": "Health & Wellness",
+      "subtopics": [
+        {
+          "name": "Human Anatomy",
+          "archetypes": {
+            "reverse_definition": "A patient is unable to move their arm after an injury to the shoulder. Which system of the body is primarily affected?",
+            "spot_the_flaw": "A trainer suggests 'spot reduction' of fat by doing only sit-ups to lose belly fat. What is the physiological flaw?",
+            "power_sprint": "Which organ is responsible for filtering blood and producing insulin?",
+            "analogy_match": "The Skeleton is to the body as 'Steel Framing' is to a skyscraper."
+          }
+        },
+        {
+          "name": "Epidemiology",
+          "archetypes": {
+            "reverse_definition": "A sudden outbreak of a disease occurs across multiple continents simultaneously. What is the correct classification?",
+            "spot_the_flaw": "A study concludes that 'coffee causes heart disease' but fails to account for the fact that most coffee drinkers in the study also smoke. What is this flaw called?",
+            "power_sprint": "Does the 'R-naught' (R0) value measure the severity of a disease or its contagiousness?",
+            "analogy_match": "An Outbreak is to Epidemiology as a 'Spark' is to Firefighting."
+          }
+        }
+      ]
+    }
+  ],
+  "skills_nodes": [
+    {
+      "parent": "Strategic Execution",
+      "subtopics": [
+        {
+          "name": "Agile/Scrum Frameworks",
+          "archetypes": {
+            "reverse_definition": "A team realizes they took on too much work mid-sprint and decides to remove two tasks. This negotiation happens during which event?",
+            "spot_the_flaw": "The Scrum Master assigns tasks to individual developers every morning. How does this violate Agile principles?",
+            "power_sprint": "True or False: The 'Sprint Retrospective' is for discussing the product features.",
+            "analogy_match": "A 'Sprint' in Agile is to a project as a 'Lap' is to a long-distance race."
+          }
+        }
+      ]
+    },
+    {
+      "parent": "Digital Craft",
+      "subtopics": [
+        {
+          "name": "UI/UX Prototyping",
+          "archetypes": {
+            "reverse_definition": "Users are clicking the 'Delete' button by mistake because it is the same color as 'Save'. Which design principle was ignored?",
+            "spot_the_flaw": "A designer builds a high-fidelity 3D mockup before testing if users understand the navigation. Why is this inefficient?",
+            "power_sprint": "Identify the 'Affordance' on a digital button: The Shadow, The Text, or The Color?",
+            "analogy_match": "A 'Wireframe' in UX is to an app as a 'Blueprint' is to a house."
+          }
+        }
+      ]
+    },
+    {
+      "parent": "Literacy & Numeracy",
+      "subtopics": [
+        {
+          "name": "Statistical Inferencing",
+          "archetypes": {
+            "reverse_definition": "A researcher wants to know if a new drug works better than a placebo by testing a small group and applying the results to everyone. This is called...?",
+            "spot_the_flaw": "A news report says 100% of people surveyed love a product, but they only asked 3 people. What is the statistical flaw?",
+            "power_sprint": "If a p-value is 0.01, is the result usually considered 'statistically significant'?",
+            "analogy_match": "A 'Sample' is to a Population as a 'Spoonful' is to a pot of soup."
+          }
+        }
+      ]
+    },
+    {
+      "parent": "Digital Craft",
+      "subtopics": [
+        {
+          "name": "Full-Stack Development",
+          "archetypes": {
+            "reverse_definition": "A user clicks a button, and the page updates without refreshing by fetching data from a server. Which part of the 'stack' handled the data request?",
+            "spot_the_flaw": "A developer puts all their database access logic directly into the frontend Javascript file. What is the major security flaw?",
+            "power_sprint": "Which language is primarily used for 'styling' a website's appearance?",
+            "analogy_match": "The Backend is to a website as the 'Engine Room' is to a ship."
+          },
+          "name": "DevOps/Version Control",
+          "archetypes": {
+            "reverse_definition": "Two developers change the same line of code and try to save it. The system flags this and asks them to choose a version. This is a...?",
+            "spot_the_flaw": "A developer 'forces' a push to the main branch without running local tests or a peer review. Why is this a flaw in DevOps?",
+            "power_sprint": "In Git, which command is used to send your local changes to a remote server?",
+            "analogy_match": "A 'Git Commit' is to code as a 'Save Point' is to a video game."
+          }
+        }
+      ]
+    },
+    {
+      "parent": "Operational Skills",
+      "subtopics": [
+        {
+          "name": "Lean Manufacturing",
+          "archetypes": {
+            "reverse_definition": "A factory reduces the time parts sit in a warehouse by only ordering materials exactly when they are needed. This is...?",
+            "spot_the_flaw": "A manager thinks 'Lean' means just firing people to save costs, rather than identifying and removing waste. What is the flaw?",
+            "power_sprint": "Does 'Kaizen' refer to one-time major changes or continuous small improvements?",
+            "analogy_match": "Waste (Muda) in Lean is to a process as 'Friction' is to a machine."
+          }
+        }
+      ]
+    },
+    {
+      "parent": "Relational Skills",
+      "subtopics": [
+        {
+          "name": "High-Stakes Negotiation",
+          "archetypes": {
+            "reverse_definition": "Two parties find a solution where both get what they value most by trading off items of low cost to one but high value to the other. This is...?",
+            "spot_the_flaw": "A negotiator makes their final and best offer in the first 5 minutes of a meeting. What is the tactical flaw?",
+            "power_sprint": "Does 'BATNA' stand for your Best Alternative or your Biggest Threat?",
+            "analogy_match": "A 'BATNA' is to a negotiator as a 'Safety Net' is to a tightrope walker."
+          }
+        }
+      ]
+    }
+  ],
+  "abilities_nodes": [
+    {
+      "parent": "Executive Function",
+      "subtopics": [
+        {
+          "name": "Working Memory Span",
+          "archetypes": {
+            "reverse_definition": "An individual cannot follow a three-step direction because they forget the first step while doing the second. This indicates a limit in...?",
+            "spot_the_flaw": "A student listens to a podcast while studying complex physics. Why does their retention drop significantly?",
+            "power_sprint": "Remember these letters: X-M-R-Q. [Clear Screen]. What was the third letter?",
+            "analogy_match": "Working Memory is to the brain as 'RAM' is to a computer."
+          }
+        }
+      ]
+    },
+    {
+      "parent": "Spatial Visualization",
+      "subtopics": [
+        {
+          "name": "3D Mental Rotation",
+          "archetypes": {
+            "reverse_definition": "An architect can look at a 2D floor plan and immediately 'walk through' the 3D building in their mind. This ability is...?",
+            "spot_the_flaw": "A designer creates a 3D object but fails to notice that the internal parts overlap and occupy the same space. What ability was lacking?",
+            "power_sprint": "[Visual Puzzle] If you rotate the letter 'd' 180 degrees, does it become a 'p', 'b', or 'q'?",
+            "analogy_match": "Spatial Visualization is to an Engineer as 'Pitch' is to a Musician."
+          }
+        }
+      ]
+    },
+    {
+      "parent": "Social-Emotional Capacity",
+      "subtopics": [
+        {
+          "name": "Cognitive Empathy",
+          "archetypes": {
+            "reverse_definition": "A leader understands *why* their team is frustrated even though the team hasn't complained yet. This is...?",
+            "spot_the_flaw": "A manager tries to solve an emotional employee conflict by quoting legal policy rather than acknowledging feelings. What is the flaw?",
+            "power_sprint": "Someone is crossing their arms and looking at the floor. Are they likely 'Open' or 'Defensive'?",
+            "analogy_match": "Empathy is to Leadership as 'Oil' is to an Engine (prevents friction)."
+          }
+        }
+      ]
+    },
+    {
+      "parent": "Divergent Thinking",
+      "subtopics": [
+        {
+          "name": "Lateral Problem Solving",
+          "archetypes": {
+            "reverse_definition": "A group solves a problem not by working harder, but by completely reframing the question and finding a 'sideways' solution. This is...?",
+            "spot_the_flaw": "A team uses the exact same solution for a new problem that they used for the last one, even though the context is different. What is the flaw?",
+            "power_sprint": "In 15 seconds: Name 3 ways to use a shoe other than wearing it.",
+            "analogy_match": "Divergent Thinking is to Innovation as 'Fuel' is to a Rocket."
+          }
+        }
+      ]
+    }
+  ]
+}

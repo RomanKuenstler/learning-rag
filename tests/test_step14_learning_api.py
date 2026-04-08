@@ -32,6 +32,15 @@ class LearningApiStubService:
             created_at="2026-04-04T00:00:00Z",
             updated_at="2026-04-04T00:00:00Z",
         )
+        self._ksa_attempt = {
+            "attempt_id": "ksa-attempt-1",
+            "status": "in_progress",
+            "version": "ksa-v1",
+            "started_at": "2026-04-04T00:00:00Z",
+            "completed_at": None,
+            "answers": {},
+            "result": None,
+        }
 
     def create_chat(self, user: UserAccount):
         if user.role == "student":
@@ -178,6 +187,41 @@ class LearningApiStubService:
             "updated_at": None,
         }
 
+    def get_ksa_assessment_definition(self, _user: UserAccount):
+        return {
+            "version": "ksa-v1",
+            "time_limit_seconds": 30,
+            "phase1_sliders": [{"id": "1.1", "key": "stem_it", "topic": "STEM/IT", "prompt": "Rate", "min": 1, "max": 10, "triggers": ["stem_fundamentals", "information_technology"]}],
+            "knowledge_questions": [],
+            "skill_questions": [],
+            "ability_questions": [],
+        }
+
+    def start_ksa_assessment(self, _user: UserAccount):
+        return {
+            "attempt_id": "ksa-attempt-1",
+            "status": "in_progress",
+            "version": "ksa-v1",
+            "started_at": "2026-04-04T00:00:00Z",
+        }
+
+    def get_ksa_assessment_attempt(self, _user: UserAccount, _attempt_id: str):
+        return self._ksa_attempt
+
+    def get_latest_ksa_assessment_attempt(self, _user: UserAccount):
+        return self._ksa_attempt
+
+    def upsert_ksa_assessment_answers(self, _user: UserAccount, _attempt_id: str, payload):
+        self._ksa_attempt["answers"] = dict(payload.answers)
+        return self._ksa_attempt
+
+    def complete_ksa_assessment(self, user: UserAccount, _attempt_id: str):
+        return {
+            **self.get_ksa_profile(user),
+            "profile_source": "assessment",
+            "has_assessment": True,
+        }
+
     def import_courses_from_uploads(self, user: UserAccount, _uploads, _scopes_by_file_raw):
         if user.role == "student":
             raise PermissionError("Students cannot create learning paths")
@@ -308,3 +352,33 @@ def test_ksa_profile_route_uses_student_default_values() -> None:
     assert payload["skills"]["literacy_numeracy"] == 3
     assert payload["abilities"]["divergent_thinking"] == 3
     assert payload["dreyfus_levels"] == ["Novice", "Advanced", "Competent", "Proficient", "Expert"]
+
+
+def test_ksa_assessment_routes_available() -> None:
+    client = build_client(student=True)
+    definition_response = client.get("/api/ksa/assessment/definition")
+    assert definition_response.status_code == 200
+    assert definition_response.json()["version"] == "ksa-v1"
+
+    start_response = client.post("/api/ksa/assessment/attempts")
+    assert start_response.status_code == 200
+    attempt_id = start_response.json()["attempt_id"]
+    attempt_response = client.get(f"/api/ksa/assessment/attempts/{attempt_id}")
+    assert attempt_response.status_code == 200
+    assert attempt_response.json()["status"] == "in_progress"
+
+    latest_response = client.get("/api/ksa/assessment/attempts/latest")
+    assert latest_response.status_code == 200
+    assert latest_response.json()["attempt_id"] == attempt_id
+
+    save_response = client.put(
+        f"/api/ksa/assessment/attempts/{attempt_id}/answers",
+        json={"answers": {"phase1": {"stem_it": 8}}},
+    )
+    assert save_response.status_code == 200
+    assert save_response.json()["answers"]["phase1"]["stem_it"] == 8
+
+    complete_response = client.post(f"/api/ksa/assessment/attempts/{attempt_id}/complete")
+    assert complete_response.status_code == 200
+    assert complete_response.json()["profile_source"] == "assessment"
+    assert complete_response.json()["has_assessment"] is True

@@ -424,6 +424,38 @@ class UserLearningGoal(Base):
     )
 
 
+class UserKSAProfile(Base):
+    __tablename__ = "user_ksa_profiles"
+    __table_args__ = (UniqueConstraint("user_id", name="uq_user_ksa_profiles_user"),)
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    user_id: Mapped[int] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True)
+    has_assessment: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
+    assessment_version: Mapped[str] = mapped_column(String(32), nullable=False, default="ksa-v1")
+    profile_json: Mapped[dict] = mapped_column(JSON, default=dict)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, server_default=func.now())
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, server_default=func.now(), onupdate=func.now()
+    )
+
+
+class UserKSAAssessmentAttempt(Base):
+    __tablename__ = "user_ksa_assessment_attempts"
+
+    id: Mapped[str] = mapped_column(String(128), primary_key=True, default=lambda: str(uuid.uuid4()))
+    user_id: Mapped[int] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True)
+    assessment_version: Mapped[str] = mapped_column(String(32), nullable=False, default="ksa-v1")
+    status: Mapped[str] = mapped_column(String(32), nullable=False, default="in_progress")
+    answers_json: Mapped[dict] = mapped_column(JSON, default=dict)
+    result_json: Mapped[dict | None] = mapped_column(JSON, nullable=True)
+    started_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, server_default=func.now())
+    completed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, server_default=func.now())
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, server_default=func.now(), onupdate=func.now()
+    )
+
+
 class DiagnosticDefinition(Base):
     __tablename__ = "diagnostic_definitions"
     __table_args__ = (UniqueConstraint("diagnostic_type", name="uq_diagnostic_definitions_type"),)

@@ -95,12 +95,19 @@ from services.retriever.schemas.diagnostics import (
     LearningStateCheckRead,
 )
 from services.retriever.schemas.ksa import KSAAbilitiesRead, KSAKnowledgeRead, KSAProfileRead, KSASkillsRead
+from services.retriever.schemas.ksa_assessment import (
+    KSAAssessmentAttemptRead,
+    KSAAssessmentDefinitionRead,
+    KSAAssessmentStartResponse,
+    KSAAssessmentAnswersUpsertRequest,
+)
 from services.retriever.services.diagnostic_definitions import load_parsed_sources
 from services.retriever.services.diagnostic_scoring import score_attempt
 from services.retriever.services.chat_naming import generate_chat_name
 from services.retriever.services.library_manager import LibraryManager, UploadFilePayload
 from services.retriever.services.course_files import CourseDefinition, CourseFileParser
 from services.retriever.services.message_mapper import map_attachment, map_chat, map_filter_file, map_filter_tag, map_gpt, map_message, map_source
+from services.retriever.services.ksa_assessment import ASSESSMENT_VERSION, evaluate_assessment, get_assessment_definition
 
 RUNTIME_SETTING_KEYS = {
     "chat_history_messages_count",
@@ -821,6 +828,13 @@ class RetrieverAppService:
         )
 
     def get_ksa_profile(self, user: UserAccount) -> KSAProfileRead:
+        persisted = self.chat_repository.get_user_ksa_profile(user.id)
+        if persisted is not None and bool(persisted.has_assessment):
+            return self._build_ksa_profile_read(
+                user_id=user.id,
+                profile_json=dict(persisted.profile_json or {}),
+                updated_at=persisted.updated_at,
+            )
         if str(user.role).lower() == "student":
             return KSAProfileRead(
                 user_id=user.id,
@@ -839,6 +853,73 @@ class RetrieverAppService:
             skills=KSASkillsRead(**PLACEHOLDER_BASELINE_SKILLS),
             abilities=KSAAbilitiesRead(**PLACEHOLDER_BASELINE_ABILITIES),
             updated_at=None,
+        )
+
+    def get_ksa_assessment_definition(self, user: UserAccount) -> KSAAssessmentDefinitionRead:
+        _ = user
+        return KSAAssessmentDefinitionRead(**get_assessment_definition())
+
+    def start_ksa_assessment(self, user: UserAccount) -> KSAAssessmentStartResponse:
+        attempt = self.chat_repository.create_user_ksa_assessment_attempt(
+            user_id=user.id,
+            assessment_version=ASSESSMENT_VERSION,
+        )
+        return KSAAssessmentStartResponse(
+            attempt_id=attempt.id,
+            status="in_progress",
+            version=attempt.assessment_version,
+            started_at=attempt.started_at,
+        )
+
+    def get_ksa_assessment_attempt(self, user: UserAccount, attempt_id: str) -> KSAAssessmentAttemptRead | None:
+        record = self.chat_repository.get_user_ksa_assessment_attempt(user_id=user.id, attempt_id=attempt_id)
+        if record is None:
+            return None
+        return self._build_ksa_attempt_read(record)
+
+    def get_latest_ksa_assessment_attempt(self, user: UserAccount) -> KSAAssessmentAttemptRead | None:
+        record = self.chat_repository.get_latest_user_ksa_assessment_attempt(user_id=user.id)
+        if record is None:
+            return None
+        return self._build_ksa_attempt_read(record)
+
+    def upsert_ksa_assessment_answers(
+        self,
+        user: UserAccount,
+        attempt_id: str,
+        payload: KSAAssessmentAnswersUpsertRequest,
+    ) -> KSAAssessmentAttemptRead | None:
+        record = self.chat_repository.upsert_user_ksa_assessment_answers(
+            user_id=user.id,
+            attempt_id=attempt_id,
+            answers_json=dict(payload.answers or {}),
+        )
+        if record is None:
+            return None
+        return self._build_ksa_attempt_read(record)
+
+    def complete_ksa_assessment(self, user: UserAccount, attempt_id: str) -> KSAProfileRead | None:
+        attempt = self.chat_repository.get_user_ksa_assessment_attempt(user_id=user.id, attempt_id=attempt_id)
+        if attempt is None:
+            return None
+        evaluation = evaluate_assessment(user_id=user.id, answers=dict(attempt.answers_json or {}))
+        completed_attempt = self.chat_repository.complete_user_ksa_assessment_attempt(
+            user_id=user.id,
+            attempt_id=attempt.id,
+            result_json=evaluation.profile_json,
+        )
+        if completed_attempt is None:
+            return None
+        self.chat_repository.upsert_user_ksa_profile(
+            user_id=user.id,
+            has_assessment=True,
+            assessment_version=ASSESSMENT_VERSION,
+            profile_json=evaluation.profile_json,
+        )
+        return self._build_ksa_profile_read(
+            user_id=user.id,
+            profile_json=evaluation.profile_json,
+            updated_at=completed_attempt.updated_at,
         )
 
     def update_learning_preferences(self, user: UserAccount, payload: LearningPreferencesUpdateRequest) -> LearningPreferencesRead:
@@ -2481,6 +2562,67 @@ class RetrieverAppService:
             is_active=goal.is_active,
             created_at=goal.created_at,
             updated_at=goal.updated_at,
+        )
+
+    def _build_ksa_profile_read(
+        self,
+        *,
+        user_id: int,
+        profile_json: dict[str, object],
+        updated_at: datetime | None,
+    ) -> KSAProfileRead:
+        knowledge = dict(profile_json.get("knowledge") or {})
+        skills = dict(profile_json.get("skills") or {})
+        abilities = dict(profile_json.get("abilities") or {})
+        assessment_details = dict(profile_json.get("assessment_details") or {})
+        derived = dict(assessment_details.get("derived") or {})
+        return KSAProfileRead(
+            user_id=user_id,
+            has_assessment=bool(profile_json.get("has_assessment", True)),
+            profile_source=str(profile_json.get("profile_source") or "assessment"),
+            scale_min=1,
+            scale_max=5,
+            dreyfus_levels=list(profile_json.get("dreyfus_levels") or ["Novice", "Advanced", "Competent", "Proficient", "Expert"]),
+            knowledge=KSAKnowledgeRead(
+                stem_fundamentals=max(1, min(5, int(knowledge.get("stem_fundamentals", 1)))),
+                information_technology=max(1, min(5, int(knowledge.get("information_technology", 1)))),
+                humanities_social_sciences=max(1, min(5, int(knowledge.get("humanities_social_sciences", 1)))),
+                languages_linguistics=max(1, min(5, int(knowledge.get("languages_linguistics", 1)))),
+                business_commerce=max(1, min(5, int(knowledge.get("business_commerce", 1)))),
+                legal_ethics=max(1, min(5, int(knowledge.get("legal_ethics", 1)))),
+                health_wellness=max(1, min(5, int(knowledge.get("health_wellness", 1)))),
+            ),
+            skills=KSASkillsRead(
+                literacy_numeracy=max(1, min(5, int(skills.get("literacy_numeracy", 1)))),
+                digital_craft=max(1, min(5, int(skills.get("digital_craft", 1)))),
+                strategic_execution=max(1, min(5, int(skills.get("strategic_execution", 1)))),
+                operational_skills=max(1, min(5, int(skills.get("operational_skills", 1)))),
+                relational_skills=max(1, min(5, int(skills.get("relational_skills", 1)))),
+                research_inquiry=max(1, min(5, int(skills.get("research_inquiry", 1)))),
+            ),
+            abilities=KSAAbilitiesRead(
+                quantitative_reasoning=max(1, min(5, int(abilities.get("quantitative_reasoning", 1)))),
+                verbal_comprehension=max(1, min(5, int(abilities.get("verbal_comprehension", 1)))),
+                spatial_visualization=max(1, min(5, int(abilities.get("spatial_visualization", 1)))),
+                executive_function=max(1, min(5, int(abilities.get("executive_function", 1)))),
+                sensory_perceptual=max(1, min(5, int(abilities.get("sensory_perceptual", 1)))),
+                social_emotional_capacity=max(1, min(5, int(abilities.get("social_emotional_capacity", 1)))),
+                divergent_thinking=max(1, min(5, int(abilities.get("divergent_thinking", 1)))),
+            ),
+            assessment_details=assessment_details or None,
+            learning_speed_multiplier=float(derived.get("learning_speed_multiplier")) if derived.get("learning_speed_multiplier") is not None else None,
+            updated_at=updated_at,
+        )
+
+    def _build_ksa_attempt_read(self, attempt) -> KSAAssessmentAttemptRead:
+        return KSAAssessmentAttemptRead(
+            attempt_id=attempt.id,
+            status=attempt.status,
+            version=attempt.assessment_version,
+            started_at=attempt.started_at,
+            completed_at=attempt.completed_at,
+            answers=dict(attempt.answers_json or {}),
+            result=dict(attempt.result_json or {}) if attempt.result_json else None,
         )
 
     def _can_view_learning_path(self, user: UserAccount, path: LearningPath) -> bool:

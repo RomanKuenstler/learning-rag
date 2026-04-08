@@ -84,13 +84,15 @@ npm run build
 - courses API list/template route coverage
 - learning API compatibility coverage after introducing courses routes
 - course JSON parser validation tests (valid payload, invalid scope-owner, example files)
-- KSA profile API coverage (`/api/learning-profile/ksa`) including student default baseline values
-- frontend production build coverage with new KSA big-map UI, assessment-dialog shell, and courses updates
+- KSA profile API coverage (`/api/learning-profile/ksa`) including baseline fallback values
+- KSA assessment API route coverage (`/api/ksa/assessment/*`) for start, read, save, and complete flows
+- deterministic KSA scoring tests (sieve logic, knowledge multipliers, skills mapping, abilities weighting, divergent heuristic)
+- frontend production build coverage with KSA big-map and real assessment dialog flow
 
 Focused run:
 
 ```bash
-python3 -m pytest tests/test_step14_learning_api.py tests/test_retriever_api.py tests/test_courses_files.py -q
+python3 -m pytest tests/test_step14_learning_api.py tests/test_step20_ksa_assessment_scoring.py tests/test_retriever_api.py tests/test_courses_files.py -q
 cd webui && npm run build
 ```
 

@@ -25,6 +25,8 @@ import type {
   LibraryResponse,
   LearningLesson,
   LearningGoal,
+  KsaAssessmentAttempt,
+  KsaAssessmentDefinition,
   KSAProfile,
   LearningProfileBundle,
   LearningProfileContext,
@@ -160,6 +162,9 @@ export function useChatApp() {
   const [ksaProfile, setKsaProfile] = useState<KSAProfile | null>(null);
   const [ksaLoading, setKsaLoading] = useState(false);
   const [ksaError, setKsaError] = useState<string | null>(null);
+  const [ksaAssessmentDefinition, setKsaAssessmentDefinition] = useState<KsaAssessmentDefinition | null>(null);
+  const [ksaAssessmentAttempt, setKsaAssessmentAttempt] = useState<KsaAssessmentAttempt | null>(null);
+  const [ksaAssessmentSaving, setKsaAssessmentSaving] = useState(false);
   const [learningProfileLoading, setLearningProfileLoading] = useState(false);
   const [learningProfileSaving, setLearningProfileSaving] = useState(false);
   const [learningProfileError, setLearningProfileError] = useState<string | null>(null);
@@ -350,6 +355,9 @@ export function useChatApp() {
     setKsaProfile(null);
     setKsaLoading(false);
     setKsaError(null);
+    setKsaAssessmentDefinition(null);
+    setKsaAssessmentAttempt(null);
+    setKsaAssessmentSaving(false);
     setLearningProfileLoading(false);
     setLearningProfileSaving(false);
     setLearningProfileError(null);
@@ -1051,6 +1059,84 @@ export function useChatApp() {
       return null;
     } finally {
       setKsaLoading(false);
+    }
+  }
+
+  async function loadKsaAssessmentDefinition() {
+    setKsaAssessmentSaving(true);
+    setKsaError(null);
+    try {
+      const payload = await apiClient.getKsaAssessmentDefinition();
+      setKsaAssessmentDefinition(payload);
+      return payload;
+    } catch (error) {
+      setKsaError(error instanceof Error ? error.message : "Failed to load KSA assessment definition");
+      throw error;
+    } finally {
+      setKsaAssessmentSaving(false);
+    }
+  }
+
+  async function startKsaAssessment() {
+    setKsaAssessmentSaving(true);
+    setKsaError(null);
+    try {
+      const started = await apiClient.startKsaAssessment();
+      const attempt = await apiClient.getKsaAssessmentAttempt(started.attempt_id);
+      setKsaAssessmentAttempt(attempt);
+      return attempt;
+    } catch (error) {
+      setKsaError(error instanceof Error ? error.message : "Failed to start KSA assessment");
+      throw error;
+    } finally {
+      setKsaAssessmentSaving(false);
+    }
+  }
+
+  async function loadLatestKsaAssessmentAttempt() {
+    setKsaAssessmentSaving(true);
+    setKsaError(null);
+    try {
+      const payload = await apiClient.getLatestKsaAssessmentAttempt();
+      setKsaAssessmentAttempt(payload);
+      return payload;
+    } catch (error) {
+      setKsaAssessmentAttempt(null);
+      return null;
+    } finally {
+      setKsaAssessmentSaving(false);
+    }
+  }
+
+  async function saveKsaAssessmentAnswers(attemptId: string, answers: Record<string, unknown>) {
+    setKsaAssessmentSaving(true);
+    setKsaError(null);
+    try {
+      const payload = await apiClient.upsertKsaAssessmentAnswers(attemptId, answers);
+      setKsaAssessmentAttempt(payload);
+      return payload;
+    } catch (error) {
+      setKsaError(error instanceof Error ? error.message : "Failed to save KSA assessment answers");
+      throw error;
+    } finally {
+      setKsaAssessmentSaving(false);
+    }
+  }
+
+  async function completeKsaAssessment(attemptId: string) {
+    setKsaAssessmentSaving(true);
+    setKsaError(null);
+    try {
+      const payload = await apiClient.completeKsaAssessment(attemptId);
+      setKsaProfile(payload);
+      const latest = await apiClient.getKsaAssessmentAttempt(attemptId);
+      setKsaAssessmentAttempt(latest);
+      return payload;
+    } catch (error) {
+      setKsaError(error instanceof Error ? error.message : "Failed to complete KSA assessment");
+      throw error;
+    } finally {
+      setKsaAssessmentSaving(false);
     }
   }
 
@@ -1893,9 +1979,12 @@ export function useChatApp() {
     coursesImporting,
     learningProfile,
     ksaProfile,
+    ksaAssessmentDefinition,
+    ksaAssessmentAttempt,
     learningProfileLoading,
     ksaLoading,
     ksaError,
+    ksaAssessmentSaving,
     learningProfileSaving,
     learningProfileError,
     learningProfileSuccess,
@@ -1986,6 +2075,11 @@ export function useChatApp() {
     downloadCourseTemplate,
     loadLearningProfile,
     loadKsaProfile,
+    loadKsaAssessmentDefinition,
+    loadLatestKsaAssessmentAttempt,
+    startKsaAssessment,
+    saveKsaAssessmentAnswers,
+    completeKsaAssessment,
     saveLearningPreferences,
     saveLearningContext,
     createLearningGoal,

@@ -13,7 +13,7 @@
   "allowed_tags": [],
   "modules": [
     {
-      "id": "18681042-565b-4ea4-8772-39f57223bf8e",
+      "id": "0570f4a7-34aa-463b-ad45-325336366062",
       "order_index": 0,
       "title": "Python Basics",
       "description": "Syntax, variables, conditionals, and loops.",
@@ -23,7 +23,7 @@
       ],
       "lessons": [
         {
-          "id": "1d1ef250-e4d5-40b9-b0c2-9f5b0c7e30cf",
+          "id": "45a6daa0-4295-4380-817f-ff3521d54d6a",
           "order_index": 0,
           "title": "Variables and Data Types",
           "description": "Numbers, strings, booleans, and lists in small examples.",
@@ -34,7 +34,7 @@
           "teaching_notes": ""
         },
         {
-          "id": "fa7fc6d8-c8ee-4256-85e8-27b32dfe057c",
+          "id": "b1ae46ea-00d8-4a62-877d-c04bff72bee4",
           "order_index": 1,
           "title": "Control Flow",
           "description": "If statements and loops for basic program logic.",
@@ -47,7 +47,7 @@
       ]
     },
     {
-      "id": "f14e6a99-b0e5-4bf1-82f6-6b3822ffbfaf",
+      "id": "0a366756-4317-47e6-9793-537930682ef8",
       "order_index": 1,
       "title": "Functions and Small Projects",
       "description": "Reusable functions and basic problem decomposition.",
@@ -57,7 +57,7 @@
       ],
       "lessons": [
         {
-          "id": "630eb341-16f9-4656-bb5d-26fd884d4756",
+          "id": "a6b4b6d7-6446-46e8-a83e-6b9d4d97bd25",
           "order_index": 0,
           "title": "Functions and Parameters",
           "description": "Build reusable code with arguments and return values.",

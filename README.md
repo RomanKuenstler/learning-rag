@@ -23,7 +23,10 @@ This repository includes the learning foundation, declared learning profile laye
 - explanation feedback persistence (rating, text, re-explain flag)
 - dynamic frontend diagnostic flow and backend-driven charts
 - dedicated learning UI sections for preferences, context, goals, and KSA big-map visualization
-- KSA baseline profile API (`/api/learning-profile/ksa`) with student default values on a Dreyfus 1-5 scale
+- KSA profile + initial assessment system:
+  - profile API: `/api/learning-profile/ksa`
+  - assessment flow APIs: `/api/ksa/assessment/*`
+  - deterministic 4-phase scoring with persisted results that replace baseline defaults after completion
 - dedicated Courses page with filtering, sorting, template download, and JSON import dialog
 - file-backed course definitions under `courses/` with startup validation + bootstrap sync
 - web UI sidebar navigation entries for Learning and Courses
