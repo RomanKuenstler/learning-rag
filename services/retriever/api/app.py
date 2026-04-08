@@ -95,6 +95,7 @@ from services.retriever.schemas.ksa_assessment import (
 )
 from services.retriever.schemas.ksa_drills import (
     KSADrillAnswersUpsertRequest,
+    KSADrillAttemptsRead,
     KSADrillAttemptRead,
     KSADrillAttemptStartRequest,
     KSADrillAttemptStartResponse,
@@ -799,6 +800,14 @@ def create_app() -> FastAPI:
         service: RetrieverAppService = Depends(get_retriever_service),
     ) -> KSADrillTopicsRead:
         return service.list_ksa_drill_topics(auth.user)
+
+    @app.get("/api/ksa/drills/attempts", response_model=KSADrillAttemptsRead)
+    def list_ksa_drill_attempts(
+        limit: int = Query(default=25, ge=1, le=100),
+        auth: AuthContext = Depends(get_app_auth_context),
+        service: RetrieverAppService = Depends(get_retriever_service),
+    ) -> KSADrillAttemptsRead:
+        return service.list_ksa_drill_attempts(auth.user, limit=limit)
 
     @app.post("/api/ksa/drills/attempts", response_model=KSADrillAttemptStartResponse)
     def start_ksa_drill_attempt(

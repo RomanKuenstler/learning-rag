@@ -35,6 +35,7 @@ import type {
   LearningGoalPriority,
   LearningProfileBundle,
   KsaDrillAttempt,
+  KsaDrillAttemptsResponse,
   KsaDrillTopic,
   KsaAssessmentAttempt,
   KsaAssessmentDefinition,
@@ -268,6 +269,9 @@ export const apiClient = {
   },
   getLatestKsaDrillAttempt() {
     return request<KsaDrillAttempt>("/api/ksa/drills/attempts/latest");
+  },
+  getKsaDrillAttempts(limit = 25) {
+    return request<KsaDrillAttemptsResponse>(`/api/ksa/drills/attempts?limit=${Math.max(1, Math.min(100, limit))}`);
   },
   getKsaDrillAttempt(attemptId: string) {
     return request<KsaDrillAttempt>(`/api/ksa/drills/attempts/${attemptId}`);

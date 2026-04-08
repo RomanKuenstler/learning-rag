@@ -119,7 +119,7 @@ def get_assessment_definition() -> dict[str, Any]:
     }
 
 
-def evaluate_assessment(*, user_id: int, answers: dict[str, Any]) -> KSAEvaluation:
+def evaluate_assessment(*, user_id: int, answers: dict[str, Any], answer_overrides: dict[str, bool] | None = None) -> KSAEvaluation:
     slider_answers = _normalize_slider_answers(dict(answers.get("phase1") or {}))
     knowledge_answers = dict(answers.get("knowledge") or {})
     skill_answers = dict(answers.get("skills") or {})
@@ -145,8 +145,8 @@ def evaluate_assessment(*, user_id: int, answers: dict[str, Any]) -> KSAEvaluati
         hard = _question_for_topic(topic, "hard")
         easy_answer = str(knowledge_answers.get(easy["id"], "")).strip()
         hard_answer = str(knowledge_answers.get(hard["id"], "")).strip()
-        easy_correct = _text_equals(easy_answer, str(easy["correct"]))
-        hard_correct = _text_equals(hard_answer, str(hard["correct"]))
+        easy_correct = bool(answer_overrides.get(easy["id"])) if answer_overrides and easy["id"] in answer_overrides else _text_equals(easy_answer, str(easy["correct"]))
+        hard_correct = bool(answer_overrides.get(hard["id"])) if answer_overrides and hard["id"] in answer_overrides else _text_equals(hard_answer, str(hard["correct"]))
         if not easy_correct:
             multiplier = 0.5
         elif easy_correct and not hard_correct:
@@ -209,7 +209,10 @@ def evaluate_assessment(*, user_id: int, answers: dict[str, Any]) -> KSAEvaluati
             expected_match = None
         else:
             expected = str(question.get("expected", "")).strip()
-            expected_match = _match_ability_answer(question_id=str(question["id"]), answer=answer_value, expected=expected)
+            if answer_overrides and str(question["id"]) in answer_overrides:
+                expected_match = bool(answer_overrides[str(question["id"])])
+            else:
+                expected_match = _match_ability_answer(question_id=str(question["id"]), answer=answer_value, expected=expected)
             correctness = 1.0 if expected_match else 0.0
         time_bonus = _time_bonus(response_time_seconds, ABILITY_TIME_LIMIT_SECONDS)
         capacity = (correctness * 0.7) + (time_bonus * 0.3)

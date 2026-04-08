@@ -35,6 +35,7 @@ class KSADrillQuestionRead(BaseModel):
     related_subtopic: str | None = None
     prompt: str
     time_limit_seconds: int | None = None
+    topic_source: Literal["manual", "auto_good", "auto_bad"] | None = None
 
 
 class KSADrillAttemptRead(BaseModel):
@@ -64,3 +65,7 @@ class KSADrillAttemptStartResponse(BaseModel):
 
 class KSADrillAnswersUpsertRequest(BaseModel):
     answers: dict[str, object] = Field(default_factory=dict)
+
+
+class KSADrillAttemptsRead(BaseModel):
+    attempts: list[KSADrillAttemptRead] = Field(default_factory=list)

@@ -168,6 +168,7 @@ export function useChatApp() {
   const [ksaAssessmentAttempt, setKsaAssessmentAttempt] = useState<KsaAssessmentAttempt | null>(null);
   const [ksaDrillTopics, setKsaDrillTopics] = useState<KsaDrillTopic[]>([]);
   const [ksaDrillAttempt, setKsaDrillAttempt] = useState<KsaDrillAttempt | null>(null);
+  const [ksaDrillAttempts, setKsaDrillAttempts] = useState<KsaDrillAttempt[]>([]);
   const [ksaAssessmentSaving, setKsaAssessmentSaving] = useState(false);
   const [learningProfileLoading, setLearningProfileLoading] = useState(false);
   const [learningProfileSaving, setLearningProfileSaving] = useState(false);
@@ -1190,6 +1191,21 @@ export function useChatApp() {
     }
   }
 
+  async function loadKsaDrillAttempts(limit = 25) {
+    setKsaAssessmentSaving(true);
+    setKsaError(null);
+    try {
+      const payload = await apiClient.getKsaDrillAttempts(limit);
+      setKsaDrillAttempts(payload.attempts ?? []);
+      return payload.attempts ?? [];
+    } catch (error) {
+      setKsaError(error instanceof Error ? error.message : "Failed to load KSA drill attempts");
+      throw error;
+    } finally {
+      setKsaAssessmentSaving(false);
+    }
+  }
+
   async function saveKsaDrillAnswers(attemptId: string, answers: Record<string, unknown>) {
     setKsaAssessmentSaving(true);
     setKsaError(null);
@@ -1213,6 +1229,8 @@ export function useChatApp() {
       setKsaProfile(payload);
       const latest = await apiClient.getKsaDrillAttempt(attemptId);
       setKsaDrillAttempt(latest);
+      const attempts = await apiClient.getKsaDrillAttempts(25);
+      setKsaDrillAttempts(attempts.attempts ?? []);
       return payload;
     } catch (error) {
       setKsaError(error instanceof Error ? error.message : "Failed to complete KSA drill attempt");
@@ -2065,6 +2083,7 @@ export function useChatApp() {
     ksaAssessmentAttempt,
     ksaDrillTopics,
     ksaDrillAttempt,
+    ksaDrillAttempts,
     learningProfileLoading,
     ksaLoading,
     ksaError,
@@ -2167,6 +2186,7 @@ export function useChatApp() {
     loadKsaDrillTopics,
     startKsaDrillAttempt,
     loadLatestKsaDrillAttempt,
+    loadKsaDrillAttempts,
     saveKsaDrillAnswers,
     completeKsaDrillAttempt,
     saveLearningPreferences,

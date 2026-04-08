@@ -2,7 +2,9 @@ from __future__ import annotations
 
 import json
 import logging
+import re
 from datetime import datetime, timezone
+from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -103,6 +105,7 @@ from services.retriever.schemas.ksa_assessment import (
 )
 from services.retriever.schemas.ksa_drills import (
     KSADrillAnswersUpsertRequest,
+    KSADrillAttemptsRead,
     KSADrillAttemptRead,
     KSADrillAttemptStartRequest,
     KSADrillAttemptStartResponse,
@@ -115,9 +118,16 @@ from services.retriever.services.chat_naming import generate_chat_name
 from services.retriever.services.library_manager import LibraryManager, UploadFilePayload
 from services.retriever.services.course_files import CourseDefinition, CourseFileParser
 from services.retriever.services.message_mapper import map_attachment, map_chat, map_filter_file, map_filter_tag, map_gpt, map_message, map_source
-from services.retriever.services.ksa_assessment import ASSESSMENT_VERSION, evaluate_assessment, get_assessment_definition
+from services.retriever.services.ksa_assessment import (
+    ASSESSMENT_VERSION,
+    ABILITY_QUESTIONS,
+    KNOWLEDGE_QUESTIONS,
+    evaluate_assessment,
+    get_assessment_definition,
+)
 from services.retriever.services.ksa_drills import (
     DRILL_ASSESSMENT_VERSION,
+    build_drill_topic_plan,
     evaluate_drill_attempt,
     generate_drill_question_set,
     list_drill_topics,
@@ -280,6 +290,7 @@ class RetrieverAppService:
         self.auth_manager = deps.auth_manager
         self.settings = deps.settings
         self.course_file_parser = CourseFileParser()
+        self._ksa_validation_executor = ThreadPoolExecutor(max_workers=2, thread_name_prefix="ksa-validate")
         self.courses_dir = Path(self.settings.courses_dir)
         self.courses_dir.mkdir(parents=True, exist_ok=True)
         if self.auth_manager is not None:
@@ -903,20 +914,41 @@ class RetrieverAppService:
         attempt_id: str,
         payload: KSAAssessmentAnswersUpsertRequest,
     ) -> KSAAssessmentAttemptRead | None:
+        existing = self.chat_repository.get_user_ksa_assessment_attempt(user_id=user.id, attempt_id=attempt_id)
+        if existing is None:
+            return None
+        merged_answers = self._merge_ksa_meta_answers(existing=dict(existing.answers_json or {}), incoming=dict(payload.answers or {}))
         record = self.chat_repository.upsert_user_ksa_assessment_answers(
             user_id=user.id,
             attempt_id=attempt_id,
-            answers_json=dict(payload.answers or {}),
+            answers_json=merged_answers,
         )
         if record is None:
             return None
+        self._schedule_ksa_assessment_ai_validation(user_id=user.id, attempt_id=attempt_id, answers_json=dict(record.answers_json or {}))
         return self._build_ksa_attempt_read(record)
 
     def complete_ksa_assessment(self, user: UserAccount, attempt_id: str) -> KSAProfileRead | None:
         attempt = self.chat_repository.get_user_ksa_assessment_attempt(user_id=user.id, attempt_id=attempt_id)
         if attempt is None:
             return None
-        evaluation = evaluate_assessment(user_id=user.id, answers=dict(attempt.answers_json or {}))
+        answers_json = dict(attempt.answers_json or {})
+        ai_validation = self._build_assessment_ai_validation(
+            answers_json=answers_json,
+            include_background=False,
+        )
+        answers_json["_ai_validations"] = ai_validation
+        self.chat_repository.upsert_user_ksa_assessment_answers(
+            user_id=user.id,
+            attempt_id=attempt.id,
+            answers_json=answers_json,
+        )
+        evaluation = evaluate_assessment(
+            user_id=user.id,
+            answers=answers_json,
+            answer_overrides=dict(ai_validation.get("overrides") or {}),
+        )
+        evaluation.profile_json.setdefault("assessment_details", {})["ai_validation"] = ai_validation
         completed_attempt = self.chat_repository.complete_user_ksa_assessment_attempt(
             user_id=user.id,
             attempt_id=attempt.id,
@@ -940,20 +972,32 @@ class RetrieverAppService:
         _ = user
         return KSADrillTopicsRead(topics=[item for item in list_drill_topics()])
 
+    def list_ksa_drill_attempts(self, user: UserAccount, *, limit: int = 25) -> KSADrillAttemptsRead:
+        records = self.chat_repository.list_user_ksa_drill_attempts(user_id=user.id, limit=limit)
+        return KSADrillAttemptsRead(attempts=[self._build_ksa_drill_attempt_read(item) for item in records])
+
     def start_ksa_drill_attempt(self, user: UserAccount, payload: KSADrillAttemptStartRequest) -> KSADrillAttemptStartResponse:
         selected = [str(item).strip() for item in list(payload.topic_keys or []) if str(item).strip()]
-        question_set = generate_drill_question_set(selected_topic_keys=selected)
+        persisted = self.chat_repository.get_user_ksa_profile(user.id)
+        if persisted is not None and bool(persisted.profile_json):
+            profile_json = dict(persisted.profile_json or {})
+        else:
+            profile_json = self._serialize_ksa_profile_read(self.get_ksa_profile(user))
+        plan = build_drill_topic_plan(selected_topic_keys=selected, profile_json=profile_json)
+        planned_topic_keys = list(plan.get("planned_topic_keys") or selected)
+        topic_roles = dict(plan.get("topic_roles") or {})
+        question_set = generate_drill_question_set(drill_topic_keys=planned_topic_keys, topic_roles=topic_roles)
         attempt = self.chat_repository.create_user_ksa_drill_attempt(
             user_id=user.id,
             assessment_version=DRILL_ASSESSMENT_VERSION,
-            selected_topic_keys=selected,
+            selected_topic_keys=planned_topic_keys,
             question_set_json=question_set,
         )
         return KSADrillAttemptStartResponse(
             attempt_id=attempt.id,
             status="in_progress",
             version=attempt.assessment_version,
-            selected_topic_keys=list(attempt.selected_topic_keys_json or []),
+            selected_topic_keys=list(plan.get("selected_topic_keys") or selected),
             question_set=[KSADrillQuestionRead(**item) for item in list(attempt.question_set_json or [])],
             started_at=attempt.started_at,
         )
@@ -976,13 +1020,23 @@ class RetrieverAppService:
         attempt_id: str,
         payload: KSADrillAnswersUpsertRequest,
     ) -> KSADrillAttemptRead | None:
+        existing = self.chat_repository.get_user_ksa_drill_attempt(user_id=user.id, attempt_id=attempt_id)
+        if existing is None:
+            return None
+        merged_answers = self._merge_ksa_meta_answers(existing=dict(existing.answers_json or {}), incoming=dict(payload.answers or {}))
         record = self.chat_repository.upsert_user_ksa_drill_answers(
             user_id=user.id,
             attempt_id=attempt_id,
-            answers_json=dict(payload.answers or {}),
+            answers_json=merged_answers,
         )
         if record is None:
             return None
+        self._schedule_ksa_drill_ai_validation(
+            user_id=user.id,
+            attempt_id=attempt_id,
+            question_set=list(record.question_set_json or []),
+            answers_json=dict(record.answers_json or {}),
+        )
         return self._build_ksa_drill_attempt_read(record)
 
     def complete_ksa_drill_attempt(self, user: UserAccount, attempt_id: str) -> KSAProfileRead | None:
@@ -995,6 +1049,11 @@ class RetrieverAppService:
         else:
             fallback_profile = self.get_ksa_profile(user)
             base_profile_json = self._serialize_ksa_profile_read(fallback_profile)
+        drill_ai_validation = self._build_drill_ai_validation(
+            question_set=list(attempt.question_set_json or []),
+            answers_json=dict(attempt.answers_json or {}),
+            include_background=False,
+        )
 
         drill_outcome = evaluate_drill_attempt(
             user_id=user.id,
@@ -1002,8 +1061,10 @@ class RetrieverAppService:
             question_set=list(attempt.question_set_json or []),
             answers=dict(attempt.answers_json or {}),
             base_profile_json=base_profile_json,
+            ai_validation_overrides=dict(drill_ai_validation.get("overrides") or {}),
         )
         result_json = dict(drill_outcome.get("result_json") or {})
+        result_json["ai_validation"] = drill_ai_validation
         profile_json = dict(drill_outcome.get("updated_profile_json") or {})
         completed = self.chat_repository.complete_user_ksa_drill_attempt(
             user_id=user.id,
@@ -2665,6 +2726,241 @@ class RetrieverAppService:
             created_at=goal.created_at,
             updated_at=goal.updated_at,
         )
+
+    def _merge_ksa_meta_answers(self, *, existing: dict[str, object], incoming: dict[str, object]) -> dict[str, object]:
+        merged = dict(incoming or {})
+        for key, value in existing.items():
+            if str(key).startswith("_") and key not in merged:
+                merged[key] = value
+        return merged
+
+    def _schedule_ksa_assessment_ai_validation(self, *, user_id: int, attempt_id: str, answers_json: dict[str, object]) -> None:
+        self._ksa_validation_executor.submit(self._run_assessment_ai_validation_job, user_id, attempt_id, answers_json)
+
+    def _run_assessment_ai_validation_job(self, user_id: int, attempt_id: str, answers_json: dict[str, object]) -> None:
+        try:
+            validation = self._build_assessment_ai_validation(answers_json=answers_json, include_background=True)
+            merged = dict(answers_json)
+            merged["_ai_validations"] = validation
+            self.chat_repository.upsert_user_ksa_assessment_answers(
+                user_id=user_id,
+                attempt_id=attempt_id,
+                answers_json=merged,
+            )
+        except Exception:
+            logger.exception("Failed background KSA assessment validation for attempt %s", attempt_id)
+
+    def _schedule_ksa_drill_ai_validation(
+        self,
+        *,
+        user_id: int,
+        attempt_id: str,
+        question_set: list[dict[str, object]],
+        answers_json: dict[str, object],
+    ) -> None:
+        self._ksa_validation_executor.submit(self._run_drill_ai_validation_job, user_id, attempt_id, question_set, answers_json)
+
+    def _run_drill_ai_validation_job(
+        self,
+        user_id: int,
+        attempt_id: str,
+        question_set: list[dict[str, object]],
+        answers_json: dict[str, object],
+    ) -> None:
+        try:
+            validation = self._build_drill_ai_validation(
+                question_set=question_set,
+                answers_json=answers_json,
+                include_background=True,
+            )
+            merged = dict(answers_json)
+            merged["_ai_validations"] = validation
+            self.chat_repository.upsert_user_ksa_drill_answers(
+                user_id=user_id,
+                attempt_id=attempt_id,
+                answers_json=merged,
+            )
+        except Exception:
+            logger.exception("Failed background KSA drill validation for attempt %s", attempt_id)
+
+    def _build_assessment_ai_validation(self, *, answers_json: dict[str, object], include_background: bool) -> dict[str, object]:
+        knowledge_answers = dict(dict(answers_json).get("knowledge") or {})
+        ability_answers = dict(dict(answers_json).get("abilities") or {})
+        overrides: dict[str, bool] = {}
+        details: dict[str, object] = {}
+
+        for question in KNOWLEDGE_QUESTIONS:
+            question_id = str(question["id"])
+            answer_value = str(knowledge_answers.get(question_id, "")).strip()
+            if not answer_value:
+                continue
+            verdict = self._validate_answer_with_llm(
+                question_text=str(question.get("question") or ""),
+                user_answer=answer_value,
+                expected_answer=str(question.get("correct") or ""),
+                expected_keywords=list(question.get("options") or []),
+            )
+            overrides[question_id] = bool(verdict.get("is_correct"))
+            details[question_id] = verdict
+
+        for question in ABILITY_QUESTIONS:
+            question_id = str(question["id"])
+            submitted = dict(ability_answers.get(question_id) or {})
+            answer_value = str(submitted.get("answer") or "").strip()
+            if not answer_value:
+                continue
+            is_open = bool(question.get("open_ended"))
+            verdict = self._validate_answer_with_llm(
+                question_text=str(question.get("task") or ""),
+                user_answer=answer_value,
+                expected_answer=str(question.get("expected") or ""),
+                expected_keywords=[],
+                open_ended=is_open,
+            )
+            if not is_open:
+                overrides[question_id] = bool(verdict.get("is_correct"))
+            details[question_id] = verdict
+
+        return {
+            "source": "chat_model",
+            "background": include_background,
+            "evaluated_at": datetime.now(timezone.utc).isoformat(),
+            "overrides": overrides,
+            "details": details,
+        }
+
+    def _build_drill_ai_validation(
+        self,
+        *,
+        question_set: list[dict[str, object]],
+        answers_json: dict[str, object],
+        include_background: bool,
+    ) -> dict[str, object]:
+        answer_map = {key: value for key, value in dict(answers_json or {}).items() if not str(key).startswith("_")}
+        overrides: dict[str, bool] = {}
+        details: dict[str, object] = {}
+        for question in question_set:
+            question_id = str(question.get("id") or "")
+            if not question_id:
+                continue
+            raw_answer = answer_map.get(question_id)
+            answer_value = ""
+            if isinstance(raw_answer, dict):
+                answer_value = str(raw_answer.get("answer") or raw_answer.get("value") or "").strip()
+            else:
+                answer_value = str(raw_answer or "").strip()
+            if not answer_value:
+                continue
+            verdict = self._validate_answer_with_llm(
+                question_text=str(question.get("prompt") or ""),
+                user_answer=answer_value,
+                expected_answer="",
+                expected_keywords=[str(item) for item in list(question.get("expected_keywords") or [])],
+            )
+            overrides[question_id] = bool(verdict.get("is_correct"))
+            details[question_id] = verdict
+        return {
+            "source": "chat_model",
+            "background": include_background,
+            "evaluated_at": datetime.now(timezone.utc).isoformat(),
+            "overrides": overrides,
+            "details": details,
+        }
+
+    def _validate_answer_with_llm(
+        self,
+        *,
+        question_text: str,
+        user_answer: str,
+        expected_answer: str,
+        expected_keywords: list[str],
+        open_ended: bool = False,
+    ) -> dict[str, object]:
+        fallback = {
+            "is_correct": self._fallback_answer_match(user_answer=user_answer, expected_answer=expected_answer, expected_keywords=expected_keywords, open_ended=open_ended),
+            "confidence": 0.5,
+            "reason": "fallback",
+            "normalized_answer": user_answer.strip(),
+        }
+        prompt = (
+            "Return ONLY compact JSON with keys is_correct (boolean), confidence (0..1), "
+            "normalized_answer (string), reason (short string). "
+            "Treat punctuation, casing, separators, and small wording variations as equivalent. "
+            "For open-ended prompts, mark correct only if the answer is clearly relevant and complete."
+        )
+        user_payload = json.dumps(
+            {
+                "question": question_text,
+                "expected_answer": expected_answer,
+                "expected_keywords": expected_keywords,
+                "open_ended": open_ended,
+                "user_answer": user_answer,
+            },
+            ensure_ascii=False,
+        )
+        try:
+            raw = self.llm_client.invoke(
+                [
+                    ("system", prompt),
+                    ("user", user_payload),
+                ]
+            )
+            parsed = self._extract_json_object(raw)
+            is_correct = bool(parsed.get("is_correct"))
+            confidence = float(parsed.get("confidence") or 0.5)
+            normalized_answer = str(parsed.get("normalized_answer") or user_answer).strip()
+            reason = str(parsed.get("reason") or "").strip()[:220]
+            return {
+                "is_correct": is_correct,
+                "confidence": max(0.0, min(1.0, confidence)),
+                "normalized_answer": normalized_answer,
+                "reason": reason or "validated",
+            }
+        except Exception:
+            return fallback
+
+    def _extract_json_object(self, text: str) -> dict[str, object]:
+        raw = str(text or "").strip()
+        try:
+            parsed = json.loads(raw)
+            if isinstance(parsed, dict):
+                return parsed
+        except Exception:
+            pass
+        match = re.search(r"\{.*\}", raw, re.DOTALL)
+        if not match:
+            raise ValueError("No JSON payload in validator response")
+        parsed = json.loads(match.group(0))
+        if not isinstance(parsed, dict):
+            raise ValueError("Validator JSON is not an object")
+        return parsed
+
+    def _fallback_answer_match(
+        self,
+        *,
+        user_answer: str,
+        expected_answer: str,
+        expected_keywords: list[str],
+        open_ended: bool,
+    ) -> bool:
+        normalized_answer = re.sub(r"\s+", " ", re.sub(r"[^a-z0-9\s]", " ", user_answer.casefold())).strip()
+        if open_ended:
+            chunks = [item.strip() for item in re.split(r"[,\n;|]+", normalized_answer) if item.strip()]
+            return len(set(chunks)) >= 2
+        normalized_expected = re.sub(r"\s+", " ", re.sub(r"[^a-z0-9\s]", " ", expected_answer.casefold())).strip()
+        if normalized_expected and normalized_expected in normalized_answer:
+            return True
+        tokens = set(normalized_answer.split(" "))
+        for keyword in expected_keywords:
+            normalized_keyword = re.sub(r"\s+", " ", re.sub(r"[^a-z0-9\s]", " ", str(keyword).casefold())).strip()
+            if not normalized_keyword:
+                continue
+            if normalized_keyword in normalized_answer:
+                return True
+            keyword_tokens = [item for item in normalized_keyword.split(" ") if item]
+            if keyword_tokens and all(token in tokens for token in keyword_tokens):
+                return True
+        return False
 
     def _build_ksa_profile_read(
         self,

@@ -35,6 +35,7 @@ type LearningPathsPageProps = {
   ksaAssessmentAttempt: KsaAssessmentAttempt | null;
   ksaDrillTopics: KsaDrillTopic[];
   ksaDrillAttempt: KsaDrillAttempt | null;
+  ksaDrillAttempts: KsaDrillAttempt[];
   ksaAssessmentSaving: boolean;
   currentUserDisplayName: string;
   onLoadLearningProfile: () => void;
@@ -46,6 +47,7 @@ type LearningPathsPageProps = {
   onCompleteKsaAssessment: (attemptId: string) => Promise<unknown>;
   onLoadKsaDrillTopics: () => Promise<unknown>;
   onLoadLatestKsaDrillAttempt: () => Promise<unknown>;
+  onLoadKsaDrillAttempts: () => Promise<unknown>;
   onStartKsaDrillAttempt: (topicKeys: string[]) => Promise<unknown>;
   onSaveKsaDrillAnswers: (attemptId: string, answers: Record<string, unknown>) => Promise<unknown>;
   onCompleteKsaDrillAttempt: (attemptId: string) => Promise<unknown>;
@@ -103,6 +105,7 @@ export function LearningPathsPage({
   ksaAssessmentAttempt,
   ksaDrillTopics,
   ksaDrillAttempt,
+  ksaDrillAttempts,
   ksaAssessmentSaving,
   currentUserDisplayName,
   onLoad,
@@ -115,6 +118,7 @@ export function LearningPathsPage({
   onCompleteKsaAssessment,
   onLoadKsaDrillTopics,
   onLoadLatestKsaDrillAttempt,
+  onLoadKsaDrillAttempts,
   onStartKsaDrillAttempt,
   onSaveKsaDrillAnswers,
   onCompleteKsaDrillAttempt,
@@ -243,6 +247,7 @@ export function LearningPathsPage({
           attempt={ksaAssessmentAttempt}
           drillTopics={ksaDrillTopics}
           drillAttempt={ksaDrillAttempt}
+          drillAttempts={ksaDrillAttempts}
           saving={ksaAssessmentSaving}
           onReload={onLoadKsaProfile}
           onLoadDefinition={onLoadKsaAssessmentDefinition}
@@ -252,6 +257,7 @@ export function LearningPathsPage({
           onCompleteAssessment={onCompleteKsaAssessment}
           onLoadDrillTopics={onLoadKsaDrillTopics}
           onLoadLatestDrillAttempt={onLoadLatestKsaDrillAttempt}
+          onLoadDrillAttempts={onLoadKsaDrillAttempts}
           onStartDrillAttempt={onStartKsaDrillAttempt}
           onSaveDrillAnswers={onSaveKsaDrillAnswers}
           onCompleteDrillAttempt={onCompleteKsaDrillAttempt}

@@ -20,7 +20,7 @@ function attachmentTone(fileName: string) {
   return "is-green";
 }
 
-export function MessageBubble({ message, onFeedback }: MessageBubbleProps) {
+export function MessageBubble({ message }: MessageBubbleProps) {
   const [sourcesOpen, setSourcesOpen] = useState(false);
   const isAssistant = message.role === "assistant";
   const attachments = message.attachments.length > 0 ? (
@@ -62,7 +62,7 @@ export function MessageBubble({ message, onFeedback }: MessageBubbleProps) {
         )}
       </div>
       {isAssistant ? attachments : null}
-      {isAssistant && message.sources.length > 0 ? (
+      {isAssistant ? (
         <div className="sources-wrap assistant-evidence-wrap">
           <button
             className={`sources-button assistant-evidence-trigger${sourcesOpen ? " active" : ""}`}
@@ -73,34 +73,9 @@ export function MessageBubble({ message, onFeedback }: MessageBubbleProps) {
             <span className="assistant-evidence-trigger-icon" aria-hidden="true">
               <Icon name="files" />
             </span>
-            <small>Sources</small>
+            <small>Sources ({message.sources.length})</small>
           </button>
           <SourcesPanel open={sourcesOpen} onClose={() => setSourcesOpen(false)} sources={message.sources} />
-        </div>
-      ) : null}
-      {isAssistant ? (
-        <div className="library-table-footer">
-          {[1, 2, 3, 4, 5].map((rating) => (
-            <button
-              key={rating}
-              className="secondary-button"
-              type="button"
-              onClick={() => {
-                if (!onFeedback) return;
-                const feedbackText = window.prompt("Optional feedback");
-                const wantsReExplain = window.confirm("Request re-explanation?");
-                const parsedMessageId = Number(message.id);
-                void onFeedback({
-                  message_id: Number.isFinite(parsedMessageId) ? parsedMessageId : null,
-                  rating,
-                  feedback_text: feedbackText ?? "",
-                  re_explain_requested: wantsReExplain,
-                });
-              }}
-            >
-              {rating}
-            </button>
-          ))}
         </div>
       ) : null}
     </article>

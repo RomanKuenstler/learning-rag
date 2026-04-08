@@ -220,6 +220,9 @@ class ChatRepository:
     def get_latest_user_ksa_drill_attempt(self, *, user_id: int) -> UserKSADrillAttempt | None:
         return self.postgres_client.get_latest_user_ksa_drill_attempt(user_id=user_id)
 
+    def list_user_ksa_drill_attempts(self, *, user_id: int, limit: int = 25) -> list[UserKSADrillAttempt]:
+        return self.postgres_client.list_user_ksa_drill_attempts(user_id=user_id, limit=limit)
+
     def upsert_user_ksa_drill_answers(
         self,
         *,

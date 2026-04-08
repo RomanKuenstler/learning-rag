@@ -34,6 +34,7 @@ export function SourcesPanel({ open, onClose, sources }: SourcesPanelProps) {
       <h4 className="sources-panel-header assistant-evidence-heading">Sources</h4>
       <p className="assistant-evidence-summary">{sources.length} retrieved matches</p>
       <div className="sources-list assistant-evidence-list">
+        {sources.length === 0 ? <p className="assistant-evidence-summary">No evidence returned for this answer.</p> : null}
         {sources.map((source) => (
           <article className="source-card" key={`${source.chunk_id}-${source.file_name}`}>
             <div className="source-row assistant-evidence-meta">

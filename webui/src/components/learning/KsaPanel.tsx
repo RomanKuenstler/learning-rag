@@ -20,6 +20,7 @@ type KsaPanelProps = {
   attempt: KsaAssessmentAttempt | null;
   drillTopics: KsaDrillTopic[];
   drillAttempt: KsaDrillAttempt | null;
+  drillAttempts: KsaDrillAttempt[];
   loading: boolean;
   saving: boolean;
   error: string | null;
@@ -31,6 +32,7 @@ type KsaPanelProps = {
   onCompleteAssessment: (attemptId: string) => Promise<unknown>;
   onLoadDrillTopics: () => Promise<unknown>;
   onLoadLatestDrillAttempt: () => Promise<unknown>;
+  onLoadDrillAttempts: () => Promise<unknown>;
   onStartDrillAttempt: (topicKeys: string[]) => Promise<unknown>;
   onSaveDrillAnswers: (attemptId: string, answers: Record<string, unknown>) => Promise<unknown>;
   onCompleteDrillAttempt: (attemptId: string) => Promise<unknown>;
@@ -75,6 +77,15 @@ const ABILITIES_AXES: RadarAxis[] = [
   { key: "divergent_thinking", label: "Divergent Thinking" },
 ];
 
+const TOPIC_LABEL_BY_KEY: Record<string, string> = [
+  ...KNOWLEDGE_AXES,
+  ...SKILLS_AXES,
+  ...ABILITIES_AXES,
+].reduce<Record<string, string>>((acc, item) => {
+  acc[item.key] = item.label;
+  return acc;
+}, {});
+
 const KNOWLEDGE_GROUPS: Array<{ sliderKey: string; topics: string[] }> = [
   { sliderKey: "stem_it", topics: ["stem_fundamentals", "information_technology"] },
   { sliderKey: "humanities", topics: ["humanities_social_sciences", "languages_linguistics"] },
@@ -102,6 +113,23 @@ function createPolygonPoints(points: Array<{ x: number; y: number }>) {
 
 function toRecord(values: KSAKnowledge | KSASkills | KSAAbilities): Record<string, KSAValue> {
   return values as unknown as Record<string, KSAValue>;
+}
+
+function formatDrillDate(value: string | null): string {
+  if (!value) {
+    return "-";
+  }
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) {
+    return "-";
+  }
+  const pad = (n: number) => String(n).padStart(2, "0");
+  const dd = pad(date.getDate());
+  const mm = pad(date.getMonth() + 1);
+  const yyyy = String(date.getFullYear());
+  const hh = pad(date.getHours());
+  const min = pad(date.getMinutes());
+  return `${dd}.${mm}.${yyyy} - ${hh}:${min}`;
 }
 
 function RadarPanel({
@@ -196,6 +224,7 @@ export function KsaPanel({
   attempt,
   drillTopics,
   drillAttempt,
+  drillAttempts,
   loading,
   saving,
   error,
@@ -207,6 +236,7 @@ export function KsaPanel({
   onCompleteAssessment,
   onLoadDrillTopics,
   onLoadLatestDrillAttempt,
+  onLoadDrillAttempts,
   onStartDrillAttempt,
   onSaveDrillAnswers,
   onCompleteDrillAttempt,
@@ -419,6 +449,7 @@ export function KsaPanel({
         await onLoadDrillTopics();
       }
       await onLoadLatestDrillAttempt();
+      await onLoadDrillAttempts();
     } catch (loadError) {
       setDrillLocalError(loadError instanceof Error ? loadError.message : "Failed to prepare drill assessment");
     }
@@ -697,6 +728,23 @@ export function KsaPanel({
   const currentSkillQuestion = skillQueue[questionIndex];
   const currentAbilityQuestion = abilityQueue[questionIndex];
   const isSensoryQuestion = currentAbilityQuestion?.id === "A.5";
+  const drillHistoryRows = useMemo(() => {
+    return (drillAttempts ?? [])
+      .filter((item) => item.status === "completed")
+      .slice(0, 12)
+      .map((item) => {
+        const topicUpdates = ((item.result ?? {}) as Record<string, unknown>).topic_updates as Record<string, { delta?: number }> | undefined;
+        const deltas = topicUpdates ? Object.values(topicUpdates).map((entry) => Number(entry?.delta ?? 0)) : [];
+        const totalDelta = deltas.reduce((acc, value) => acc + value, 0);
+        const topicKeys = item.selected_topic_keys ?? [];
+        return {
+          id: item.attempt_id,
+          completedAt: item.completed_at,
+          topicKeys,
+          totalDelta,
+        };
+      });
+  }, [drillAttempts]);
 
   return (
     <>
@@ -764,6 +812,44 @@ export function KsaPanel({
             Start Assessment Drills
           </button>
         </div>
+        <section className="library-table-card ksa-drill-attempts-card">
+          <header className="library-table-header">
+            <h4>Assessment Drill Attempts</h4>
+          </header>
+          <div className="library-table">
+            <div className="library-table-head ksa-drill-attempts-head">
+              <span>Completed</span>
+              <span>Topics</span>
+              <span>DELTA</span>
+            </div>
+            <div className="library-table-body">
+              {drillHistoryRows.length === 0 ? (
+                <div className="library-table-row">
+                  <span>No completed drill attempts yet.</span>
+                  <span>-</span>
+                  <span>-</span>
+                </div>
+              ) : (
+                drillHistoryRows.map((row) => (
+                  <div key={row.id} className="library-table-row">
+                    <span>{formatDrillDate(row.completedAt)}</span>
+                    <span className="ksa-attempt-topic-badges">
+                      {row.topicKeys.map((topicKey) => (
+                        <span key={`${row.id}-${topicKey}`} className="tag-pill">
+                          {TOPIC_LABEL_BY_KEY[topicKey] ?? topicKey}
+                        </span>
+                      ))}
+                    </span>
+                    <span className={row.totalDelta > 0 ? "trend-up" : row.totalDelta < 0 ? "trend-down" : ""}>
+                      {row.totalDelta > 0 ? "+" : ""}
+                      {row.totalDelta.toFixed(2)}
+                    </span>
+                  </div>
+                ))
+              )}
+            </div>
+          </div>
+        </section>
       </section>
 
       {drillDialogOpen ? (
@@ -800,7 +886,7 @@ export function KsaPanel({
             {drillStep === "topics" ? (
               <div className="ksa-drill-topics">
                 <h3>Select Drill Topics</h3>
-                <p>Choose 1 to 3 big-map topics. Each selected topic runs a 12-question triple-drill sequence.</p>
+                <p>Choose 1 to 3 big-map topics. We auto-fill reinforcement and challenge topics to complete a 4-block drill.</p>
                 <div className="ksa-drill-topic-grid">
                   {(drillTopics ?? []).map((topic) => {
                     const selected = selectedDrillTopicKeys.includes(topic.key);
@@ -813,7 +899,6 @@ export function KsaPanel({
                       >
                         <strong>{topic.name}</strong>
                         <small>{topic.group.toUpperCase()}</small>
-                        <span>{topic.subtopics.slice(0, 3).join(" · ")}</span>
                       </button>
                     );
                   })}

@@ -2,20 +2,34 @@ from __future__ import annotations
 
 import pytest
 
-from services.retriever.services.ksa_drills import evaluate_drill_attempt, generate_drill_question_set, list_drill_topics
+from services.retriever.services.ksa_drills import build_drill_topic_plan, evaluate_drill_attempt, generate_drill_question_set, list_drill_topics
 
 
 def test_drill_topics_and_question_generation_use_archetypes_source() -> None:
     topics = list_drill_topics()
     assert any(topic["key"] == "digital_craft" for topic in topics)
-    question_set = generate_drill_question_set(selected_topic_keys=["digital_craft"])
-    assert len(question_set) == 12
-    assert all(item["topic_key"] == "digital_craft" for item in question_set)
-    assert {item["block_label"] for item in question_set} == {"Baseline", "The Drill", "Expansion"}
+    plan = build_drill_topic_plan(
+        selected_topic_keys=["digital_craft"],
+        profile_json={"skills": {"digital_craft": 3, "research_inquiry": 2}},
+    )
+    question_set = generate_drill_question_set(
+        drill_topic_keys=list(plan["planned_topic_keys"]),
+        topic_roles=dict(plan["topic_roles"]),
+    )
+    assert len(question_set) == 16
+    assert any(item["topic_key"] == "digital_craft" for item in question_set)
+    assert any(item.get("topic_source") == "auto_bad" for item in question_set)
 
 
 def test_drill_evaluation_updates_top_level_and_subnodes() -> None:
-    question_set = generate_drill_question_set(selected_topic_keys=["digital_craft"])
+    plan = build_drill_topic_plan(
+        selected_topic_keys=["digital_craft"],
+        profile_json={"skills": {"digital_craft": 3, "strategic_execution": 3, "operational_skills": 2}},
+    )
+    question_set = generate_drill_question_set(
+        drill_topic_keys=list(plan["planned_topic_keys"]),
+        topic_roles=dict(plan["topic_roles"]),
+    )
     answers = {
         item["id"]: {
             "answer": f"{item['topic_name']} {item['focus_subtopic']} strong practical answer",
@@ -66,20 +80,27 @@ def test_drill_evaluation_updates_top_level_and_subnodes() -> None:
     assert updated_profile["skills"]["digital_craft"] >= 2
     assert topic_node["level"] >= 2.0
     assert len(topic_node["sub_nodes"]) >= 1
-    assert outcome["result_json"]["triple_drill"]["questions_per_topic"] == 12
+    assert outcome["result_json"]["drill_flow"]["questions_per_topic"] == 4
 
 
 def test_drill_question_set_validates_selected_topic_count_and_keys() -> None:
     with pytest.raises(ValueError):
-        generate_drill_question_set(selected_topic_keys=[])
+        build_drill_topic_plan(selected_topic_keys=[], profile_json={})
     with pytest.raises(ValueError):
-        generate_drill_question_set(selected_topic_keys=["digital_craft", "research_inquiry", "stem_fundamentals", "legal_ethics"])
+        build_drill_topic_plan(selected_topic_keys=["digital_craft", "research_inquiry", "stem_fundamentals", "legal_ethics"], profile_json={})
     with pytest.raises(ValueError):
-        generate_drill_question_set(selected_topic_keys=["unknown_topic"])
+        build_drill_topic_plan(selected_topic_keys=["unknown_topic"], profile_json={})
 
 
 def test_drill_keyword_matching_accepts_case_and_punctuation_variants() -> None:
-    question_set = generate_drill_question_set(selected_topic_keys=["digital_craft"])
+    plan = build_drill_topic_plan(
+        selected_topic_keys=["digital_craft"],
+        profile_json={"skills": {"digital_craft": 3, "literacy_numeracy": 2}},
+    )
+    question_set = generate_drill_question_set(
+        drill_topic_keys=list(plan["planned_topic_keys"]),
+        topic_roles=dict(plan["topic_roles"]),
+    )
     answers = {
         item["id"]: {
             "answer": "DIGITAL craft, full-stack DEVELOPING; workflow-focused response",

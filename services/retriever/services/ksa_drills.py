@@ -4,6 +4,7 @@ from datetime import datetime, timezone
 from functools import lru_cache
 import json
 from pathlib import Path
+import random
 import re
 from typing import Any
 
@@ -257,7 +258,7 @@ def list_drill_topics() -> list[dict[str, Any]]:
     return topics
 
 
-def generate_drill_question_set(*, selected_topic_keys: list[str]) -> list[dict[str, Any]]:
+def build_drill_topic_plan(*, selected_topic_keys: list[str], profile_json: dict[str, Any]) -> dict[str, Any]:
     unique_keys: list[str] = []
     for key in selected_topic_keys:
         normalized = str(key).strip()
@@ -271,52 +272,103 @@ def generate_drill_question_set(*, selected_topic_keys: list[str]) -> list[dict[
     if len(unique_keys) < 1 or len(unique_keys) > 3:
         raise ValueError("Select between 1 and 3 topics")
 
+    all_keys = [str(item["key"]) for item in TOPIC_REGISTRY]
+    levels = {key: _read_profile_topic_level(profile_json=profile_json, topic_key=key) for key in all_keys}
+    planned: list[str] = list(unique_keys)
+    topic_roles: dict[str, str] = {key: "manual" for key in planned}
+
+    remaining = [key for key in all_keys if key not in planned]
+    while len(planned) < 3 and remaining:
+        good_pool = [key for key in remaining if levels.get(key, 2.0) >= 3.0]
+        candidate_pool = good_pool or sorted(remaining, key=lambda key: levels.get(key, 2.0), reverse=True)
+        chosen = random.choice(candidate_pool)
+        planned.append(chosen)
+        topic_roles[chosen] = "auto_good"
+        remaining = [key for key in remaining if key != chosen]
+
+    remaining_after_primary = [key for key in all_keys if key not in planned]
+    bad_pool = [key for key in remaining_after_primary if levels.get(key, 2.0) <= 2.0]
+    if bad_pool:
+        challenge = random.choice(bad_pool)
+    elif remaining_after_primary:
+        challenge = min(remaining_after_primary, key=lambda key: levels.get(key, 2.0))
+    else:
+        challenge = min(all_keys, key=lambda key: levels.get(key, 2.0))
+    if challenge not in planned:
+        planned.append(challenge)
+    topic_roles[challenge] = "auto_bad"
+
+    return {
+        "selected_topic_keys": unique_keys,
+        "planned_topic_keys": planned,
+        "topic_roles": topic_roles,
+    }
+
+
+def generate_drill_question_set(*, drill_topic_keys: list[str], topic_roles: dict[str, str] | None = None) -> list[dict[str, Any]]:
     questions: list[dict[str, Any]] = []
+    unique_keys: list[str] = []
+    for topic_key in drill_topic_keys:
+        normalized = str(topic_key).strip()
+        if not normalized:
+            continue
+        if normalized not in TOPIC_BY_KEY:
+            raise ValueError(f"Unsupported drill topic: {normalized}")
+        if normalized in unique_keys:
+            continue
+        unique_keys.append(normalized)
+    if len(unique_keys) < 1:
+        raise ValueError("No drill topics planned")
+
+    role_map = dict(topic_roles or {})
     for topic_index, topic_key in enumerate(unique_keys):
         topic = dict(TOPIC_BY_KEY[topic_key])
         subtopic_a, subtopic_b = _choose_subtopic_pair(topic)
-        block_specs = [
-            (1, "Baseline", subtopic_a, subtopic_b),
-            (2, "The Drill", subtopic_a, subtopic_b),
-            (3, "Expansion", subtopic_b, subtopic_a),
+        topic_source = str(role_map.get(topic_key) or "manual")
+        block_index = topic_index + 1
+        if topic_source == "auto_bad":
+            block_label = "Challenge"
+        elif topic_source == "auto_good":
+            block_label = "Reinforcement"
+        else:
+            block_label = f"Selected {block_index}"
+        question_plan = [
+            (1, "recalibration", "reverse_definition", subtopic_a, None),
+            (2, "threshold", "spot_the_flaw", subtopic_a, None),
+            (3, "sidestep", "analogy_match", subtopic_b, subtopic_a),
+            (4, "stress_test", "power_sprint", subtopic_a, None),
         ]
-        for block_index, block_label, focus_subtopic, side_subtopic in block_specs:
-            question_plan = [
-                (1, "recalibration", "reverse_definition", focus_subtopic, None),
-                (2, "threshold", "spot_the_flaw", focus_subtopic, None),
-                (3, "sidestep", "analogy_match", side_subtopic, focus_subtopic),
-                (4, "stress_test", "power_sprint", focus_subtopic, None),
-            ]
-            for question_index, kind, archetype, subtopic_name, related_subtopic in question_plan:
-                prompt = _resolve_archetype_prompt(
-                    topic_name=str(topic["name"]),
-                    subtopic_name=subtopic_name,
-                    archetype=archetype,
-                    kind=kind,
-                )
-                question_id = f"{topic_key}-t{topic_index + 1}-b{block_index}-q{question_index}"
-                questions.append(
-                    {
-                        "id": question_id,
-                        "topic_key": topic_key,
-                        "topic_name": str(topic["name"]),
-                        "topic_group": str(topic["group"]),
-                        "block_index": block_index,
-                        "block_label": block_label,
-                        "question_index": question_index,
-                        "kind": kind,
-                        "archetype": archetype,
-                        "focus_subtopic": subtopic_name,
-                        "related_subtopic": related_subtopic,
-                        "prompt": prompt,
-                        "time_limit_seconds": DRILL_STRESS_TIME_LIMIT_SECONDS if kind == "stress_test" else None,
-                        "expected_keywords": _derive_keywords(
-                            topic_name=str(topic["name"]),
-                            subtopic_name=subtopic_name,
-                            prompt=prompt,
-                        ),
-                    }
-                )
+        for question_index, kind, archetype, subtopic_name, related_subtopic in question_plan:
+            prompt = _resolve_archetype_prompt(
+                topic_name=str(topic["name"]),
+                subtopic_name=subtopic_name,
+                archetype=archetype,
+                kind=kind,
+            )
+            question_id = f"{topic_key}-b{block_index}-q{question_index}"
+            questions.append(
+                {
+                    "id": question_id,
+                    "topic_key": topic_key,
+                    "topic_name": str(topic["name"]),
+                    "topic_group": str(topic["group"]),
+                    "topic_source": topic_source,
+                    "block_index": block_index,
+                    "block_label": block_label,
+                    "question_index": question_index,
+                    "kind": kind,
+                    "archetype": archetype,
+                    "focus_subtopic": subtopic_name,
+                    "related_subtopic": related_subtopic,
+                    "prompt": prompt,
+                    "time_limit_seconds": DRILL_STRESS_TIME_LIMIT_SECONDS if kind == "stress_test" else None,
+                    "expected_keywords": _derive_keywords(
+                        topic_name=str(topic["name"]),
+                        subtopic_name=subtopic_name,
+                        prompt=prompt,
+                    ),
+                }
+            )
     return questions
 
 
@@ -327,6 +379,7 @@ def evaluate_drill_attempt(
     question_set: list[dict[str, Any]],
     answers: dict[str, Any],
     base_profile_json: dict[str, Any],
+    ai_validation_overrides: dict[str, bool] | None = None,
 ) -> dict[str, Any]:
     now_iso = datetime.now(timezone.utc).isoformat()
     profile_json = _normalize_profile_json(base_profile_json=base_profile_json, user_id=user_id)
@@ -354,7 +407,8 @@ def evaluate_drill_attempt(
         stress_scores: list[float] = []
         block_results: list[dict[str, Any]] = []
 
-        for block_index in (1, 2, 3):
+        block_indexes = sorted({int(item.get("block_index") or 0) for item in topic_questions if int(item.get("block_index") or 0) > 0})
+        for block_index in block_indexes:
             block_questions = sorted(
                 [item for item in topic_questions if int(item.get("block_index") or 0) == block_index],
                 key=lambda item: int(item.get("question_index") or 0),
@@ -367,7 +421,8 @@ def evaluate_drill_attempt(
                 answer_text = _extract_answer_text(raw_answer)
                 response_seconds = _extract_response_seconds(raw_answer, question)
                 keyword_score = _keyword_score(answer_text, list(question.get("expected_keywords") or []))
-                is_correct = keyword_score >= 1.0
+                override_value = (ai_validation_overrides or {}).get(str(question.get("id")))
+                is_correct = bool(override_value) if override_value is not None else keyword_score >= 1.0
                 time_limit = int(question.get("time_limit_seconds") or 0)
                 if str(question.get("kind")) == "stress_test":
                     time_remaining_ratio = _time_remaining_ratio(response_seconds, time_limit or DRILL_STRESS_TIME_LIMIT_SECONDS)
@@ -406,10 +461,15 @@ def evaluate_drill_attempt(
                 map_decay_events += 1
 
             focus_subtopic = str(block_questions[0].get("focus_subtopic") or "")
-            if block_index in {2, 3} and focus_subtopic:
+            related_subtopic = str(block_questions[2].get("focus_subtopic") or "")
+            if focus_subtopic:
                 existing_sub = float(sub_nodes.get(focus_subtopic) or max(1.0, current_level - 0.4))
                 sub_delta = 0.2 if sum([1 for item in [q1_pass, q2_pass, q3_pass] if item]) >= 2 else 0.05
                 sub_nodes[focus_subtopic] = round(_clamp_level(existing_sub + sub_delta), 3)
+            if related_subtopic:
+                existing_related = float(sub_nodes.get(related_subtopic) or max(1.0, current_level - 0.55))
+                related_delta = 0.1 if q3_pass else 0.02
+                sub_nodes[related_subtopic] = round(_clamp_level(existing_related + related_delta), 3)
 
             block_results.append(
                 {
@@ -449,6 +509,7 @@ def evaluate_drill_attempt(
         per_topic_result[topic_key] = {
             "topic_name": str(topic.get("name")),
             "group": str(topic.get("group")),
+            "source": _topic_source_for_question_set(question_set=question_set, topic_key=topic_key),
             "initial_level": round(current_level, 3),
             "delta": round(next_level - current_level, 3),
             "final_level": round(next_level, 3),
@@ -486,9 +547,9 @@ def evaluate_drill_attempt(
         "selected_topic_keys": selected_topic_keys,
         "topic_updates": per_topic_result,
         "archetype_source": ARCHETYPE_FILE_RELATIVE_PATH,
-        "triple_drill": {
-            "questions_per_topic": 12,
-            "blocks": ["Baseline", "The Drill", "Expansion"],
+        "drill_flow": {
+            "questions_per_topic": 4,
+            "block_count": len(selected_topic_keys),
             "structure": ["Q1 Recalibration", "Q2 Threshold", "Q3 Side-Step", "Q4 Stress-Test"],
         },
     }
@@ -689,6 +750,27 @@ def _normalize_profile_json(*, base_profile_json: dict[str, Any], user_id: int) 
         "skills": skills,
         "abilities": abilities,
     }
+
+
+def _read_profile_topic_level(*, profile_json: dict[str, Any], topic_key: str) -> float:
+    topic = TOPIC_BY_KEY.get(topic_key)
+    if topic is None:
+        return 2.0
+    group = str(topic.get("group") or "")
+    section = dict(profile_json.get(group) or {})
+    try:
+        return _clamp_level(float(section.get(topic_key) or 2.0))
+    except Exception:
+        return 2.0
+
+
+def _topic_source_for_question_set(*, question_set: list[dict[str, Any]], topic_key: str) -> str:
+    for item in question_set:
+        if str(item.get("topic_key")) == topic_key:
+            value = str(item.get("topic_source") or "").strip()
+            if value:
+                return value
+    return "manual"
 
 
 def _read_top_level(profile_json: dict[str, Any], group: str, topic_key: str) -> int:

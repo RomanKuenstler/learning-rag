@@ -1272,6 +1272,16 @@ class PostgresClient:
                 .limit(1)
             )
 
+    def list_user_ksa_drill_attempts(self, *, user_id: int, limit: int = 25) -> list[UserKSADrillAttempt]:
+        with self.session() as session:
+            rows = session.scalars(
+                select(UserKSADrillAttempt)
+                .where(UserKSADrillAttempt.user_id == user_id)
+                .order_by(UserKSADrillAttempt.started_at.desc())
+                .limit(max(1, min(int(limit), 100)))
+            )
+            return list(rows)
+
     def upsert_user_ksa_drill_answers(
         self,
         *,

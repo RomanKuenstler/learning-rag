@@ -343,6 +343,7 @@ function AppRoutes() {
                     await Promise.all([
                       app.loadLearningProfile(),
                       app.loadKsaProfile(),
+                      app.loadKsaDrillAttempts(),
                       app.loadDiagnosticCatalog(),
                       app.loadDiagnosticAttempts(),
                       app.loadLearningStateChecks(),
@@ -360,6 +361,7 @@ function AppRoutes() {
                   ksaAssessmentAttempt={app.ksaAssessmentAttempt}
                   ksaDrillTopics={app.ksaDrillTopics}
                   ksaDrillAttempt={app.ksaDrillAttempt}
+                  ksaDrillAttempts={app.ksaDrillAttempts}
                   ksaAssessmentSaving={app.ksaAssessmentSaving}
                   currentUserDisplayName={app.currentUser.displayname}
                   onLoadLearningProfile={() => void app.loadLearningProfile()}
@@ -371,6 +373,7 @@ function AppRoutes() {
                   onCompleteKsaAssessment={(attemptId) => app.completeKsaAssessment(attemptId)}
                   onLoadKsaDrillTopics={() => app.loadKsaDrillTopics()}
                   onLoadLatestKsaDrillAttempt={() => app.loadLatestKsaDrillAttempt()}
+                  onLoadKsaDrillAttempts={() => app.loadKsaDrillAttempts()}
                   onStartKsaDrillAttempt={(topicKeys) => app.startKsaDrillAttempt(topicKeys)}
                   onSaveKsaDrillAnswers={(attemptId, answers) => app.saveKsaDrillAnswers(attemptId, answers)}
                   onCompleteKsaDrillAttempt={(attemptId) => app.completeKsaDrillAttempt(attemptId)}

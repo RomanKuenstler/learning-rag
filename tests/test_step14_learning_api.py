@@ -279,6 +279,10 @@ class LearningApiStubService:
     def get_latest_ksa_drill_attempt(self, _user: UserAccount):
         return self._ksa_drill_attempt
 
+    def list_ksa_drill_attempts(self, _user: UserAccount, limit: int = 25):
+        _ = limit
+        return {"attempts": [self._ksa_drill_attempt]}
+
     def upsert_ksa_drill_answers(self, _user: UserAccount, _attempt_id: str, payload):
         self._ksa_drill_attempt["answers"] = dict(payload.answers)
         return self._ksa_drill_attempt
@@ -465,6 +469,9 @@ def test_ksa_drill_routes_available() -> None:
 
     latest_response = client.get("/api/ksa/drills/attempts/latest")
     assert latest_response.status_code == 200
+    list_response = client.get("/api/ksa/drills/attempts")
+    assert list_response.status_code == 200
+    assert isinstance(list_response.json().get("attempts"), list)
     assert latest_response.json()["attempt_id"] == attempt_id
 
     get_response = client.get(f"/api/ksa/drills/attempts/{attempt_id}")

@@ -13,7 +13,7 @@
   "allowed_tags": [],
   "modules": [
     {
-      "id": "2891d1eb-2ead-4e0f-9f46-7ea4f5c5d0bf",
+      "id": "6cddf606-fed6-47e3-bd8c-8624b57a0599",
       "order_index": 0,
       "title": "Getting Started",
       "description": "Core concepts and first practical steps.",
@@ -23,7 +23,7 @@
       ],
       "lessons": [
         {
-          "id": "4dd520a9-0209-4350-8f39-3c9044533aa5",
+          "id": "40811d45-7ee4-456d-9ac2-6a2c6ad48456",
           "order_index": 0,
           "title": "What Docker Is",
           "description": "Mental model for images, containers, and registries.",
@@ -34,7 +34,7 @@
           "teaching_notes": ""
         },
         {
-          "id": "96536a4b-9d44-4fff-a990-58a82f51f00d",
+          "id": "e6df951a-7550-4756-9fe2-95915205733e",
           "order_index": 1,
           "title": "First Container Run",
           "description": "Run, stop, and inspect a hello-world style container.",
@@ -46,7 +46,7 @@
       ]
     },
     {
-      "id": "025c3167-cf87-4cf2-87fd-a5b051a32657",
+      "id": "144c9dc7-4826-4126-9e2e-8964aaf21633",
       "order_index": 1,
       "title": "Compose Basics",
       "description": "Model multi-service local development.",
@@ -56,7 +56,7 @@
       ],
       "lessons": [
         {
-          "id": "3749f19e-a52c-4a4e-a3c1-11a8c658c488",
+          "id": "18ef7b23-b9d0-4f89-a14d-edacb138cc57",
           "order_index": 0,
           "title": "Compose File Structure",
           "description": "Services, volumes, ports, and environment basics.",

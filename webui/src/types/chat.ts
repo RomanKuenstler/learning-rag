@@ -553,6 +553,7 @@ export type KsaDrillQuestion = {
   related_subtopic?: string | null;
   prompt: string;
   time_limit_seconds?: number | null;
+  topic_source?: "manual" | "auto_good" | "auto_bad" | null;
 };
 
 export type KsaDrillAttempt = {
@@ -565,6 +566,10 @@ export type KsaDrillAttempt = {
   completed_at: string | null;
   answers: Record<string, unknown>;
   result: Record<string, unknown> | null;
+};
+
+export type KsaDrillAttemptsResponse = {
+  attempts: KsaDrillAttempt[];
 };
 
 export type DiagnosticQuestionType = "single_choice" | "multi_choice" | "likert" | "slider" | "text";
