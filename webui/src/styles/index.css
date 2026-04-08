@@ -3395,6 +3395,79 @@ button.send:hover:not(:disabled) {
   font-size: 0.78rem;
 }
 
+.ksa-drill-topics {
+  display: grid;
+  gap: 0.75rem;
+  align-content: start;
+}
+
+.ksa-drill-topics h3 {
+  margin: 0;
+  color: #0f172a;
+}
+
+.ksa-drill-topics p {
+  margin: 0;
+  color: #475569;
+}
+
+.ksa-drill-topic-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 0.7rem;
+}
+
+.ksa-drill-topic-card {
+  text-align: left;
+  border: 1px solid #d7dee8;
+  border-radius: 12px;
+  background: #f8fafc;
+  padding: 0.7rem;
+  display: grid;
+  gap: 0.35rem;
+  color: #0f172a;
+}
+
+.ksa-drill-topic-card small {
+  color: #64748b;
+  font-size: 0.74rem;
+  letter-spacing: 0.03em;
+}
+
+.ksa-drill-topic-card span {
+  color: #334155;
+  font-size: 0.79rem;
+}
+
+.ksa-drill-topic-card.selected {
+  border-color: #1d4ed8;
+  box-shadow: 0 0 0 1px rgba(29, 78, 216, 0.2);
+  background: #eff6ff;
+}
+
+.ksa-drill-topic-meta {
+  margin: 0;
+  color: #64748b;
+  font-size: 0.78rem;
+  font-weight: 600;
+}
+
+.ksa-drill-question-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem;
+}
+
+.ksa-drill-question-meta > span {
+  border: 1px solid #dbe3ec;
+  border-radius: 999px;
+  padding: 0.15rem 0.45rem;
+  background: #f8fafc;
+  color: #334155;
+  font-size: 0.72rem;
+  font-weight: 600;
+}
+
 .learning-goals-actions {
   margin-top: 0.7rem;
 }

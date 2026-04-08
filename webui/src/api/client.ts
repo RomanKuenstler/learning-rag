@@ -34,6 +34,8 @@ import type {
   LearningGoal,
   LearningGoalPriority,
   LearningProfileBundle,
+  KsaDrillAttempt,
+  KsaDrillTopic,
   KsaAssessmentAttempt,
   KsaAssessmentDefinition,
   KSAProfile,
@@ -251,6 +253,33 @@ export const apiClient = {
   },
   completeKsaAssessment(attemptId: string) {
     return request<KSAProfile>(`/api/ksa/assessment/attempts/${attemptId}/complete`, { method: "POST" });
+  },
+  getKsaDrillTopics() {
+    return request<{ topics: KsaDrillTopic[] }>("/api/ksa/drills/topics");
+  },
+  startKsaDrillAttempt(topicKeys: string[]) {
+    return request<{ attempt_id: string; status: "in_progress" | "completed"; version: string; selected_topic_keys: string[]; question_set: KsaDrillAttempt["question_set"]; started_at: string }>(
+      "/api/ksa/drills/attempts",
+      {
+        method: "POST",
+        body: JSON.stringify({ topic_keys: topicKeys }),
+      },
+    );
+  },
+  getLatestKsaDrillAttempt() {
+    return request<KsaDrillAttempt>("/api/ksa/drills/attempts/latest");
+  },
+  getKsaDrillAttempt(attemptId: string) {
+    return request<KsaDrillAttempt>(`/api/ksa/drills/attempts/${attemptId}`);
+  },
+  upsertKsaDrillAnswers(attemptId: string, answers: Record<string, unknown>) {
+    return request<KsaDrillAttempt>(`/api/ksa/drills/attempts/${attemptId}/answers`, {
+      method: "PUT",
+      body: JSON.stringify({ answers }),
+    });
+  },
+  completeKsaDrillAttempt(attemptId: string) {
+    return request<KSAProfile>(`/api/ksa/drills/attempts/${attemptId}/complete`, { method: "POST" });
   },
   updateLearningPreferences(payload: Partial<Omit<LearningPreferences, "updated_at">>) {
     return request<LearningPreferences>("/api/learning-profile/preferences", {

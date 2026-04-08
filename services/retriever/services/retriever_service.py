@@ -101,6 +101,14 @@ from services.retriever.schemas.ksa_assessment import (
     KSAAssessmentStartResponse,
     KSAAssessmentAnswersUpsertRequest,
 )
+from services.retriever.schemas.ksa_drills import (
+    KSADrillAnswersUpsertRequest,
+    KSADrillAttemptRead,
+    KSADrillAttemptStartRequest,
+    KSADrillAttemptStartResponse,
+    KSADrillQuestionRead,
+    KSADrillTopicsRead,
+)
 from services.retriever.services.diagnostic_definitions import load_parsed_sources
 from services.retriever.services.diagnostic_scoring import score_attempt
 from services.retriever.services.chat_naming import generate_chat_name
@@ -108,6 +116,12 @@ from services.retriever.services.library_manager import LibraryManager, UploadFi
 from services.retriever.services.course_files import CourseDefinition, CourseFileParser
 from services.retriever.services.message_mapper import map_attachment, map_chat, map_filter_file, map_filter_tag, map_gpt, map_message, map_source
 from services.retriever.services.ksa_assessment import ASSESSMENT_VERSION, evaluate_assessment, get_assessment_definition
+from services.retriever.services.ksa_drills import (
+    DRILL_ASSESSMENT_VERSION,
+    evaluate_drill_attempt,
+    generate_drill_question_set,
+    list_drill_topics,
+)
 
 RUNTIME_SETTING_KEYS = {
     "chat_history_messages_count",
@@ -920,6 +934,94 @@ class RetrieverAppService:
             user_id=user.id,
             profile_json=evaluation.profile_json,
             updated_at=completed_attempt.updated_at,
+        )
+
+    def list_ksa_drill_topics(self, user: UserAccount) -> KSADrillTopicsRead:
+        _ = user
+        return KSADrillTopicsRead(topics=[item for item in list_drill_topics()])
+
+    def start_ksa_drill_attempt(self, user: UserAccount, payload: KSADrillAttemptStartRequest) -> KSADrillAttemptStartResponse:
+        selected = [str(item).strip() for item in list(payload.topic_keys or []) if str(item).strip()]
+        question_set = generate_drill_question_set(selected_topic_keys=selected)
+        attempt = self.chat_repository.create_user_ksa_drill_attempt(
+            user_id=user.id,
+            assessment_version=DRILL_ASSESSMENT_VERSION,
+            selected_topic_keys=selected,
+            question_set_json=question_set,
+        )
+        return KSADrillAttemptStartResponse(
+            attempt_id=attempt.id,
+            status="in_progress",
+            version=attempt.assessment_version,
+            selected_topic_keys=list(attempt.selected_topic_keys_json or []),
+            question_set=[KSADrillQuestionRead(**item) for item in list(attempt.question_set_json or [])],
+            started_at=attempt.started_at,
+        )
+
+    def get_ksa_drill_attempt(self, user: UserAccount, attempt_id: str) -> KSADrillAttemptRead | None:
+        record = self.chat_repository.get_user_ksa_drill_attempt(user_id=user.id, attempt_id=attempt_id)
+        if record is None:
+            return None
+        return self._build_ksa_drill_attempt_read(record)
+
+    def get_latest_ksa_drill_attempt(self, user: UserAccount) -> KSADrillAttemptRead | None:
+        record = self.chat_repository.get_latest_user_ksa_drill_attempt(user_id=user.id)
+        if record is None:
+            return None
+        return self._build_ksa_drill_attempt_read(record)
+
+    def upsert_ksa_drill_answers(
+        self,
+        user: UserAccount,
+        attempt_id: str,
+        payload: KSADrillAnswersUpsertRequest,
+    ) -> KSADrillAttemptRead | None:
+        record = self.chat_repository.upsert_user_ksa_drill_answers(
+            user_id=user.id,
+            attempt_id=attempt_id,
+            answers_json=dict(payload.answers or {}),
+        )
+        if record is None:
+            return None
+        return self._build_ksa_drill_attempt_read(record)
+
+    def complete_ksa_drill_attempt(self, user: UserAccount, attempt_id: str) -> KSAProfileRead | None:
+        attempt = self.chat_repository.get_user_ksa_drill_attempt(user_id=user.id, attempt_id=attempt_id)
+        if attempt is None:
+            return None
+        persisted_profile = self.chat_repository.get_user_ksa_profile(user.id)
+        if persisted_profile is not None:
+            base_profile_json = dict(persisted_profile.profile_json or {})
+        else:
+            fallback_profile = self.get_ksa_profile(user)
+            base_profile_json = self._serialize_ksa_profile_read(fallback_profile)
+
+        drill_outcome = evaluate_drill_attempt(
+            user_id=user.id,
+            selected_topic_keys=list(attempt.selected_topic_keys_json or []),
+            question_set=list(attempt.question_set_json or []),
+            answers=dict(attempt.answers_json or {}),
+            base_profile_json=base_profile_json,
+        )
+        result_json = dict(drill_outcome.get("result_json") or {})
+        profile_json = dict(drill_outcome.get("updated_profile_json") or {})
+        completed = self.chat_repository.complete_user_ksa_drill_attempt(
+            user_id=user.id,
+            attempt_id=attempt.id,
+            result_json=result_json,
+        )
+        if completed is None:
+            return None
+        self.chat_repository.upsert_user_ksa_profile(
+            user_id=user.id,
+            has_assessment=True,
+            assessment_version=DRILL_ASSESSMENT_VERSION,
+            profile_json=profile_json,
+        )
+        return self._build_ksa_profile_read(
+            user_id=user.id,
+            profile_json=profile_json,
+            updated_at=completed.updated_at,
         )
 
     def update_learning_preferences(self, user: UserAccount, payload: LearningPreferencesUpdateRequest) -> LearningPreferencesRead:
@@ -2575,6 +2677,7 @@ class RetrieverAppService:
         skills = dict(profile_json.get("skills") or {})
         abilities = dict(profile_json.get("abilities") or {})
         assessment_details = dict(profile_json.get("assessment_details") or {})
+        drill_state = dict(profile_json.get("drill_state") or {})
         derived = dict(assessment_details.get("derived") or {})
         return KSAProfileRead(
             user_id=user_id,
@@ -2610,6 +2713,7 @@ class RetrieverAppService:
                 divergent_thinking=max(1, min(5, int(abilities.get("divergent_thinking", 1)))),
             ),
             assessment_details=assessment_details or None,
+            drill_state=drill_state or None,
             learning_speed_multiplier=float(derived.get("learning_speed_multiplier")) if derived.get("learning_speed_multiplier") is not None else None,
             updated_at=updated_at,
         )
@@ -2624,6 +2728,34 @@ class RetrieverAppService:
             answers=dict(attempt.answers_json or {}),
             result=dict(attempt.result_json or {}) if attempt.result_json else None,
         )
+
+    def _build_ksa_drill_attempt_read(self, attempt) -> KSADrillAttemptRead:
+        return KSADrillAttemptRead(
+            attempt_id=attempt.id,
+            status=attempt.status,
+            version=attempt.assessment_version,
+            selected_topic_keys=list(attempt.selected_topic_keys_json or []),
+            question_set=[KSADrillQuestionRead(**item) for item in list(attempt.question_set_json or [])],
+            started_at=attempt.started_at,
+            completed_at=attempt.completed_at,
+            answers=dict(attempt.answers_json or {}),
+            result=dict(attempt.result_json or {}) if attempt.result_json else None,
+        )
+
+    def _serialize_ksa_profile_read(self, profile: KSAProfileRead) -> dict[str, object]:
+        return {
+            "user_id": profile.user_id,
+            "has_assessment": profile.has_assessment,
+            "profile_source": profile.profile_source,
+            "scale_min": profile.scale_min,
+            "scale_max": profile.scale_max,
+            "dreyfus_levels": list(profile.dreyfus_levels),
+            "knowledge": profile.knowledge.model_dump(),
+            "skills": profile.skills.model_dump(),
+            "abilities": profile.abilities.model_dump(),
+            "assessment_details": dict(profile.assessment_details or {}),
+            "drill_state": dict(profile.drill_state or {}),
+        }
 
     def _can_view_learning_path(self, user: UserAccount, path: LearningPath) -> bool:
         if user.role == "admin":

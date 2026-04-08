@@ -13,6 +13,8 @@ import type {
   KSAProfile,
   KsaAssessmentAttempt,
   KsaAssessmentDefinition,
+  KsaDrillAttempt,
+  KsaDrillTopic,
 } from "../../types/chat";
 import { DiagnosticPanel } from "./DiagnosticPanel";
 import { KsaPanel } from "./KsaPanel";
@@ -31,6 +33,8 @@ type LearningPathsPageProps = {
   ksaError: string | null;
   ksaAssessmentDefinition: KsaAssessmentDefinition | null;
   ksaAssessmentAttempt: KsaAssessmentAttempt | null;
+  ksaDrillTopics: KsaDrillTopic[];
+  ksaDrillAttempt: KsaDrillAttempt | null;
   ksaAssessmentSaving: boolean;
   currentUserDisplayName: string;
   onLoadLearningProfile: () => void;
@@ -40,6 +44,11 @@ type LearningPathsPageProps = {
   onStartKsaAssessment: () => Promise<unknown>;
   onSaveKsaAssessmentAnswers: (attemptId: string, answers: Record<string, unknown>) => Promise<unknown>;
   onCompleteKsaAssessment: (attemptId: string) => Promise<unknown>;
+  onLoadKsaDrillTopics: () => Promise<unknown>;
+  onLoadLatestKsaDrillAttempt: () => Promise<unknown>;
+  onStartKsaDrillAttempt: (topicKeys: string[]) => Promise<unknown>;
+  onSaveKsaDrillAnswers: (attemptId: string, answers: Record<string, unknown>) => Promise<unknown>;
+  onCompleteKsaDrillAttempt: (attemptId: string) => Promise<unknown>;
   onSaveLearningPreferences: (payload: Partial<Omit<LearningPreferences, "updated_at">>) => Promise<unknown>;
   onSaveLearningContext: (payload: Partial<Omit<LearningProfileContext, "updated_at">>) => Promise<unknown>;
   onCreateLearningGoal: (payload: {
@@ -92,6 +101,8 @@ export function LearningPathsPage({
   ksaError,
   ksaAssessmentDefinition,
   ksaAssessmentAttempt,
+  ksaDrillTopics,
+  ksaDrillAttempt,
   ksaAssessmentSaving,
   currentUserDisplayName,
   onLoad,
@@ -102,6 +113,11 @@ export function LearningPathsPage({
   onStartKsaAssessment,
   onSaveKsaAssessmentAnswers,
   onCompleteKsaAssessment,
+  onLoadKsaDrillTopics,
+  onLoadLatestKsaDrillAttempt,
+  onStartKsaDrillAttempt,
+  onSaveKsaDrillAnswers,
+  onCompleteKsaDrillAttempt,
   onSaveLearningPreferences,
   onSaveLearningContext,
   onCreateLearningGoal,
@@ -225,6 +241,8 @@ export function LearningPathsPage({
           error={ksaError}
           definition={ksaAssessmentDefinition}
           attempt={ksaAssessmentAttempt}
+          drillTopics={ksaDrillTopics}
+          drillAttempt={ksaDrillAttempt}
           saving={ksaAssessmentSaving}
           onReload={onLoadKsaProfile}
           onLoadDefinition={onLoadKsaAssessmentDefinition}
@@ -232,6 +250,11 @@ export function LearningPathsPage({
           onStartAssessment={onStartKsaAssessment}
           onSaveAnswers={onSaveKsaAssessmentAnswers}
           onCompleteAssessment={onCompleteKsaAssessment}
+          onLoadDrillTopics={onLoadKsaDrillTopics}
+          onLoadLatestDrillAttempt={onLoadLatestKsaDrillAttempt}
+          onStartDrillAttempt={onStartKsaDrillAttempt}
+          onSaveDrillAnswers={onSaveKsaDrillAnswers}
+          onCompleteDrillAttempt={onCompleteKsaDrillAttempt}
         />
       ) : null}
     </section>

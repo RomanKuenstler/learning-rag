@@ -125,16 +125,20 @@ KSA is modeled as a separate concept from Step B preferences and Step B.1 diagno
 
 - Profile endpoint: `GET /api/learning-profile/ksa`
 - Assessment endpoints: `/api/ksa/assessment/*`
+- Drill endpoints: `/api/ksa/drills/*`
 - Schema modules:
   - `services/retriever/schemas/ksa.py`
   - `services/retriever/schemas/ksa_assessment.py`
+  - `services/retriever/schemas/ksa_drills.py`
 - Scoring/definition module:
   - `services/retriever/services/ksa_assessment.py`
+  - `services/retriever/services/ksa_drills.py`
 
 Persistence entities:
 
 - `user_ksa_profiles`
 - `user_ksa_assessment_attempts`
+- `user_ksa_drill_attempts`
 
 Source model:
 
@@ -159,3 +163,26 @@ Initial assessment architecture:
 - Derived values include `learning_speed_multiplier` based on quantitative + executive-function capacity.
 
 This keeps assessment scoring deterministic and separated from presentation mapping, so future mini-assessments and deep-dive views can extend the system without replacing the current API contract.
+
+KSA drills architecture:
+
+- drill topic and archetype source:
+  - `prds/interaction-archetypes_ksa.json`
+  - loaded through a dedicated parser/cache in `ksa_drills.py`
+- drill flow engine:
+  - user selects `1..3` top-level topics
+  - system generates deterministic 12-question triple-drill sequence per topic
+- persistence model:
+  - each drill attempt stores selected topics, generated question set, staged answers, and result payload
+  - profile refinement writes into `user_ksa_profiles.profile_json`
+  - drill-specific long-lived state is stored under `profile_json.drill_state`
+    - `topic_nodes`
+    - `sub_nodes`
+    - map-decay counters
+    - attempt metadata/source markers
+
+Separation intent:
+
+- initial onboarding assessment and deep-dive drills are separate engines
+- visualization remains top-level radar based for now
+- persistence already supports future node-splitting/shatter visualizations without schema replacement

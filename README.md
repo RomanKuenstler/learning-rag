@@ -27,6 +27,11 @@ This repository includes the learning foundation, declared learning profile laye
   - profile API: `/api/learning-profile/ksa`
   - assessment flow APIs: `/api/ksa/assessment/*`
   - deterministic 4-phase scoring with persisted results that replace baseline defaults after completion
+- KSA assessment drills system:
+  - drill APIs: `/api/ksa/drills/*`
+  - topic selection (`1..3` topics), 12-question triple-drill flow per topic
+  - top-level KSA refinement + persisted sub-topic nodes (`drill_state`) for future map shattering visuals
+  - drill prompt/archetype source: `prds/interaction-archetypes_ksa.json`
 - dedicated Courses page with filtering, sorting, template download, and JSON import dialog
 - file-backed course definitions under `courses/` with startup validation + bootstrap sync
 - web UI sidebar navigation entries for Learning and Courses

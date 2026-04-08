@@ -37,6 +37,7 @@ from services.common.models import (
     SettingRecord,
     UserLearningGoal,
     UserKSAAssessmentAttempt,
+    UserKSADrillAttempt,
     UserKSAProfile,
     UserLearningPreference,
     UserLearningProfile,
@@ -1216,6 +1217,95 @@ class PostgresClient:
                 select(UserKSAAssessmentAttempt).where(
                     UserKSAAssessmentAttempt.id == attempt_id,
                     UserKSAAssessmentAttempt.user_id == user_id,
+                )
+            )
+            if record is None:
+                return None
+            now = datetime.now(timezone.utc)
+            record.result_json = result_json
+            record.status = "completed"
+            record.completed_at = now
+            record.updated_at = now
+            session.flush()
+            session.refresh(record)
+            return record
+
+    def create_user_ksa_drill_attempt(
+        self,
+        *,
+        user_id: int,
+        assessment_version: str,
+        selected_topic_keys: list[str],
+        question_set_json: list[dict[str, object]],
+    ) -> UserKSADrillAttempt:
+        with self.session() as session:
+            record = UserKSADrillAttempt(
+                user_id=user_id,
+                assessment_version=assessment_version,
+                status="in_progress",
+                selected_topic_keys_json=list(selected_topic_keys),
+                question_set_json=list(question_set_json),
+                answers_json={},
+                result_json=None,
+                started_at=datetime.now(timezone.utc),
+            )
+            session.add(record)
+            session.flush()
+            session.refresh(record)
+            return record
+
+    def get_user_ksa_drill_attempt(self, *, user_id: int, attempt_id: str) -> UserKSADrillAttempt | None:
+        with self.session() as session:
+            return session.scalar(
+                select(UserKSADrillAttempt).where(
+                    UserKSADrillAttempt.id == attempt_id,
+                    UserKSADrillAttempt.user_id == user_id,
+                )
+            )
+
+    def get_latest_user_ksa_drill_attempt(self, *, user_id: int) -> UserKSADrillAttempt | None:
+        with self.session() as session:
+            return session.scalar(
+                select(UserKSADrillAttempt)
+                .where(UserKSADrillAttempt.user_id == user_id)
+                .order_by(UserKSADrillAttempt.started_at.desc())
+                .limit(1)
+            )
+
+    def upsert_user_ksa_drill_answers(
+        self,
+        *,
+        user_id: int,
+        attempt_id: str,
+        answers_json: dict[str, object],
+    ) -> UserKSADrillAttempt | None:
+        with self.session() as session:
+            record = session.scalar(
+                select(UserKSADrillAttempt).where(
+                    UserKSADrillAttempt.id == attempt_id,
+                    UserKSADrillAttempt.user_id == user_id,
+                )
+            )
+            if record is None:
+                return None
+            record.answers_json = answers_json
+            record.updated_at = datetime.now(timezone.utc)
+            session.flush()
+            session.refresh(record)
+            return record
+
+    def complete_user_ksa_drill_attempt(
+        self,
+        *,
+        user_id: int,
+        attempt_id: str,
+        result_json: dict[str, object],
+    ) -> UserKSADrillAttempt | None:
+        with self.session() as session:
+            record = session.scalar(
+                select(UserKSADrillAttempt).where(
+                    UserKSADrillAttempt.id == attempt_id,
+                    UserKSADrillAttempt.user_id == user_id,
                 )
             )
             if record is None:

@@ -19,6 +19,7 @@ from services.common.models import (
     SettingRecord,
     UserLearningGoal,
     UserKSAAssessmentAttempt,
+    UserKSADrillAttempt,
     UserKSAProfile,
     UserLearningPreference,
     UserLearningProfile,
@@ -193,6 +194,53 @@ class ChatRepository:
         result_json: dict[str, object],
     ) -> UserKSAAssessmentAttempt | None:
         return self.postgres_client.complete_user_ksa_assessment_attempt(
+            user_id=user_id,
+            attempt_id=attempt_id,
+            result_json=result_json,
+        )
+
+    def create_user_ksa_drill_attempt(
+        self,
+        *,
+        user_id: int,
+        assessment_version: str,
+        selected_topic_keys: list[str],
+        question_set_json: list[dict[str, object]],
+    ) -> UserKSADrillAttempt:
+        return self.postgres_client.create_user_ksa_drill_attempt(
+            user_id=user_id,
+            assessment_version=assessment_version,
+            selected_topic_keys=selected_topic_keys,
+            question_set_json=question_set_json,
+        )
+
+    def get_user_ksa_drill_attempt(self, *, user_id: int, attempt_id: str) -> UserKSADrillAttempt | None:
+        return self.postgres_client.get_user_ksa_drill_attempt(user_id=user_id, attempt_id=attempt_id)
+
+    def get_latest_user_ksa_drill_attempt(self, *, user_id: int) -> UserKSADrillAttempt | None:
+        return self.postgres_client.get_latest_user_ksa_drill_attempt(user_id=user_id)
+
+    def upsert_user_ksa_drill_answers(
+        self,
+        *,
+        user_id: int,
+        attempt_id: str,
+        answers_json: dict[str, object],
+    ) -> UserKSADrillAttempt | None:
+        return self.postgres_client.upsert_user_ksa_drill_answers(
+            user_id=user_id,
+            attempt_id=attempt_id,
+            answers_json=answers_json,
+        )
+
+    def complete_user_ksa_drill_attempt(
+        self,
+        *,
+        user_id: int,
+        attempt_id: str,
+        result_json: dict[str, object],
+    ) -> UserKSADrillAttempt | None:
+        return self.postgres_client.complete_user_ksa_drill_attempt(
             user_id=user_id,
             attempt_id=attempt_id,
             result_json=result_json,

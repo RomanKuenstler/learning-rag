@@ -1,5 +1,33 @@
 # Changelog
 
+## 2026-04-08 18:35 UTC
+
+- Added KSA Assessment Drills (deep-dive) flow end-to-end:
+  - `Start Assessment Drills` action in Learning KSA tab
+  - direct-to-topic-selection drill dialog (no splash)
+  - user selection of `1..3` big-map topics
+  - deterministic 12-question triple-drill sequence per selected topic
+- Added KSA drill persistence model and migration:
+  - `user_ksa_drill_attempts`
+  - profile-level `drill_state` refinement storage with `topic_nodes`, `sub_nodes`, map-decay metadata, and archetype source
+- Added KSA drill APIs:
+  - `GET /api/ksa/drills/topics`
+  - `POST /api/ksa/drills/attempts`
+  - `GET /api/ksa/drills/attempts/latest`
+  - `GET /api/ksa/drills/attempts/{attempt_id}`
+  - `PUT /api/ksa/drills/attempts/{attempt_id}/answers`
+  - `POST /api/ksa/drills/attempts/{attempt_id}/complete`
+- Wired drill scoring/refinement logic:
+  - parent topic level updates (`+0.2` on Q1+Q2 pass)
+  - map-decay signal on Q1 fail
+  - sub-topic expansion updates for block 2/3
+  - stress-test ability scoring with 15s time target (`correctness*0.7 + time_remaining*0.3`)
+- Integrated drill prompt/archetype loading from `prds/interaction-archetypes_ksa.json` with deterministic fallback prompts.
+- Improved free-text normalization tolerance for drill scoring (case/punctuation/spacing/morphological token variants).
+- Added/updated tests:
+  - `tests/test_step21_ksa_drills.py`
+  - `tests/test_step14_learning_api.py` drill route coverage
+
 ## 2026-04-08 10:30 UTC
 
 - Implemented the first real KSA assessment system end-to-end (definition, flow, scoring, persistence, and chart data integration).

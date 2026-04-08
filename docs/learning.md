@@ -19,6 +19,7 @@ The `KSA` tab renders the capability overview with:
 - each radar uses a 1-5 Dreyfus scale (`Novice`, `Advanced`, `Competent`, `Proficient`, `Expert`)
 - a real multi-phase `KSA Assessment` flow dialog
 - a deep-dive placeholder section below the charts
+- `Start Assessment Drills` action below deep-dive for voluntary refinement runs
 
 Authoritative radar axes:
 
@@ -59,6 +60,40 @@ Derived values currently include:
 
 - `logic_quantitative_index` (`executive_function` + `quantitative_reasoning` capacity)
 - `learning_speed_multiplier` => `1.5` when index `> 1.6`, otherwise `1.0`
+
+## KSA Assessment Drills (Deep Dive)
+
+Drills are a separate follow-up flow that refines an existing big-map profile.
+
+- button location: below `KSA Deep Dive`
+- dialog entry: opens directly into topic selection (no intro splash)
+- topic selection: user chooses `1..3` top-level topics
+- per selected topic: deterministic 12-question triple-drill sequence
+  - Block 1 `Baseline` (Q1 recalibration, Q2 threshold, Q3 side-step, Q4 stress-test)
+  - Block 2 `The Drill` (sub-topic A progression)
+  - Block 3 `Expansion` (sub-topic B progression)
+
+Drill scoring/persistence behavior:
+
+- parent topic:
+  - pass Q1 + Q2 => `+0.2` level delta
+  - fail Q1 => map decay signal (`-0.1` + decay event increment)
+- block 2/3: create or update sub-topic entries in `drill_state.topic_nodes[*].sub_nodes`
+- stress-test questions:
+  - 15-second target
+  - score uses `ability = correctness*0.7 + time_remaining*0.3`
+- top-level chart values are refreshed from refined topic levels
+
+Question source:
+
+- drill prompts/archetypes are loaded from `prds/interaction-archetypes_ksa.json`
+- if a specific archetype prompt is missing, deterministic fallback prompt templates are used
+
+Repeatability:
+
+- users can run drills repeatedly
+- each attempt is persisted in history
+- profile is refined incrementally instead of full blind replacement
 
 ## Courses Page
 

@@ -51,5 +51,6 @@ class KSAProfileRead(BaseModel):
     skills: KSASkillsRead
     abilities: KSAAbilitiesRead
     assessment_details: dict[str, object] | None = None
+    drill_state: dict[str, object] | None = None
     learning_speed_multiplier: float | None = None
     updated_at: datetime | None = None

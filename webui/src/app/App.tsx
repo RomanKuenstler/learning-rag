@@ -358,6 +358,8 @@ function AppRoutes() {
                   ksaError={app.ksaError}
                   ksaAssessmentDefinition={app.ksaAssessmentDefinition}
                   ksaAssessmentAttempt={app.ksaAssessmentAttempt}
+                  ksaDrillTopics={app.ksaDrillTopics}
+                  ksaDrillAttempt={app.ksaDrillAttempt}
                   ksaAssessmentSaving={app.ksaAssessmentSaving}
                   currentUserDisplayName={app.currentUser.displayname}
                   onLoadLearningProfile={() => void app.loadLearningProfile()}
@@ -367,6 +369,11 @@ function AppRoutes() {
                   onStartKsaAssessment={() => app.startKsaAssessment()}
                   onSaveKsaAssessmentAnswers={(attemptId, answers) => app.saveKsaAssessmentAnswers(attemptId, answers)}
                   onCompleteKsaAssessment={(attemptId) => app.completeKsaAssessment(attemptId)}
+                  onLoadKsaDrillTopics={() => app.loadKsaDrillTopics()}
+                  onLoadLatestKsaDrillAttempt={() => app.loadLatestKsaDrillAttempt()}
+                  onStartKsaDrillAttempt={(topicKeys) => app.startKsaDrillAttempt(topicKeys)}
+                  onSaveKsaDrillAnswers={(attemptId, answers) => app.saveKsaDrillAnswers(attemptId, answers)}
+                  onCompleteKsaDrillAttempt={(attemptId) => app.completeKsaDrillAttempt(attemptId)}
                   onSaveLearningPreferences={(payload) => app.saveLearningPreferences(payload).then(() => undefined)}
                   onSaveLearningContext={(payload) => app.saveLearningContext(payload).then(() => undefined)}
                   onCreateLearningGoal={(payload) => app.createLearningGoal(payload).then(() => undefined)}

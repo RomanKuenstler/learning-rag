@@ -25,6 +25,8 @@ import type {
   LibraryResponse,
   LearningLesson,
   LearningGoal,
+  KsaDrillAttempt,
+  KsaDrillTopic,
   KsaAssessmentAttempt,
   KsaAssessmentDefinition,
   KSAProfile,
@@ -164,6 +166,8 @@ export function useChatApp() {
   const [ksaError, setKsaError] = useState<string | null>(null);
   const [ksaAssessmentDefinition, setKsaAssessmentDefinition] = useState<KsaAssessmentDefinition | null>(null);
   const [ksaAssessmentAttempt, setKsaAssessmentAttempt] = useState<KsaAssessmentAttempt | null>(null);
+  const [ksaDrillTopics, setKsaDrillTopics] = useState<KsaDrillTopic[]>([]);
+  const [ksaDrillAttempt, setKsaDrillAttempt] = useState<KsaDrillAttempt | null>(null);
   const [ksaAssessmentSaving, setKsaAssessmentSaving] = useState(false);
   const [learningProfileLoading, setLearningProfileLoading] = useState(false);
   const [learningProfileSaving, setLearningProfileSaving] = useState(false);
@@ -1140,6 +1144,84 @@ export function useChatApp() {
     }
   }
 
+  async function loadKsaDrillTopics() {
+    setKsaAssessmentSaving(true);
+    setKsaError(null);
+    try {
+      const payload = await apiClient.getKsaDrillTopics();
+      setKsaDrillTopics(payload.topics);
+      return payload.topics;
+    } catch (error) {
+      setKsaError(error instanceof Error ? error.message : "Failed to load KSA drill topics");
+      throw error;
+    } finally {
+      setKsaAssessmentSaving(false);
+    }
+  }
+
+  async function startKsaDrillAttempt(topicKeys: string[]) {
+    setKsaAssessmentSaving(true);
+    setKsaError(null);
+    try {
+      const started = await apiClient.startKsaDrillAttempt(topicKeys);
+      const attempt = await apiClient.getKsaDrillAttempt(started.attempt_id);
+      setKsaDrillAttempt(attempt);
+      return attempt;
+    } catch (error) {
+      setKsaError(error instanceof Error ? error.message : "Failed to start KSA drill attempt");
+      throw error;
+    } finally {
+      setKsaAssessmentSaving(false);
+    }
+  }
+
+  async function loadLatestKsaDrillAttempt() {
+    setKsaAssessmentSaving(true);
+    setKsaError(null);
+    try {
+      const payload = await apiClient.getLatestKsaDrillAttempt();
+      setKsaDrillAttempt(payload);
+      return payload;
+    } catch {
+      setKsaDrillAttempt(null);
+      return null;
+    } finally {
+      setKsaAssessmentSaving(false);
+    }
+  }
+
+  async function saveKsaDrillAnswers(attemptId: string, answers: Record<string, unknown>) {
+    setKsaAssessmentSaving(true);
+    setKsaError(null);
+    try {
+      const payload = await apiClient.upsertKsaDrillAnswers(attemptId, answers);
+      setKsaDrillAttempt(payload);
+      return payload;
+    } catch (error) {
+      setKsaError(error instanceof Error ? error.message : "Failed to save KSA drill answers");
+      throw error;
+    } finally {
+      setKsaAssessmentSaving(false);
+    }
+  }
+
+  async function completeKsaDrillAttempt(attemptId: string) {
+    setKsaAssessmentSaving(true);
+    setKsaError(null);
+    try {
+      const payload = await apiClient.completeKsaDrillAttempt(attemptId);
+      setKsaProfile(payload);
+      const latest = await apiClient.getKsaDrillAttempt(attemptId);
+      setKsaDrillAttempt(latest);
+      return payload;
+    } catch (error) {
+      setKsaError(error instanceof Error ? error.message : "Failed to complete KSA drill attempt");
+      throw error;
+    } finally {
+      setKsaAssessmentSaving(false);
+    }
+  }
+
   async function saveLearningPreferences(payload: Partial<Omit<LearningPreferences, "updated_at">>) {
     setLearningProfileSaving(true);
     setLearningProfileError(null);
@@ -1981,6 +2063,8 @@ export function useChatApp() {
     ksaProfile,
     ksaAssessmentDefinition,
     ksaAssessmentAttempt,
+    ksaDrillTopics,
+    ksaDrillAttempt,
     learningProfileLoading,
     ksaLoading,
     ksaError,
@@ -2080,6 +2164,11 @@ export function useChatApp() {
     startKsaAssessment,
     saveKsaAssessmentAnswers,
     completeKsaAssessment,
+    loadKsaDrillTopics,
+    startKsaDrillAttempt,
+    loadLatestKsaDrillAttempt,
+    saveKsaDrillAnswers,
+    completeKsaDrillAttempt,
     saveLearningPreferences,
     saveLearningContext,
     createLearningGoal,

@@ -41,6 +41,33 @@ class LearningApiStubService:
             "answers": {},
             "result": None,
         }
+        self._ksa_drill_attempt = {
+            "attempt_id": "ksa-drill-attempt-1",
+            "status": "in_progress",
+            "version": "ksa-drill-v1",
+            "selected_topic_keys": ["digital_craft"],
+            "question_set": [
+                {
+                    "id": "digital_craft-b1-q1",
+                    "topic_key": "digital_craft",
+                    "topic_name": "Digital Craft",
+                    "topic_group": "skills",
+                    "block_index": 1,
+                    "block_label": "Baseline",
+                    "question_index": 1,
+                    "kind": "recalibration",
+                    "archetype": "reverse_definition",
+                    "focus_subtopic": "UI/UX Prototyping",
+                    "related_subtopic": None,
+                    "prompt": "Sample prompt",
+                    "time_limit_seconds": None,
+                }
+            ],
+            "started_at": "2026-04-04T00:00:00Z",
+            "completed_at": None,
+            "answers": {},
+            "result": None,
+        }
 
     def create_chat(self, user: UserAccount):
         if user.role == "student":
@@ -222,6 +249,48 @@ class LearningApiStubService:
             "has_assessment": True,
         }
 
+    def list_ksa_drill_topics(self, _user: UserAccount):
+        return {
+            "topics": [
+                {
+                    "key": "digital_craft",
+                    "group": "skills",
+                    "name": "Digital Craft",
+                    "subtopics": ["UI/UX Prototyping", "Full-Stack Development"],
+                    "archetype_subtopics": ["UI/UX Prototyping"],
+                }
+            ]
+        }
+
+    def start_ksa_drill_attempt(self, _user: UserAccount, payload):
+        self._ksa_drill_attempt["selected_topic_keys"] = list(payload.topic_keys)
+        return {
+            "attempt_id": "ksa-drill-attempt-1",
+            "status": "in_progress",
+            "version": "ksa-drill-v1",
+            "selected_topic_keys": list(payload.topic_keys),
+            "question_set": list(self._ksa_drill_attempt["question_set"]),
+            "started_at": "2026-04-04T00:00:00Z",
+        }
+
+    def get_ksa_drill_attempt(self, _user: UserAccount, _attempt_id: str):
+        return self._ksa_drill_attempt
+
+    def get_latest_ksa_drill_attempt(self, _user: UserAccount):
+        return self._ksa_drill_attempt
+
+    def upsert_ksa_drill_answers(self, _user: UserAccount, _attempt_id: str, payload):
+        self._ksa_drill_attempt["answers"] = dict(payload.answers)
+        return self._ksa_drill_attempt
+
+    def complete_ksa_drill_attempt(self, user: UserAccount, _attempt_id: str):
+        return {
+            **self.get_ksa_profile(user),
+            "profile_source": "assessment",
+            "has_assessment": True,
+            "drill_state": {"attempt_count": 1},
+        }
+
     def import_courses_from_uploads(self, user: UserAccount, _uploads, _scopes_by_file_raw):
         if user.role == "student":
             raise PermissionError("Students cannot create learning paths")
@@ -381,4 +450,34 @@ def test_ksa_assessment_routes_available() -> None:
     complete_response = client.post(f"/api/ksa/assessment/attempts/{attempt_id}/complete")
     assert complete_response.status_code == 200
     assert complete_response.json()["profile_source"] == "assessment"
+    assert complete_response.json()["has_assessment"] is True
+
+
+def test_ksa_drill_routes_available() -> None:
+    client = build_client(student=True)
+    topics_response = client.get("/api/ksa/drills/topics")
+    assert topics_response.status_code == 200
+    assert topics_response.json()["topics"][0]["key"] == "digital_craft"
+
+    start_response = client.post("/api/ksa/drills/attempts", json={"topic_keys": ["digital_craft"]})
+    assert start_response.status_code == 200
+    attempt_id = start_response.json()["attempt_id"]
+
+    latest_response = client.get("/api/ksa/drills/attempts/latest")
+    assert latest_response.status_code == 200
+    assert latest_response.json()["attempt_id"] == attempt_id
+
+    get_response = client.get(f"/api/ksa/drills/attempts/{attempt_id}")
+    assert get_response.status_code == 200
+    assert get_response.json()["status"] == "in_progress"
+
+    save_response = client.put(
+        f"/api/ksa/drills/attempts/{attempt_id}/answers",
+        json={"answers": {"digital_craft-b1-q1": {"answer": "test", "response_time_seconds": 7}}},
+    )
+    assert save_response.status_code == 200
+    assert "digital_craft-b1-q1" in save_response.json()["answers"]
+
+    complete_response = client.post(f"/api/ksa/drills/attempts/{attempt_id}/complete")
+    assert complete_response.status_code == 200
     assert complete_response.json()["has_assessment"] is True

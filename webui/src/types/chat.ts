@@ -481,6 +481,7 @@ export type KSAProfile = {
   skills: KSASkills;
   abilities: KSAAbilities;
   assessment_details?: Record<string, unknown> | null;
+  drill_state?: Record<string, unknown> | null;
   learning_speed_multiplier?: number | null;
   updated_at: string | null;
 };
@@ -524,6 +525,42 @@ export type KsaAssessmentAttempt = {
   attempt_id: string;
   status: "in_progress" | "completed";
   version: string;
+  started_at: string;
+  completed_at: string | null;
+  answers: Record<string, unknown>;
+  result: Record<string, unknown> | null;
+};
+
+export type KsaDrillTopic = {
+  key: string;
+  group: "knowledge" | "skills" | "abilities";
+  name: string;
+  subtopics: string[];
+  archetype_subtopics: string[];
+};
+
+export type KsaDrillQuestion = {
+  id: string;
+  topic_key: string;
+  topic_name: string;
+  topic_group: "knowledge" | "skills" | "abilities";
+  block_index: number;
+  block_label: string;
+  question_index: number;
+  kind: "recalibration" | "threshold" | "sidestep" | "stress_test";
+  archetype: "reverse_definition" | "spot_the_flaw" | "analogy_match" | "power_sprint";
+  focus_subtopic: string;
+  related_subtopic?: string | null;
+  prompt: string;
+  time_limit_seconds?: number | null;
+};
+
+export type KsaDrillAttempt = {
+  attempt_id: string;
+  status: "in_progress" | "completed";
+  version: string;
+  selected_topic_keys: string[];
+  question_set: KsaDrillQuestion[];
   started_at: string;
   completed_at: string | null;
   answers: Record<string, unknown>;

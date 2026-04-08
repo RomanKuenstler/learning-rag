@@ -93,6 +93,13 @@ from services.retriever.schemas.ksa_assessment import (
     KSAAssessmentDefinitionRead,
     KSAAssessmentStartResponse,
 )
+from services.retriever.schemas.ksa_drills import (
+    KSADrillAnswersUpsertRequest,
+    KSADrillAttemptRead,
+    KSADrillAttemptStartRequest,
+    KSADrillAttemptStartResponse,
+    KSADrillTopicsRead,
+)
 from services.retriever.services.library_manager import UploadFilePayload
 from services.retriever.services.retriever_service import RetrieverAppService
 
@@ -784,6 +791,65 @@ def create_app() -> FastAPI:
         profile = service.complete_ksa_assessment(auth.user, attempt_id)
         if profile is None:
             raise HTTPException(status_code=404, detail="KSA assessment attempt not found")
+        return profile
+
+    @app.get("/api/ksa/drills/topics", response_model=KSADrillTopicsRead)
+    def list_ksa_drill_topics(
+        auth: AuthContext = Depends(get_app_auth_context),
+        service: RetrieverAppService = Depends(get_retriever_service),
+    ) -> KSADrillTopicsRead:
+        return service.list_ksa_drill_topics(auth.user)
+
+    @app.post("/api/ksa/drills/attempts", response_model=KSADrillAttemptStartResponse)
+    def start_ksa_drill_attempt(
+        payload: KSADrillAttemptStartRequest,
+        auth: AuthContext = Depends(get_app_auth_context),
+        service: RetrieverAppService = Depends(get_retriever_service),
+    ) -> KSADrillAttemptStartResponse:
+        return service.start_ksa_drill_attempt(auth.user, payload)
+
+    @app.get("/api/ksa/drills/attempts/latest", response_model=KSADrillAttemptRead, responses={404: {"model": ErrorResponse}})
+    def get_latest_ksa_drill_attempt(
+        auth: AuthContext = Depends(get_app_auth_context),
+        service: RetrieverAppService = Depends(get_retriever_service),
+    ) -> KSADrillAttemptRead:
+        attempt = service.get_latest_ksa_drill_attempt(auth.user)
+        if attempt is None:
+            raise HTTPException(status_code=404, detail="KSA drill attempt not found")
+        return attempt
+
+    @app.get("/api/ksa/drills/attempts/{attempt_id}", response_model=KSADrillAttemptRead, responses={404: {"model": ErrorResponse}})
+    def get_ksa_drill_attempt(
+        attempt_id: str,
+        auth: AuthContext = Depends(get_app_auth_context),
+        service: RetrieverAppService = Depends(get_retriever_service),
+    ) -> KSADrillAttemptRead:
+        attempt = service.get_ksa_drill_attempt(auth.user, attempt_id)
+        if attempt is None:
+            raise HTTPException(status_code=404, detail="KSA drill attempt not found")
+        return attempt
+
+    @app.put("/api/ksa/drills/attempts/{attempt_id}/answers", response_model=KSADrillAttemptRead, responses={404: {"model": ErrorResponse}})
+    def upsert_ksa_drill_answers(
+        attempt_id: str,
+        payload: KSADrillAnswersUpsertRequest,
+        auth: AuthContext = Depends(get_app_auth_context),
+        service: RetrieverAppService = Depends(get_retriever_service),
+    ) -> KSADrillAttemptRead:
+        attempt = service.upsert_ksa_drill_answers(auth.user, attempt_id, payload)
+        if attempt is None:
+            raise HTTPException(status_code=404, detail="KSA drill attempt not found")
+        return attempt
+
+    @app.post("/api/ksa/drills/attempts/{attempt_id}/complete", response_model=KSAProfileRead, responses={404: {"model": ErrorResponse}})
+    def complete_ksa_drill_attempt(
+        attempt_id: str,
+        auth: AuthContext = Depends(get_app_auth_context),
+        service: RetrieverAppService = Depends(get_retriever_service),
+    ) -> KSAProfileRead:
+        profile = service.complete_ksa_drill_attempt(auth.user, attempt_id)
+        if profile is None:
+            raise HTTPException(status_code=404, detail="KSA drill attempt not found")
         return profile
 
     @app.patch("/api/learning-profile/preferences", response_model=LearningPreferencesRead)

@@ -305,6 +305,50 @@ Persisted scoring behavior:
 - skills: `A -> level 1`, `B -> level 3`
 - abilities: `capacity = correctness*0.7 + time_bonus*0.3`, mapped into display `1..5`
 
+### `GET /api/ksa/drills/topics`
+
+Returns available drill topics grouped by KSA domain. Payload includes:
+
+- `key`, `group`, `name`
+- configured `subtopics`
+- `archetype_subtopics` discovered from `prds/interaction-archetypes_ksa.json`
+
+### `POST /api/ksa/drills/attempts`
+
+Starts a new KSA drill attempt.
+
+Request:
+
+- `selected_topic_keys`: array size `1..3`
+
+Response:
+
+- `attempt_id`
+
+### `GET /api/ksa/drills/attempts/latest`
+
+Returns latest user-owned drill attempt (`404` if none).
+
+### `GET /api/ksa/drills/attempts/{attempt_id}`
+
+Returns one user-owned drill attempt (`404` if missing).
+
+### `PUT /api/ksa/drills/attempts/{attempt_id}/answers`
+
+Upserts staged drill answers for the attempt.
+
+### `POST /api/ksa/drills/attempts/{attempt_id}/complete`
+
+Scores the drill attempt, refines persisted KSA profile, and returns updated profile.
+
+Drill result behavior:
+
+- deterministic triple-drill (`12` questions per selected topic)
+- parent topic delta + map-decay handling
+- sub-topic (`sub_nodes`) create/update for block 2 and 3
+- top-level chart values updated from refined topic levels
+- ability stress-test scoring with 15-second time target
+
 ## Diagnostics (Step B.1)
 
 ### `GET /api/diagnostics/definitions`
