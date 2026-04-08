@@ -4331,13 +4331,13 @@ button.send:hover:not(:disabled) {
 
 .courses-head,
 .courses-row {
-  grid-template-columns: minmax(260px, 2.2fr) minmax(90px, 0.75fr) minmax(140px, 1fr) minmax(100px, 0.85fr) minmax(90px, 0.7fr) minmax(90px, 0.7fr) minmax(155px, 1fr) minmax(96px, 0.72fr);
+  grid-template-columns: minmax(240px, 2.1fr) minmax(90px, 0.75fr) minmax(140px, 1fr) minmax(100px, 0.85fr) minmax(80px, 0.62fr) minmax(80px, 0.62fr) minmax(80px, 0.62fr) minmax(155px, 1fr) minmax(96px, 0.72fr);
 }
 
-.courses-head > :nth-child(7),
-.courses-row > :nth-child(7),
 .courses-head > :nth-child(8),
-.courses-row > :nth-child(8) {
+.courses-row > :nth-child(8),
+.courses-head > :nth-child(9),
+.courses-row > :nth-child(9) {
   justify-self: end;
   text-align: right;
 }
@@ -4424,7 +4424,7 @@ button.send:hover:not(:disabled) {
 }
 
 .courses-details-stats {
-  grid-template-columns: repeat(4, minmax(0, 1fr));
+  grid-template-columns: repeat(6, minmax(0, 1fr));
 }
 
 .courses-upload-row {
@@ -4665,6 +4665,274 @@ button.send:hover:not(:disabled) {
   min-width: 2rem;
 }
 
+.skilltree-shell {
+  display: grid;
+  grid-template-columns: minmax(0, 2fr) minmax(280px, 1fr);
+  gap: 0.75rem;
+  align-items: start;
+}
+
+.skilltree-main-column {
+  min-width: 0;
+  display: grid;
+  gap: 0.55rem;
+  align-content: start;
+}
+
+.skilltree-board {
+  position: relative;
+  border: 1px solid #dbe3ec;
+  border-radius: 12px;
+  min-height: 520px;
+  overflow: auto;
+  padding-bottom: 0.4rem;
+  background:
+    linear-gradient(90deg, rgba(148, 163, 184, 0.2) 1px, transparent 1px),
+    linear-gradient(rgba(148, 163, 184, 0.2) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(148, 163, 184, 0.12) 1px, transparent 1px),
+    linear-gradient(rgba(148, 163, 184, 0.12) 1px, transparent 1px),
+    #f8fafc;
+  background-size: 210px 130px, 210px 130px, 42px 42px, 42px 42px, auto;
+}
+
+.skilltree-canvas {
+  position: relative;
+  min-width: 960px;
+  min-height: 520px;
+  isolation: isolate;
+}
+
+.skilltree-legend {
+  position: sticky;
+  top: 0;
+  z-index: 2;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.45rem;
+  padding: 0.45rem 0.5rem;
+  background: rgba(248, 250, 252, 0.92);
+  backdrop-filter: blur(2px);
+  border-bottom: 1px solid #dbe3ec;
+}
+
+.skilltree-legend-item {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.32rem;
+  padding: 0.16rem 0.4rem;
+  border-radius: 999px;
+  background: #ffffff;
+  border: 1px solid #e2e8f0;
+  color: #334155;
+  font-size: 0.7rem;
+  font-weight: 700;
+}
+
+.skilltree-legend-dot {
+  width: 0.52rem;
+  height: 0.52rem;
+  border-radius: 999px;
+}
+
+.skilltree-lines {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+  z-index: 1;
+}
+
+.skilltree-edge {
+  stroke: #94a3b8;
+  stroke-width: 2;
+  stroke-linecap: round;
+}
+
+.skilltree-edge.recommended {
+  stroke: #64748b;
+  stroke-dasharray: 5 5;
+}
+
+.skilltree-node {
+  position: absolute;
+  width: 56px;
+  height: 56px;
+  background: #ffffff;
+  border-radius: 999px;
+  border: none;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  cursor: pointer;
+  z-index: 3;
+}
+
+.skilltree-completion-block {
+  display: grid;
+  gap: 0.45rem;
+}
+
+.skilltree-node-icon-shell {
+  width: 52px;
+  height: 52px;
+  border-radius: 999px;
+  border: 2px solid #94a3b8;
+  background: #ffffff;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: 0 3px 10px rgba(15, 23, 42, 0.11);
+}
+
+.skilltree-node-icon {
+  width: 1.1rem;
+  height: 1.1rem;
+}
+
+.skilltree-node.selected .skilltree-node-icon-shell {
+  outline: 2px solid #0f172a;
+  outline-offset: 2px;
+}
+
+.skilltree-node-locked {
+  opacity: 0.66;
+}
+
+.skilltree-node.optional .skilltree-node-icon-shell {
+  border-style: dashed;
+}
+
+.skilltree-node-available .skilltree-node-icon-shell {
+  background: #eff6ff;
+}
+
+.skilltree-node-in_progress .skilltree-node-icon-shell {
+  background: #fffbeb;
+  transform: scale(1.04);
+}
+
+.skilltree-node-completed .skilltree-node-icon-shell,
+.skilltree-node-mastered .skilltree-node-icon-shell {
+  background: #f0fdf4;
+}
+
+.skilltree-node-optional_skipped .skilltree-node-icon-shell {
+  background: #f8fafc;
+}
+
+.skilltree-chapter-progress-strip {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.6rem;
+  border: 1px solid #dbe3ec;
+  border-radius: 10px;
+  margin-top: 0.55rem;
+  padding: 0.45rem 0.55rem;
+  background: #ffffff;
+}
+
+.skilltree-course-progress-summary {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.45rem;
+  width: fit-content;
+  border: 1px solid #dbe3ec;
+  border-radius: 999px;
+  background: #ffffff;
+  padding: 0.28rem 0.58rem;
+  color: #334155;
+  font-size: 0.74rem;
+}
+
+.skilltree-course-progress-summary strong {
+  color: #0f172a;
+  font-size: 0.7rem;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+}
+
+.skilltree-chapter-progress-item {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 0.32rem;
+  border-right: 1px solid #e2e8f0;
+  padding-right: 0.55rem;
+}
+
+.skilltree-chapter-progress-item:last-child {
+  border-right: none;
+  padding-right: 0;
+}
+
+.skilltree-chapter-progress-value {
+  font-size: 1.05rem;
+  font-weight: 700;
+  line-height: 1;
+}
+
+.skilltree-chapter-progress-label {
+  color: #64748b;
+  font-size: 0.74rem;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.skilltree-sidepanel {
+  border: 1px solid #dbe3ec;
+  border-radius: 12px;
+  background: #ffffff;
+  padding: 0.75rem;
+  display: grid;
+  gap: 0.55rem;
+  align-content: start;
+}
+
+.skilltree-sidepanel h5 {
+  margin: 0;
+  color: #0f172a;
+  font-size: 1rem;
+}
+
+.skilltree-sidepanel p {
+  margin: 0;
+  color: #475569;
+  font-size: 0.82rem;
+  line-height: 1.4;
+}
+
+.skilltree-sidepanel-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem;
+}
+
+.skilltree-sidepanel-meta span {
+  display: inline-flex;
+  align-items: center;
+  border-radius: 999px;
+  background: #f1f5f9;
+  color: #334155;
+  padding: 0.18rem 0.45rem;
+  font-size: 0.68rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+}
+
+.skilltree-sidepanel-list {
+  display: grid;
+  gap: 0.2rem;
+}
+
+.skilltree-sidepanel-list strong {
+  color: #0f172a;
+  font-size: 0.74rem;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+}
+
 .learning-path-lesson-title {
   color: #1f2937;
   font-size: 0.82rem;
@@ -4886,7 +5154,11 @@ button.send:hover:not(:disabled) {
 
   .courses-head,
   .courses-row {
-    grid-template-columns: minmax(220px, 2.2fr) 0.8fr minmax(120px, 1fr) 0.85fr 0.65fr 0.65fr minmax(140px, 1fr) minmax(96px, 0.72fr);
+    grid-template-columns: minmax(220px, 2.2fr) 0.8fr minmax(120px, 1fr) 0.85fr 0.62fr 0.62fr 0.62fr minmax(140px, 1fr) minmax(96px, 0.72fr);
+  }
+
+  .skilltree-shell {
+    grid-template-columns: minmax(0, 1fr);
   }
 
   .learning-goals-head,
@@ -5250,7 +5522,7 @@ button.send:hover:not(:disabled) {
 
   .courses-head,
   .courses-row {
-    min-width: 900px;
+    min-width: 980px;
   }
 
   .learning-goals-head,

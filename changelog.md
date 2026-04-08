@@ -1,5 +1,37 @@
 # Changelog
 
+## 2026-04-08 22:10 UTC
+
+- Reworked course model into graph-based skilltree foundation with schema v2.
+- Added v2 course JSON support (`chapters`, `nodes`, `edges`, `entry_node_ids`, completion/layout metadata, node KSA links).
+- Added compatibility migration path for legacy v1 module/lesson JSON imports.
+- Added learning-path persistence fields for skilltree definitions:
+  - `learning_paths.schema_version`
+  - `learning_paths.skilltree_definition`
+- Added per-user node progress persistence table:
+  - `user_learning_node_progress`
+- Implemented deterministic prerequisite/unlock runtime logic:
+  - `requires_all`, `requires_any`, `recommended`
+  - node states: `locked`, `available`, `in_progress`, `completed`, `mastered`, `optional_skipped`
+  - chapter/branch and course completion summaries for required-node completion
+- Updated course import/export/bootstrap flow to use v2 as canonical while preserving legacy linear editing compatibility.
+- Reworked Courses detail UI from linear module list to skilltree graph with:
+  - node/edge visualization
+  - progress-state styling
+  - right-side node details panel
+  - KSA metadata display
+  - chapter and overall completion summaries
+- Added new tests:
+  - `tests/test_course_skilltree_runtime.py`
+  - expanded `tests/test_courses_files.py` for v2 validation + v1 migration + cycle validation
+- Updated docs:
+  - `README.md`
+  - `docs/learning.md`
+  - `docs/courses.md`
+  - `docs/api.md`
+  - `docs/architecture.md`
+  - `docs/testing.md`
+
 ## 2026-04-08 18:35 UTC
 
 - Added KSA Assessment Drills (deep-dive) flow end-to-end:

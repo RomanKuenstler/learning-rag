@@ -1,5 +1,6 @@
 {
-  "schema_version": 1,
+  "schema_version": 2,
+  "source_schema_version": 2,
   "id": "430c9822-a4f6-4868-a9f3-fee585761500",
   "title": "test",
   "description": "",
@@ -14,14 +15,59 @@
     7
   ],
   "allowed_tags": [],
-  "modules": [
+  "chapters": [
     {
       "id": "b30d9b6e-2897-407f-882e-8704f04944c1",
-      "order_index": 0,
       "title": "test",
       "description": "",
-      "learning_objectives": [],
-      "lessons": []
+      "order_index": 0,
+      "metadata": {
+        "learning_objectives": [],
+        "migrated_from": "module"
+      }
     }
-  ]
+  ],
+  "nodes": [
+    {
+      "id": "node-1-1",
+      "title": "test Overview",
+      "description": "",
+      "type": "learning_unit",
+      "chapter_id": "b30d9b6e-2897-407f-882e-8704f04944c1",
+      "required": true,
+      "prerequisites": {
+        "requires_all": [],
+        "requires_any": [],
+        "recommended": []
+      },
+      "completion_mode": "lesson_complete",
+      "estimated_duration_minutes": null,
+      "layout": {
+        "x": 120.0,
+        "y": 120.0
+      },
+      "metadata": {
+        "objectives": [],
+        "teaching_notes": "",
+        "migrated_from": "lesson"
+      },
+      "display": {},
+      "ksa": []
+    }
+  ],
+  "edges": [],
+  "entry_node_ids": [
+    "node-1-1"
+  ],
+  "completion_rules": {
+    "required_completion": "all_required_nodes",
+    "migrated_from_schema": 1
+  },
+  "visual_layout": {
+    "layout_engine": "manual",
+    "migrated_from_schema": 1
+  },
+  "metadata": {
+    "migrated_from_schema": 1
+  }
 }

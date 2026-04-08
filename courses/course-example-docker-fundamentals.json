@@ -1,5 +1,6 @@
 {
-  "schema_version": 1,
+  "schema_version": 2,
+  "source_schema_version": 2,
   "id": "course-example-docker-fundamentals",
   "title": "Example: Docker Fundamentals",
   "description": "Starter path demonstrating a complete learning setup.",
@@ -11,61 +12,149 @@
   "status": "published",
   "allowed_file_ids": [],
   "allowed_tags": [],
-  "modules": [
+  "chapters": [
     {
       "id": "6cddf606-fed6-47e3-bd8c-8624b57a0599",
-      "order_index": 0,
       "title": "Getting Started",
       "description": "Core concepts and first practical steps.",
-      "learning_objectives": [
-        "Understand images/containers",
-        "Run and inspect containers"
-      ],
-      "lessons": [
-        {
-          "id": "40811d45-7ee4-456d-9ac2-6a2c6ad48456",
-          "order_index": 0,
-          "title": "What Docker Is",
-          "description": "Mental model for images, containers, and registries.",
-          "objectives": [
-            "Differentiate image vs container",
-            "Know when to use Docker"
-          ],
-          "teaching_notes": ""
-        },
-        {
-          "id": "e6df951a-7550-4756-9fe2-95915205733e",
-          "order_index": 1,
-          "title": "First Container Run",
-          "description": "Run, stop, and inspect a hello-world style container.",
-          "objectives": [
-            "Use run/ps/stop/logs"
-          ],
-          "teaching_notes": ""
-        }
-      ]
+      "order_index": 0,
+      "metadata": {
+        "learning_objectives": [
+          "Understand images/containers",
+          "Run and inspect containers"
+        ],
+        "migrated_from": "module"
+      }
     },
     {
       "id": "144c9dc7-4826-4126-9e2e-8964aaf21633",
-      "order_index": 1,
       "title": "Compose Basics",
       "description": "Model multi-service local development.",
-      "learning_objectives": [
-        "Read compose files",
-        "Start and manage service stacks"
-      ],
-      "lessons": [
-        {
-          "id": "18ef7b23-b9d0-4f89-a14d-edacb138cc57",
-          "order_index": 0,
-          "title": "Compose File Structure",
-          "description": "Services, volumes, ports, and environment basics.",
-          "objectives": [
-            "Understand core compose keys"
-          ],
-          "teaching_notes": ""
-        }
-      ]
+      "order_index": 1,
+      "metadata": {
+        "learning_objectives": [
+          "Read compose files",
+          "Start and manage service stacks"
+        ],
+        "migrated_from": "module"
+      }
     }
-  ]
+  ],
+  "nodes": [
+    {
+      "id": "40811d45-7ee4-456d-9ac2-6a2c6ad48456",
+      "title": "What Docker Is",
+      "description": "Mental model for images, containers, and registries.",
+      "type": "learning_unit",
+      "chapter_id": "6cddf606-fed6-47e3-bd8c-8624b57a0599",
+      "required": true,
+      "prerequisites": {
+        "requires_all": [],
+        "requires_any": [],
+        "recommended": []
+      },
+      "completion_mode": "lesson_complete",
+      "estimated_duration_minutes": 40,
+      "layout": {
+        "x": 120.0,
+        "y": 120.0
+      },
+      "metadata": {
+        "objectives": [
+          "Differentiate image vs container",
+          "Know when to use Docker"
+        ],
+        "teaching_notes": "",
+        "migrated_from": "lesson"
+      },
+      "display": {},
+      "ksa": []
+    },
+    {
+      "id": "e6df951a-7550-4756-9fe2-95915205733e",
+      "title": "First Container Run",
+      "description": "Run, stop, and inspect a hello-world style container.",
+      "type": "learning_unit",
+      "chapter_id": "6cddf606-fed6-47e3-bd8c-8624b57a0599",
+      "required": true,
+      "prerequisites": {
+        "requires_all": [
+          "40811d45-7ee4-456d-9ac2-6a2c6ad48456"
+        ],
+        "requires_any": [],
+        "recommended": []
+      },
+      "completion_mode": "lesson_complete",
+      "estimated_duration_minutes": 40,
+      "layout": {
+        "x": 300.0,
+        "y": 120.0
+      },
+      "metadata": {
+        "objectives": [
+          "Use run/ps/stop/logs"
+        ],
+        "teaching_notes": "",
+        "migrated_from": "lesson"
+      },
+      "display": {},
+      "ksa": []
+    },
+    {
+      "id": "18ef7b23-b9d0-4f89-a14d-edacb138cc57",
+      "title": "Compose File Structure",
+      "description": "Services, volumes, ports, and environment basics.",
+      "type": "learning_unit",
+      "chapter_id": "144c9dc7-4826-4126-9e2e-8964aaf21633",
+      "required": true,
+      "prerequisites": {
+        "requires_all": [
+          "e6df951a-7550-4756-9fe2-95915205733e"
+        ],
+        "requires_any": [],
+        "recommended": []
+      },
+      "completion_mode": "lesson_complete",
+      "estimated_duration_minutes": 40,
+      "layout": {
+        "x": 480.0,
+        "y": 290.0
+      },
+      "metadata": {
+        "objectives": [
+          "Understand core compose keys"
+        ],
+        "teaching_notes": "",
+        "migrated_from": "lesson"
+      },
+      "display": {},
+      "ksa": []
+    }
+  ],
+  "edges": [
+    {
+      "from_node_id": "40811d45-7ee4-456d-9ac2-6a2c6ad48456",
+      "to_node_id": "e6df951a-7550-4756-9fe2-95915205733e",
+      "relationship": "requires_all"
+    },
+    {
+      "from_node_id": "e6df951a-7550-4756-9fe2-95915205733e",
+      "to_node_id": "18ef7b23-b9d0-4f89-a14d-edacb138cc57",
+      "relationship": "requires_all"
+    }
+  ],
+  "entry_node_ids": [
+    "40811d45-7ee4-456d-9ac2-6a2c6ad48456"
+  ],
+  "completion_rules": {
+    "required_completion": "all_required_nodes",
+    "migrated_from_schema": 1
+  },
+  "visual_layout": {
+    "layout_engine": "manual",
+    "migrated_from_schema": 1
+  },
+  "metadata": {
+    "migrated_from_schema": 1
+  }
 }

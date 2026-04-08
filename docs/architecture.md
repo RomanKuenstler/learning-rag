@@ -44,12 +44,14 @@ Permission enforcement is also server-side:
 
 ## Learning Foundation Model
 
-Step A introduces a dedicated learning domain:
+The learning domain now supports both legacy linear structures and graph-based skilltree structures:
 
 - `learning_paths` with scope (`global` or `user`), status (`draft|published|archived`), and metadata.
 - `learning_modules` ordered per path.
 - `learning_lessons` ordered per module.
 - `learning_path_allowed_files` and `learning_path_allowed_tags` for learning-path source scoping.
+- `learning_paths.schema_version` and `learning_paths.skilltree_definition` for v2 course graph persistence.
+- `user_learning_node_progress` for per-user node state persistence.
 
 Authorization rules:
 
@@ -64,14 +66,25 @@ Future learning chat support is prepared through:
 
 ## Course File Bootstrap Layer
 
-Course/path definitions are also represented as declarative JSON files in `courses/`.
+Course/path definitions are represented as declarative JSON files in `courses/`.
 
 - startup flow: validate files -> upsert valid courses into learning tables -> export current DB courses back to files
-- schema validation is strict (required fields, nested modules/lessons, enum checks)
+- schema validation is strict (required fields, node ids, dependency references, enum checks, cycle checks)
 - invalid files are logged with file-specific error details and are not imported
 - user-scoped file definitions require `owner_user_id`
 
-This keeps learning-path persistence in relational tables while enabling maintainable file-based bootstrap and import workflows.
+Schema behavior:
+
+- v2 (`schema_version: 2`) is the canonical representation (`chapters`, `nodes`, `edges`, `entry_node_ids`, completion/layout metadata).
+- v1 (`schema_version: 1`) remains supported and is migrated into a linear v2 graph during import/bootstrap.
+- legacy module/lesson CRUD remains available; when used, the service regenerates the skilltree definition from linear structure for compatibility.
+
+Runtime progression behavior:
+
+- deterministic prerequisite evaluation with `requires_all` and `requires_any`
+- optional/recommended edges are supported without blocking required completion
+- node states computed as `locked`, `available`, `in_progress`, `completed`, `mastered`, `optional_skipped`
+- branch/chapter completion and course completion are computed from required nodes
 
 ## Declared Learning Profile Model (Step B)
 

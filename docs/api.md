@@ -132,9 +132,16 @@ Lists course/path records for the authenticated user with optional query params:
 - `owner_user_id`
 - `sort` (`name_asc|name_desc|updated_desc|updated_asc|modules_desc|lessons_desc|scope_global_first|scope_user_first`)
 
+Course list responses expose both skilltree and compatibility counters:
+
+- `chapter_count`
+- `node_count`
+- `module_count`
+- `lesson_count`
+
 ### `GET /api/courses/template`
 
-Returns a reusable JSON template payload (`path-template.json`) that documents all supported course fields.
+Returns a reusable v2 skilltree JSON template payload (`path-template.json`).
 
 ### `POST /api/courses/import`
 
@@ -146,6 +153,8 @@ Multipart upload endpoint for up to 5 `.json` course files.
 Behavior:
 
 - files are schema validated
+- `schema_version: 2` is primary
+- `schema_version: 1` is accepted through compatibility migration into v2 graph format
 - per-file scope is enforced against role permissions (`global` requires admin)
 - valid files are imported
 - invalid files are rejected with per-file errors
@@ -163,7 +172,13 @@ Permission rules:
 
 ### `GET /api/learning-paths/{learning_path_id}`
 
-Returns one visible learning path with nested modules and lessons.
+Returns one visible learning path with:
+
+- skilltree graph payload (`chapters`, `nodes`, `edges`, `entry_node_ids`)
+- node metadata (`type`, `required`, `completion_mode`, `layout`, `ksa`)
+- computed node progress map (`node_progress`)
+- chapter progress and overall completion summary
+- compatibility module/lesson projection (`modules`, `lessons`)
 
 ### `PATCH /api/learning-paths/{learning_path_id}`
 

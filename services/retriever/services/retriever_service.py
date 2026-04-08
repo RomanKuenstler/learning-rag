@@ -72,6 +72,14 @@ from services.retriever.schemas.learning import (
     LearningPathListResponse,
     LearningPathRead,
     LearningPathUpdateRequest,
+    SkilltreeChapterProgressRead,
+    SkilltreeChapterRead,
+    SkilltreeCompletionSummaryRead,
+    SkilltreeEdgeRead,
+    SkilltreeNodeKsaRead,
+    SkilltreeNodeLayoutRead,
+    SkilltreeNodePrerequisitesRead,
+    SkilltreeNodeRead,
 )
 from services.retriever.schemas.learning_profile import (
     LearningGoalCreateRequest,
@@ -116,7 +124,8 @@ from services.retriever.services.diagnostic_definitions import load_parsed_sourc
 from services.retriever.services.diagnostic_scoring import score_attempt
 from services.retriever.services.chat_naming import generate_chat_name
 from services.retriever.services.library_manager import LibraryManager, UploadFilePayload
-from services.retriever.services.course_files import CourseDefinition, CourseFileParser
+from services.retriever.services.course_files import CourseDefinition, CourseFileParser, LegacyCourseDefinition
+from services.retriever.services.course_skilltree import build_skilltree_runtime
 from services.retriever.services.message_mapper import map_attachment, map_chat, map_filter_file, map_filter_tag, map_gpt, map_message, map_source
 from services.retriever.services.ksa_assessment import (
     ASSESSMENT_VERSION,
@@ -1356,6 +1365,13 @@ class RetrieverAppService:
             modules = self.chat_repository.list_learning_modules(record.id)
             module_count = len(modules)
             lesson_count = sum(len(self.chat_repository.list_learning_lessons(module.id)) for module in modules)
+            try:
+                definition = self._course_definition_from_learning_path(record)
+                chapter_count = len(definition.chapters)
+                node_count = len(definition.nodes)
+            except Exception:
+                chapter_count = module_count
+                node_count = lesson_count
             owner = users_by_id.get(record.owner_user_id or -1)
             items.append(
                 CourseListItemRead(
@@ -1369,6 +1385,9 @@ class RetrieverAppService:
                     status=record.status,
                     subject=record.subject or "",
                     difficulty_level=record.difficulty_level or "",
+                    schema_version=record.schema_version,
+                    chapter_count=chapter_count,
+                    node_count=node_count,
                     module_count=module_count,
                     lesson_count=lesson_count,
                     updated_at=record.updated_at,
@@ -1465,6 +1484,18 @@ class RetrieverAppService:
                 "difficulty_level": payload.difficulty_level.strip(),
                 "estimated_duration_minutes": payload.estimated_duration_minutes,
                 "status": payload.status,
+                "schema_version": 2,
+                "skilltree_definition": {
+                    "schema_version": 2,
+                    "source_schema_version": 2,
+                    "chapters": [],
+                    "nodes": [],
+                    "edges": [],
+                    "entry_node_ids": [],
+                    "completion_rules": {"required_completion": "all_required_nodes"},
+                    "visual_layout": {},
+                    "metadata": {},
+                },
             }
         )
         self.chat_repository.replace_learning_path_allowed_files(record.id, payload.allowed_file_ids)
@@ -1544,6 +1575,7 @@ class RetrieverAppService:
                 "learning_objectives": [item.strip() for item in payload.learning_objectives if item.strip()],
             }
         )
+        self._sync_skilltree_from_linear_path(learning_path_id)
         self._write_course_file_for_path(learning_path_id)
         return self._build_learning_module_read(module, lessons=[])
 
@@ -1573,6 +1605,7 @@ class RetrieverAppService:
         if updated is None:
             return None
         lessons = self.chat_repository.list_learning_lessons(updated.id)
+        self._sync_skilltree_from_linear_path(learning_path.id)
         self._write_course_file_for_path(learning_path.id)
         return self._build_learning_module_read(updated, lessons=lessons)
 
@@ -1587,6 +1620,7 @@ class RetrieverAppService:
         deleted = self.chat_repository.delete_learning_module(module_id)
         if deleted is None:
             return None
+        self._sync_skilltree_from_linear_path(learning_path.id)
         self._write_course_file_for_path(learning_path.id)
         return self._build_learning_module_read(deleted, lessons=[])
 
@@ -1606,6 +1640,7 @@ class RetrieverAppService:
             module.id: self.chat_repository.list_learning_lessons(module.id)
             for module in modules
         }
+        self._sync_skilltree_from_linear_path(learning_path_id)
         self._write_course_file_for_path(learning_path_id)
         return [self._build_learning_module_read(module, lessons=lessons_by_module.get(module.id, [])) for module in modules]
 
@@ -1633,6 +1668,7 @@ class RetrieverAppService:
                 "teaching_notes": payload.teaching_notes.strip(),
             }
         )
+        self._sync_skilltree_from_linear_path(learning_path.id)
         self._write_course_file_for_path(learning_path.id)
         return self._build_learning_lesson_read(lesson)
 
@@ -1664,6 +1700,7 @@ class RetrieverAppService:
         updated = self.chat_repository.update_learning_lesson(lesson_id, fields)
         if updated is None:
             return None
+        self._sync_skilltree_from_linear_path(learning_path.id)
         self._write_course_file_for_path(learning_path.id)
         return self._build_learning_lesson_read(updated)
 
@@ -1681,6 +1718,7 @@ class RetrieverAppService:
         deleted = self.chat_repository.delete_learning_lesson(lesson_id)
         if deleted is None:
             return None
+        self._sync_skilltree_from_linear_path(learning_path.id)
         self._write_course_file_for_path(learning_path.id)
         return self._build_learning_lesson_read(deleted)
 
@@ -1699,6 +1737,7 @@ class RetrieverAppService:
         self._ensure_learning_path_edit_allowed(user, learning_path)
         lesson_orders = [(item.id, item.order_index) for item in payload.lessons]
         lessons = self.chat_repository.reorder_learning_lessons(module_id, lesson_orders)
+        self._sync_skilltree_from_linear_path(learning_path.id)
         self._write_course_file_for_path(learning_path.id)
         return [self._build_learning_lesson_read(lesson) for lesson in lessons]
 
@@ -2195,34 +2234,18 @@ class RetrieverAppService:
             "difficulty_level": definition.difficulty_level,
             "estimated_duration_minutes": definition.estimated_duration_minutes,
             "status": definition.status,
+            "schema_version": 2,
+            "skilltree_definition": definition.model_dump(exclude={"id", "scope", "owner_user_id", "status", "title", "description", "subject", "difficulty_level", "estimated_duration_minutes", "allowed_file_ids", "allowed_tags"}),
         }
         if existing is None:
+            if definition.id:
+                fields["id"] = definition.id
             existing = self.chat_repository.create_learning_path(fields)
         else:
             updated = self.chat_repository.update_learning_path(existing.id, fields)
             if updated is not None:
                 existing = updated
-        modules_payload: list[dict[str, object]] = []
-        for module in sorted(definition.modules, key=lambda item: item.order_index):
-            lessons_payload: list[dict[str, object]] = []
-            for lesson in sorted(module.lessons, key=lambda item: item.order_index):
-                lesson_payload: dict[str, object] = {
-                    "order_index": lesson.order_index,
-                    "title": lesson.title,
-                    "description": lesson.description,
-                    "objectives": list(lesson.objectives),
-                    "teaching_notes": lesson.teaching_notes,
-                }
-                lessons_payload.append(lesson_payload)
-            module_payload: dict[str, object] = {
-                "learning_path_id": existing.id,
-                "order_index": module.order_index,
-                "title": module.title,
-                "description": module.description,
-                "learning_objectives": list(module.learning_objectives),
-                "lessons": lessons_payload,
-            }
-            modules_payload.append(module_payload)
+        modules_payload = self._modules_payload_from_course_definition(existing.id, definition)
         self.chat_repository.replace_learning_path_structure(existing.id, modules_payload)
         self.chat_repository.replace_learning_path_allowed_files(existing.id, definition.allowed_file_ids)
         self.chat_repository.replace_learning_path_allowed_tags(existing.id, definition.allowed_tags)
@@ -2245,35 +2268,34 @@ class RetrieverAppService:
             path = self.chat_repository.get_learning_path(learning_path_id)
             if path is None:
                 return
-            modules = self.chat_repository.list_learning_modules(path.id)
-            module_payload = []
-            for module in modules:
-                lessons = self.chat_repository.list_learning_lessons(module.id)
-                module_payload.append(
-                    {
-                        "id": module.id,
-                        "order_index": module.order_index,
-                        "title": module.title,
-                        "description": module.description or "",
-                        "learning_objectives": list(module.learning_objectives or []),
-                        "lessons": [
-                            {
-                                "id": lesson.id,
-                                "order_index": lesson.order_index,
-                                "title": lesson.title,
-                                "description": lesson.description or "",
-                                "objectives": list(lesson.objectives or []),
-                                "teaching_notes": lesson.teaching_notes or "",
-                            }
-                            for lesson in lessons
-                        ],
-                    }
-                )
             allowed_files = self.chat_repository.list_learning_path_allowed_files(path.id)
             allowed_tags = self.chat_repository.list_learning_path_allowed_tags(path.id)
-            definition = CourseDefinition.model_validate(
+            definition = self._course_definition_from_learning_path(path).model_copy(
+                update={
+                    "id": path.id,
+                    "scope": path.scope,
+                    "owner_user_id": path.owner_user_id,
+                    "title": path.title,
+                    "description": path.description or "",
+                    "subject": path.subject or "",
+                    "difficulty_level": path.difficulty_level or "",
+                    "estimated_duration_minutes": path.estimated_duration_minutes,
+                    "status": path.status,
+                    "allowed_file_ids": [item.file_id for item in allowed_files],
+                    "allowed_tags": [item.tag for item in allowed_tags],
+                }
+            )
+            self._write_course_definition_file(definition)
+        except Exception:
+            logger.exception("Failed to export course file for learning path %s", learning_path_id)
+
+    def _course_definition_from_learning_path(self, path: LearningPath) -> CourseDefinition:
+        payload = dict(path.skilltree_definition or {})
+        if payload:
+            return CourseDefinition.model_validate(
                 {
-                    "schema_version": 1,
+                    "schema_version": 2,
+                    "source_schema_version": int(path.schema_version or 2),
                     "id": path.id,
                     "title": path.title,
                     "description": path.description or "",
@@ -2283,14 +2305,147 @@ class RetrieverAppService:
                     "difficulty_level": path.difficulty_level or "",
                     "estimated_duration_minutes": path.estimated_duration_minutes,
                     "status": path.status,
-                    "allowed_file_ids": [item.file_id for item in allowed_files],
-                    "allowed_tags": [item.tag for item in allowed_tags],
-                    "modules": module_payload,
+                    "allowed_file_ids": [],
+                    "allowed_tags": [],
+                    **payload,
                 }
             )
-            self._write_course_definition_file(definition)
-        except Exception:
-            logger.exception("Failed to export course file for learning path %s", learning_path_id)
+        return self._legacy_definition_from_modules(path)
+
+    def _legacy_definition_from_modules(self, path: LearningPath) -> CourseDefinition:
+        modules = self.chat_repository.list_learning_modules(path.id)
+        raw_modules: list[dict[str, object]] = []
+        for module in modules:
+            lessons = self.chat_repository.list_learning_lessons(module.id)
+            raw_modules.append(
+                {
+                    "id": module.id,
+                    "order_index": module.order_index,
+                    "title": module.title,
+                    "description": module.description or "",
+                    "learning_objectives": list(module.learning_objectives or []),
+                    "lessons": [
+                        {
+                            "id": lesson.id,
+                            "order_index": lesson.order_index,
+                            "title": lesson.title,
+                            "description": lesson.description or "",
+                            "objectives": list(lesson.objectives or []),
+                            "teaching_notes": lesson.teaching_notes or "",
+                        }
+                        for lesson in lessons
+                    ],
+                }
+            )
+        legacy = LegacyCourseDefinition.model_validate(
+            {
+                "schema_version": 1,
+                "id": path.id,
+                "title": path.title,
+                "description": path.description or "",
+                "scope": path.scope,
+                "owner_user_id": path.owner_user_id,
+                "subject": path.subject or "",
+                "difficulty_level": path.difficulty_level or "",
+                "estimated_duration_minutes": path.estimated_duration_minutes,
+                "status": path.status,
+                "allowed_file_ids": [],
+                "allowed_tags": [],
+                "modules": raw_modules,
+            }
+        )
+        migrated_payload = self.course_file_parser._convert_legacy_payload(legacy)  # noqa: SLF001 - compatibility conversion
+        migrated_payload["source_schema_version"] = 1
+        return CourseDefinition.model_validate(migrated_payload)
+
+    def _modules_payload_from_course_definition(self, learning_path_id: str, definition: CourseDefinition) -> list[dict[str, object]]:
+        chapter_order = sorted(definition.chapters, key=lambda item: (item.order_index, item.title.lower()))
+        if not chapter_order:
+            return [
+                {
+                    "learning_path_id": learning_path_id,
+                    "order_index": 0,
+                    "title": "Ungrouped",
+                    "description": "",
+                    "learning_objectives": [],
+                    "lessons": [
+                        {
+                            "order_index": lesson_index,
+                            "title": node.title,
+                            "description": node.description,
+                            "objectives": [str(item).strip() for item in list(node.metadata.get("objectives", [])) if str(item).strip()],
+                            "teaching_notes": str(node.metadata.get("teaching_notes", "")),
+                        }
+                        for lesson_index, node in enumerate(
+                            sorted(definition.nodes, key=lambda node: (float(node.layout.y), float(node.layout.x), node.title.lower()))
+                        )
+                    ],
+                }
+            ]
+
+        nodes_by_chapter: dict[str, list] = {chapter.id: [] for chapter in chapter_order}
+        for node in definition.nodes:
+            chapter_id = node.chapter_id if node.chapter_id in nodes_by_chapter else chapter_order[0].id
+            nodes_by_chapter.setdefault(chapter_id, []).append(node)
+
+        modules_payload: list[dict[str, object]] = []
+        for chapter_index, chapter in enumerate(chapter_order):
+            chapter_id = chapter.id
+            chapter_nodes = sorted(
+                nodes_by_chapter.get(chapter_id, []),
+                key=lambda node: (float(node.layout.y), float(node.layout.x), node.title.lower()),
+            )
+            lessons_payload = []
+            for lesson_index, node in enumerate(chapter_nodes):
+                lessons_payload.append(
+                    {
+                        "order_index": lesson_index,
+                        "title": node.title,
+                        "description": node.description,
+                        "objectives": [str(item).strip() for item in list(node.metadata.get("objectives", [])) if str(item).strip()],
+                        "teaching_notes": str(node.metadata.get("teaching_notes", "")),
+                    }
+                )
+            modules_payload.append(
+                {
+                    "learning_path_id": learning_path_id,
+                    "order_index": chapter_index,
+                    "title": chapter.title,
+                    "description": chapter.description,
+                    "learning_objectives": [
+                        str(item).strip() for item in list(chapter.metadata.get("learning_objectives", [])) if str(item).strip()
+                    ],
+                    "lessons": lessons_payload,
+                }
+            )
+        return modules_payload
+
+    def _sync_skilltree_from_linear_path(self, learning_path_id: str) -> None:
+        path = self.chat_repository.get_learning_path(learning_path_id)
+        if path is None:
+            return
+        definition = self._legacy_definition_from_modules(path)
+        self.chat_repository.update_learning_path(
+            learning_path_id,
+            {
+                "schema_version": 2,
+                "skilltree_definition": definition.model_dump(
+                    exclude={
+                        "id",
+                        "scope",
+                        "owner_user_id",
+                        "status",
+                        "title",
+                        "description",
+                        "subject",
+                        "difficulty_level",
+                        "estimated_duration_minutes",
+                        "allowed_file_ids",
+                        "allowed_tags",
+                    }
+                ),
+            },
+        )
 
     def _delete_course_file_for_course_id(self, course_id: str) -> None:
         self._delete_course_files_for_id(course_id)
@@ -2320,31 +2475,10 @@ class RetrieverAppService:
         file_name: str,
         target_learning_path_id: str | None,
     ) -> None:
-        allowed_module_ids: set[str] = set()
-        allowed_lesson_ids: set[str] = set()
-        if target_learning_path_id:
-            for module in self.chat_repository.list_learning_modules(target_learning_path_id):
-                allowed_module_ids.add(module.id)
-                for lesson in self.chat_repository.list_learning_lessons(module.id):
-                    allowed_lesson_ids.add(lesson.id)
-
         if definition.id:
             existing = self.chat_repository.get_learning_path(definition.id)
             if existing is not None and existing.id != target_learning_path_id:
                 raise ValueError(f"{file_name}: id '{definition.id}' already exists; remove id fields from the JSON file")
-
-        for module in definition.modules:
-            if not module.id:
-                continue
-            existing_module = self.chat_repository.get_learning_module(module.id)
-            if existing_module is not None and module.id not in allowed_module_ids:
-                raise ValueError(f"{file_name}: module id '{module.id}' already exists; remove id fields from the JSON file")
-            for lesson in module.lessons:
-                if not lesson.id:
-                    continue
-                existing_lesson = self.chat_repository.get_learning_lesson(lesson.id)
-                if existing_lesson is not None and lesson.id not in allowed_lesson_ids:
-                    raise ValueError(f"{file_name}: lesson id '{lesson.id}' already exists; remove id fields from the JSON file")
 
     def _course_structure_signature(self, learning_path_id: str) -> tuple[tuple[object, ...], tuple[int, ...], tuple[str, ...]]:
         modules = self.chat_repository.list_learning_modules(learning_path_id)
@@ -3119,6 +3253,7 @@ class RetrieverAppService:
         )
 
     def _build_learning_path_read(self, user: UserAccount, path: LearningPath) -> LearningPathRead:
+        definition = self._course_definition_from_learning_path(path)
         modules = self.chat_repository.list_learning_modules(path.id)
         lessons_by_module = {
             module.id: self.chat_repository.list_learning_lessons(module.id)
@@ -3126,6 +3261,9 @@ class RetrieverAppService:
         }
         allowed_files = self.chat_repository.list_learning_path_allowed_files(path.id)
         allowed_tags = self.chat_repository.list_learning_path_allowed_tags(path.id)
+        progress_entries = self.chat_repository.list_user_learning_node_progress(user_id=user.id, learning_path_id=path.id)
+        progress_map = {entry.node_id: entry.status for entry in progress_entries}
+        runtime = build_skilltree_runtime(definition, persisted_node_progress=progress_map)
         return LearningPathRead(
             id=path.id,
             scope=path.scope,
@@ -3136,8 +3274,82 @@ class RetrieverAppService:
             difficulty_level=path.difficulty_level or "",
             estimated_duration_minutes=path.estimated_duration_minutes,
             status=path.status,
+            schema_version=int(path.schema_version or 1),
             allowed_file_ids=[item.file_id for item in allowed_files],
             allowed_tags=[item.tag for item in allowed_tags],
+            chapters=[
+                SkilltreeChapterRead(
+                    id=chapter.id,
+                    title=chapter.title,
+                    description=chapter.description,
+                    order_index=chapter.order_index,
+                    metadata=dict(chapter.metadata or {}),
+                )
+                for chapter in definition.chapters
+            ],
+            nodes=[
+                SkilltreeNodeRead(
+                    id=node.id,
+                    title=node.title,
+                    description=node.description,
+                    type=node.type,
+                    chapter_id=node.chapter_id,
+                    required=node.required,
+                    prerequisites=SkilltreeNodePrerequisitesRead(
+                        requires_all=list(node.prerequisites.requires_all),
+                        requires_any=list(node.prerequisites.requires_any),
+                        recommended=list(node.prerequisites.recommended),
+                    ),
+                    completion_mode=node.completion_mode,
+                    estimated_duration_minutes=node.estimated_duration_minutes,
+                    layout=SkilltreeNodeLayoutRead(x=node.layout.x, y=node.layout.y),
+                    metadata=dict(node.metadata or {}),
+                    display=dict(node.display or {}),
+                    ksa=[
+                        SkilltreeNodeKsaRead(
+                            dimension=item.dimension,
+                            topic=item.topic,
+                            subtopic=item.subtopic,
+                            target_level=item.target_level,
+                            contribution_weight=item.contribution_weight,
+                        )
+                        for item in node.ksa
+                    ],
+                )
+                for node in definition.nodes
+            ],
+            edges=[
+                SkilltreeEdgeRead(
+                    from_node_id=edge.from_node_id,
+                    to_node_id=edge.to_node_id,
+                    relationship=edge.relationship,
+                )
+                for edge in definition.edges
+            ],
+            entry_node_ids=list(definition.entry_node_ids),
+            completion_rules=dict(definition.completion_rules or {}),
+            visual_layout=dict(definition.visual_layout or {}),
+            metadata=dict(definition.metadata or {}),
+            node_progress=dict(runtime.node_progress),
+            chapter_progress=[
+                SkilltreeChapterProgressRead(
+                    chapter_id=item.chapter_id,
+                    title=item.title,
+                    required_total=item.required_total,
+                    required_completed=item.required_completed,
+                    optional_total=item.optional_total,
+                    optional_completed=item.optional_completed,
+                    is_complete=item.is_complete,
+                )
+                for item in runtime.chapter_summaries
+            ],
+            completion_summary=SkilltreeCompletionSummaryRead(
+                required_total=runtime.completion_summary.required_total,
+                required_completed=runtime.completion_summary.required_completed,
+                optional_total=runtime.completion_summary.optional_total,
+                optional_completed=runtime.completion_summary.optional_completed,
+                is_complete=runtime.completion_summary.is_complete,
+            ),
             modules=[
                 self._build_learning_module_read(module, lessons=lessons_by_module.get(module.id, []))
                 for module in modules

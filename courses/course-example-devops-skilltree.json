@@ -1,0 +1,322 @@
+{
+  "schema_version": 2,
+  "source_schema_version": 2,
+  "id": "course-example-devops-skilltree",
+  "title": "Example: DevOps Skilltree",
+  "description": "Branching DevOps progression with parallel learning tracks and optional reinforcement nodes.",
+  "scope": "global",
+  "owner_user_id": null,
+  "subject": "DevOps",
+  "difficulty_level": "intermediate",
+  "estimated_duration_minutes": 240,
+  "status": "published",
+  "allowed_file_ids": [],
+  "allowed_tags": [
+    "ci-cd",
+    "docker",
+    "kubernetes"
+  ],
+  "chapters": [
+    {
+      "id": "chapter-foundations",
+      "title": "Foundations",
+      "description": "Core container and git workflows.",
+      "order_index": 0,
+      "metadata": {
+        "learning_objectives": [
+          "Understand container lifecycle",
+          "Ship repeatable local workflows"
+        ]
+      }
+    },
+    {
+      "id": "chapter-delivery",
+      "title": "Delivery",
+      "description": "Build and release automation.",
+      "order_index": 1,
+      "metadata": {
+        "learning_objectives": [
+          "Automate build and test",
+          "Design safe deployment flow"
+        ]
+      }
+    },
+    {
+      "id": "chapter-operations",
+      "title": "Operations",
+      "description": "Observe and stabilize production behavior.",
+      "order_index": 2,
+      "metadata": {
+        "learning_objectives": [
+          "Operate services with confidence",
+          "Respond to incidents with runbooks"
+        ]
+      }
+    }
+  ],
+  "nodes": [
+    {
+      "id": "node-container-basics",
+      "title": "Container Basics",
+      "description": "Images, containers, and runtime lifecycle.",
+      "type": "learning_unit",
+      "chapter_id": "chapter-foundations",
+      "required": true,
+      "prerequisites": {
+        "requires_all": [],
+        "requires_any": [],
+        "recommended": []
+      },
+      "completion_mode": "lesson_complete",
+      "estimated_duration_minutes": 20,
+      "layout": {
+        "x": 90.0,
+        "y": 140.0
+      },
+      "metadata": {},
+      "display": {},
+      "ksa": [
+        {
+          "dimension": "K",
+          "topic": "information_technology",
+          "subtopic": null,
+          "target_level": 3,
+          "contribution_weight": 0.5
+        }
+      ]
+    },
+    {
+      "id": "node-compose-lab",
+      "title": "Compose Lab",
+      "description": "Run multi-service local stack with docker compose.",
+      "type": "practice",
+      "chapter_id": "chapter-foundations",
+      "required": true,
+      "prerequisites": {
+        "requires_all": [
+          "node-container-basics"
+        ],
+        "requires_any": [],
+        "recommended": []
+      },
+      "completion_mode": "practice_complete",
+      "estimated_duration_minutes": 25,
+      "layout": {
+        "x": 280.0,
+        "y": 140.0
+      },
+      "metadata": {},
+      "display": {},
+      "ksa": [
+        {
+          "dimension": "S",
+          "topic": "digital_craft",
+          "subtopic": "Full-Stack Development",
+          "target_level": 3,
+          "contribution_weight": 0.6
+        }
+      ]
+    },
+    {
+      "id": "node-gitops-primer",
+      "title": "GitOps Primer",
+      "description": "Declarative delivery workflow with git as source of truth.",
+      "type": "learning_unit",
+      "chapter_id": "chapter-delivery",
+      "required": true,
+      "prerequisites": {
+        "requires_all": [
+          "node-compose-lab"
+        ],
+        "requires_any": [],
+        "recommended": []
+      },
+      "completion_mode": "lesson_complete",
+      "estimated_duration_minutes": 30,
+      "layout": {
+        "x": 470.0,
+        "y": 90.0
+      },
+      "metadata": {},
+      "display": {},
+      "ksa": []
+    },
+    {
+      "id": "node-cicd-pipeline",
+      "title": "CI/CD Pipeline",
+      "description": "Build and test automation for every commit.",
+      "type": "checkpoint",
+      "chapter_id": "chapter-delivery",
+      "required": true,
+      "prerequisites": {
+        "requires_all": [
+          "node-compose-lab"
+        ],
+        "requires_any": [],
+        "recommended": []
+      },
+      "completion_mode": "checkpoint_pass",
+      "estimated_duration_minutes": 35,
+      "layout": {
+        "x": 470.0,
+        "y": 220.0
+      },
+      "metadata": {},
+      "display": {},
+      "ksa": []
+    },
+    {
+      "id": "node-observability",
+      "title": "Observability Basics",
+      "description": "Metrics, logs, and traces for service health.",
+      "type": "learning_unit",
+      "chapter_id": "chapter-operations",
+      "required": true,
+      "prerequisites": {
+        "requires_all": [],
+        "requires_any": [
+          "node-gitops-primer",
+          "node-cicd-pipeline"
+        ],
+        "recommended": []
+      },
+      "completion_mode": "lesson_complete",
+      "estimated_duration_minutes": 25,
+      "layout": {
+        "x": 680.0,
+        "y": 150.0
+      },
+      "metadata": {},
+      "display": {},
+      "ksa": [
+        {
+          "dimension": "A",
+          "topic": "executive_function",
+          "subtopic": null,
+          "target_level": 3,
+          "contribution_weight": 0.4
+        }
+      ]
+    },
+    {
+      "id": "node-incident-drill",
+      "title": "Incident Drill",
+      "description": "Optional incident response simulation.",
+      "type": "review",
+      "chapter_id": "chapter-operations",
+      "required": false,
+      "prerequisites": {
+        "requires_all": [
+          "node-observability"
+        ],
+        "requires_any": [],
+        "recommended": []
+      },
+      "completion_mode": "manual",
+      "estimated_duration_minutes": 20,
+      "layout": {
+        "x": 860.0,
+        "y": 240.0
+      },
+      "metadata": {},
+      "display": {},
+      "ksa": []
+    },
+    {
+      "id": "node-release-milestone",
+      "title": "Release Milestone",
+      "description": "Merge point for delivery and operations readiness.",
+      "type": "milestone",
+      "chapter_id": "chapter-operations",
+      "required": true,
+      "prerequisites": {
+        "requires_all": [
+          "node-observability"
+        ],
+        "requires_any": [
+          "node-gitops-primer",
+          "node-cicd-pipeline"
+        ],
+        "recommended": [
+          "node-incident-drill"
+        ]
+      },
+      "completion_mode": "checkpoint_pass",
+      "estimated_duration_minutes": 25,
+      "layout": {
+        "x": 860.0,
+        "y": 110.0
+      },
+      "metadata": {},
+      "display": {},
+      "ksa": []
+    }
+  ],
+  "edges": [
+    {
+      "from_node_id": "node-incident-drill",
+      "to_node_id": "node-release-milestone",
+      "relationship": "recommended"
+    },
+    {
+      "from_node_id": "node-compose-lab",
+      "to_node_id": "node-cicd-pipeline",
+      "relationship": "requires_all"
+    },
+    {
+      "from_node_id": "node-compose-lab",
+      "to_node_id": "node-gitops-primer",
+      "relationship": "requires_all"
+    },
+    {
+      "from_node_id": "node-container-basics",
+      "to_node_id": "node-compose-lab",
+      "relationship": "requires_all"
+    },
+    {
+      "from_node_id": "node-observability",
+      "to_node_id": "node-incident-drill",
+      "relationship": "requires_all"
+    },
+    {
+      "from_node_id": "node-observability",
+      "to_node_id": "node-release-milestone",
+      "relationship": "requires_all"
+    },
+    {
+      "from_node_id": "node-cicd-pipeline",
+      "to_node_id": "node-observability",
+      "relationship": "requires_any"
+    },
+    {
+      "from_node_id": "node-cicd-pipeline",
+      "to_node_id": "node-release-milestone",
+      "relationship": "requires_any"
+    },
+    {
+      "from_node_id": "node-gitops-primer",
+      "to_node_id": "node-observability",
+      "relationship": "requires_any"
+    },
+    {
+      "from_node_id": "node-gitops-primer",
+      "to_node_id": "node-release-milestone",
+      "relationship": "requires_any"
+    }
+  ],
+  "entry_node_ids": [
+    "node-container-basics"
+  ],
+  "completion_rules": {
+    "required_completion": "all_required_nodes"
+  },
+  "visual_layout": {
+    "layout_engine": "manual",
+    "canvas_width": 1080,
+    "canvas_height": 460
+  },
+  "metadata": {
+    "domain": "devops",
+    "example": true
+  }
+}

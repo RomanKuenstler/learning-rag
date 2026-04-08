@@ -83,7 +83,8 @@ npm run build
 
 - courses API list/template route coverage
 - learning API compatibility coverage after introducing courses routes
-- course JSON parser validation tests (valid payload, invalid scope-owner, example files)
+- course JSON parser validation tests (v2 payload, v1 migration, cycle rejection, example files)
+- skilltree runtime tests (unlock logic, optional/parallel branches, requires-any merge, completion summary)
 - KSA profile API coverage (`/api/learning-profile/ksa`) including baseline fallback values
 - KSA assessment API route coverage (`/api/ksa/assessment/*`) for start, read, save, and complete flows
 - deterministic KSA scoring tests (sieve logic, knowledge multipliers, skills mapping, abilities weighting, divergent heuristic)
@@ -94,7 +95,7 @@ npm run build
 Focused run:
 
 ```bash
-python3 -m pytest tests/test_step14_learning_api.py tests/test_step20_ksa_assessment_scoring.py tests/test_step21_ksa_drills.py tests/test_retriever_api.py tests/test_courses_files.py -q
+python3 -m pytest tests/test_step14_learning_api.py tests/test_step20_ksa_assessment_scoring.py tests/test_step21_ksa_drills.py tests/test_retriever_api.py tests/test_courses_files.py tests/test_course_skilltree_runtime.py -q
 cd webui && npm run build
 ```
 

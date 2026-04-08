@@ -10,7 +10,11 @@ This repository includes the learning foundation, declared learning profile laye
 - role model: `admin`, `user`, `student`
 - student restrictions for normal chat and GPT usage
 - learning-path domain model with global and user scope
-- ordered module and lesson structure
+- graph-based skilltree course structure (`schema_version: 2`)
+- compatibility migration from legacy linear module/lesson JSON (`schema_version: 1`)
+- node prerequisites (`requires_all`, `requires_any`, `recommended`) with deterministic unlock logic
+- node progress-state foundation (`locked`, `available`, `in_progress`, `completed`, `mastered`, `optional_skipped`)
+- node-level KSA metadata support (`K/S/A`, topic, subtopic, target level, contribution weight)
 - learning-path source scoping through allowed files and tags
 - learning-path CRUD API with role-based authorization
 - user-scoped declared learning preferences

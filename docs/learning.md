@@ -97,12 +97,15 @@ Repeatability:
 
 ## Courses Page
 
-A new `/courses` page manages learning paths as courses with:
+A new `/courses` page manages learning paths as graph-based skilltree courses with:
 
 - table view
 - search
 - filtering (`scope`, `status`)
 - sorting (`name`, `updated`, `modules`, `lessons`, scope-first variants)
+- skilltree render in course details (graph nodes + edges)
+- right-side node detail panel
+- chapter and course completion summaries
 - `Download Template` action
 - `Add Paths` dialog for uploading up to 5 JSON files
 
@@ -110,7 +113,7 @@ The upload dialog supports per-file scope (`global` or `user`) using styled drop
 
 ## Course JSON Source Of Truth
 
-Course definitions are file-backed in `courses/`.
+Course definitions are file-backed in `courses/` and now use skilltree schema v2.
 
 - one `.json` file = one course/path
 - files are validated at startup
@@ -119,6 +122,33 @@ Course definitions are file-backed in `courses/`.
 - existing DB paths are exported back to `courses/` so each path has a corresponding JSON file
 
 `global` vs `user` scope is validated from JSON. User-scoped courses require `owner_user_id` in file-based bootstrap.
+
+### Schema v2 Overview
+
+- top-level: `schema_version`, metadata, `chapters`, `nodes`, `edges`, `entry_node_ids`, `completion_rules`, `visual_layout`
+- node types: `learning_unit`, `practice`, `checkpoint`, `review`, `milestone`
+- dependency relationships: `requires_all`, `requires_any`, `recommended`
+- optional and parallel progression are supported through node `required` and graph dependencies
+- node KSA metadata is supported on each node (`dimension`, `topic`, optional `subtopic`, `target_level`, `contribution_weight`)
+
+### Compatibility And Migration
+
+- legacy `schema_version: 1` module/lesson files are still accepted
+- legacy payloads are converted into a linear v2 graph during import/bootstrap
+- existing linear CRUD endpoints continue to work, with automatic graph regeneration from module/lesson edits
+
+### Progress States
+
+Node runtime states currently support:
+
+- `locked`
+- `available`
+- `in_progress`
+- `completed`
+- `mastered`
+- `optional_skipped`
+
+The system computes deterministic unlock states from prerequisites and persisted node progress.
 
 ## Diagnostics (Step B.1)
 

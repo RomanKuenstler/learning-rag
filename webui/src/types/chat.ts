@@ -278,6 +278,9 @@ export type GptPreviewRequest = {
 
 export type LearningPathScope = "global" | "user";
 export type LearningPathStatus = "draft" | "published" | "archived";
+export type SkilltreeNodeType = "learning_unit" | "practice" | "checkpoint" | "review" | "milestone";
+export type SkilltreeNodeCompletionMode = "lesson_complete" | "manual" | "practice_complete" | "checkpoint_pass";
+export type SkilltreeNodeProgressState = "locked" | "available" | "in_progress" | "completed" | "mastered" | "optional_skipped";
 
 export type LearningLesson = {
   id: string;
@@ -313,8 +316,19 @@ export type LearningPath = {
   difficulty_level: string;
   estimated_duration_minutes: number | null;
   status: LearningPathStatus | string;
+  schema_version: number;
   allowed_file_ids: number[];
   allowed_tags: string[];
+  chapters: SkilltreeChapter[];
+  nodes: SkilltreeNode[];
+  edges: SkilltreeEdge[];
+  entry_node_ids: string[];
+  completion_rules: Record<string, unknown>;
+  visual_layout: Record<string, unknown>;
+  metadata: Record<string, unknown>;
+  node_progress: Record<string, SkilltreeNodeProgressState | string>;
+  chapter_progress: SkilltreeChapterProgress[];
+  completion_summary: SkilltreeCompletionSummary | null;
   modules: LearningModule[];
   can_edit: boolean;
   can_delete: boolean;
@@ -347,10 +361,80 @@ export type CourseListItem = {
   status: LearningPathStatus | string;
   subject: string;
   difficulty_level: string;
+  schema_version: number;
+  chapter_count: number;
+  node_count: number;
   module_count: number;
   lesson_count: number;
   updated_at: string;
   created_at: string;
+};
+
+export type SkilltreeNodePrerequisites = {
+  requires_all: string[];
+  requires_any: string[];
+  recommended: string[];
+};
+
+export type SkilltreeNodeKsa = {
+  dimension: "K" | "S" | "A";
+  topic: string;
+  subtopic: string | null;
+  target_level: number | null;
+  contribution_weight: number | null;
+};
+
+export type SkilltreeNodeLayout = {
+  x: number;
+  y: number;
+};
+
+export type SkilltreeNode = {
+  id: string;
+  title: string;
+  description: string;
+  type: SkilltreeNodeType;
+  chapter_id: string | null;
+  required: boolean;
+  prerequisites: SkilltreeNodePrerequisites;
+  completion_mode: SkilltreeNodeCompletionMode;
+  estimated_duration_minutes: number | null;
+  layout: SkilltreeNodeLayout;
+  metadata: Record<string, unknown>;
+  display: Record<string, unknown>;
+  ksa: SkilltreeNodeKsa[];
+};
+
+export type SkilltreeEdge = {
+  from_node_id: string;
+  to_node_id: string;
+  relationship: "requires_all" | "requires_any" | "recommended";
+};
+
+export type SkilltreeChapter = {
+  id: string;
+  title: string;
+  description: string;
+  order_index: number;
+  metadata: Record<string, unknown>;
+};
+
+export type SkilltreeChapterProgress = {
+  chapter_id: string;
+  title: string;
+  required_total: number;
+  required_completed: number;
+  optional_total: number;
+  optional_completed: number;
+  is_complete: boolean;
+};
+
+export type SkilltreeCompletionSummary = {
+  required_total: number;
+  required_completed: number;
+  optional_total: number;
+  optional_completed: number;
+  is_complete: boolean;
 };
 
 export type CourseListResponse = {

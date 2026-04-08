@@ -36,6 +36,7 @@ from services.common.models import (
     RetrievalLog,
     SettingRecord,
     UserLearningGoal,
+    UserLearningNodeProgress,
     UserKSAAssessmentAttempt,
     UserKSADrillAttempt,
     UserKSAProfile,
@@ -1742,6 +1743,58 @@ class PostgresClient:
                 .order_by(LearningPathAllowedTag.tag.asc())
             )
             return list(rows)
+
+    def list_user_learning_node_progress(self, *, user_id: int, learning_path_id: str) -> list[UserLearningNodeProgress]:
+        with self.session() as session:
+            rows = session.scalars(
+                select(UserLearningNodeProgress)
+                .where(
+                    UserLearningNodeProgress.user_id == user_id,
+                    UserLearningNodeProgress.learning_path_id == learning_path_id,
+                )
+                .order_by(UserLearningNodeProgress.updated_at.desc(), UserLearningNodeProgress.node_id.asc())
+            )
+            return list(rows)
+
+    def upsert_user_learning_node_progress(
+        self,
+        *,
+        user_id: int,
+        learning_path_id: str,
+        node_id: str,
+        status: str,
+        started_at: datetime | None = None,
+        completed_at: datetime | None = None,
+    ) -> UserLearningNodeProgress:
+        with self.session() as session:
+            record = session.scalar(
+                select(UserLearningNodeProgress).where(
+                    UserLearningNodeProgress.user_id == user_id,
+                    UserLearningNodeProgress.learning_path_id == learning_path_id,
+                    UserLearningNodeProgress.node_id == node_id,
+                )
+            )
+            now = datetime.now(timezone.utc)
+            if record is None:
+                record = UserLearningNodeProgress(
+                    user_id=user_id,
+                    learning_path_id=learning_path_id,
+                    node_id=node_id,
+                    status=status,
+                    started_at=started_at,
+                    completed_at=completed_at,
+                )
+                session.add(record)
+            else:
+                record.status = status
+                if started_at is not None:
+                    record.started_at = started_at
+                if completed_at is not None:
+                    record.completed_at = completed_at
+                record.updated_at = now
+            session.flush()
+            session.refresh(record)
+            return record
 
     def get_diagnostic_definition(self, diagnostic_type: str) -> DiagnosticDefinition | None:
         with self.session() as session:

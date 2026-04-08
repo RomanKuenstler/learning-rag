@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from datetime import datetime
+from typing import Literal
 
 from pydantic import BaseModel, Field
 
@@ -29,6 +30,73 @@ class LearningModuleRead(BaseModel):
     updated_at: datetime
 
 
+class SkilltreeNodePrerequisitesRead(BaseModel):
+    requires_all: list[str] = Field(default_factory=list)
+    requires_any: list[str] = Field(default_factory=list)
+    recommended: list[str] = Field(default_factory=list)
+
+
+class SkilltreeNodeKsaRead(BaseModel):
+    dimension: Literal["K", "S", "A"]
+    topic: str
+    subtopic: str | None = None
+    target_level: int | None = None
+    contribution_weight: float | None = None
+
+
+class SkilltreeNodeLayoutRead(BaseModel):
+    x: float = 0
+    y: float = 0
+
+
+class SkilltreeNodeRead(BaseModel):
+    id: str
+    title: str
+    description: str = ""
+    type: Literal["learning_unit", "practice", "checkpoint", "review", "milestone"]
+    chapter_id: str | None = None
+    required: bool = True
+    prerequisites: SkilltreeNodePrerequisitesRead = Field(default_factory=SkilltreeNodePrerequisitesRead)
+    completion_mode: Literal["lesson_complete", "manual", "practice_complete", "checkpoint_pass"] = "lesson_complete"
+    estimated_duration_minutes: int | None = None
+    layout: SkilltreeNodeLayoutRead = Field(default_factory=SkilltreeNodeLayoutRead)
+    metadata: dict[str, object] = Field(default_factory=dict)
+    display: dict[str, object] = Field(default_factory=dict)
+    ksa: list[SkilltreeNodeKsaRead] = Field(default_factory=list)
+
+
+class SkilltreeEdgeRead(BaseModel):
+    from_node_id: str
+    to_node_id: str
+    relationship: Literal["requires_all", "requires_any", "recommended"] = "requires_all"
+
+
+class SkilltreeChapterRead(BaseModel):
+    id: str
+    title: str
+    description: str = ""
+    order_index: int = 0
+    metadata: dict[str, object] = Field(default_factory=dict)
+
+
+class SkilltreeChapterProgressRead(BaseModel):
+    chapter_id: str
+    title: str
+    required_total: int
+    required_completed: int
+    optional_total: int
+    optional_completed: int
+    is_complete: bool
+
+
+class SkilltreeCompletionSummaryRead(BaseModel):
+    required_total: int
+    required_completed: int
+    optional_total: int
+    optional_completed: int
+    is_complete: bool
+
+
 class LearningPathRead(BaseModel):
     id: str
     scope: str
@@ -39,8 +107,19 @@ class LearningPathRead(BaseModel):
     difficulty_level: str = ""
     estimated_duration_minutes: int | None = None
     status: str
+    schema_version: int = 1
     allowed_file_ids: list[int] = Field(default_factory=list)
     allowed_tags: list[str] = Field(default_factory=list)
+    chapters: list[SkilltreeChapterRead] = Field(default_factory=list)
+    nodes: list[SkilltreeNodeRead] = Field(default_factory=list)
+    edges: list[SkilltreeEdgeRead] = Field(default_factory=list)
+    entry_node_ids: list[str] = Field(default_factory=list)
+    completion_rules: dict[str, object] = Field(default_factory=dict)
+    visual_layout: dict[str, object] = Field(default_factory=dict)
+    metadata: dict[str, object] = Field(default_factory=dict)
+    node_progress: dict[str, str] = Field(default_factory=dict)
+    chapter_progress: list[SkilltreeChapterProgressRead] = Field(default_factory=list)
+    completion_summary: SkilltreeCompletionSummaryRead | None = None
     modules: list[LearningModuleRead] = Field(default_factory=list)
     can_edit: bool = False
     can_delete: bool = False
@@ -63,6 +142,9 @@ class CourseListItemRead(BaseModel):
     status: str
     subject: str = ""
     difficulty_level: str = ""
+    schema_version: int = 1
+    chapter_count: int = 0
+    node_count: int = 0
     module_count: int = 0
     lesson_count: int = 0
     updated_at: datetime

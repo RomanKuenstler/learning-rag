@@ -18,6 +18,7 @@ from services.common.models import (
     RetrievalLog,
     SettingRecord,
     UserLearningGoal,
+    UserLearningNodeProgress,
     UserKSAAssessmentAttempt,
     UserKSADrillAttempt,
     UserKSAProfile,
@@ -474,6 +475,28 @@ class ChatRepository:
 
     def list_learning_path_allowed_tags(self, learning_path_id: str) -> list[LearningPathAllowedTag]:
         return self.postgres_client.list_learning_path_allowed_tags(learning_path_id)
+
+    def list_user_learning_node_progress(self, *, user_id: int, learning_path_id: str) -> list[UserLearningNodeProgress]:
+        return self.postgres_client.list_user_learning_node_progress(user_id=user_id, learning_path_id=learning_path_id)
+
+    def upsert_user_learning_node_progress(
+        self,
+        *,
+        user_id: int,
+        learning_path_id: str,
+        node_id: str,
+        status: str,
+        started_at=None,
+        completed_at=None,
+    ) -> UserLearningNodeProgress:
+        return self.postgres_client.upsert_user_learning_node_progress(
+            user_id=user_id,
+            learning_path_id=learning_path_id,
+            node_id=node_id,
+            status=status,
+            started_at=started_at,
+            completed_at=completed_at,
+        )
 
     def get_diagnostic_definition(self, diagnostic_type: str) -> DiagnosticDefinition | None:
         return self.postgres_client.get_diagnostic_definition(diagnostic_type)
