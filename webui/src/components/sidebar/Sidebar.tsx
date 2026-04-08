@@ -7,7 +7,7 @@ type SidebarProps = {
   chats: Chat[];
   gpts: Gpt[];
   activeChatId: string | null;
-  activeView: "chat" | "gpt" | "library" | "admin" | "learning";
+  activeView: "chat" | "gpt" | "library" | "admin" | "learning" | "courses";
   currentUser: CurrentUser;
   canUseStandardChat: boolean;
   canUseGpts: boolean;
@@ -15,6 +15,7 @@ type SidebarProps = {
   onCreateChat: () => void;
   onCreateGpt: () => void;
   onOpenLearning: () => void;
+  onOpenCourses: () => void;
   onOpenLibrary: () => void;
   onOpenAdmin: () => void;
   onOpenArchive: () => void;
@@ -48,6 +49,7 @@ export function Sidebar({
   onCreateChat,
   onCreateGpt,
   onOpenLearning,
+  onOpenCourses,
   onOpenLibrary,
   onOpenAdmin,
   onOpenArchive,
@@ -117,6 +119,10 @@ export function Sidebar({
         <button className={`side-nav-item${activeView === "learning" ? " active" : ""}`} type="button" onClick={onOpenLearning}>
           <Icon name="book" className="side-nav-item-svg" />
           <span>Learning</span>
+        </button>
+        <button className={`side-nav-item${activeView === "courses" ? " active" : ""}`} type="button" onClick={onOpenCourses}>
+          <Icon name="chalkboard" className="side-nav-item-svg" />
+          <span>Courses</span>
         </button>
         {canUseLibrary ? (
           <button className={`side-nav-item${activeView === "library" ? " active" : ""}`} type="button" onClick={onOpenLibrary}>

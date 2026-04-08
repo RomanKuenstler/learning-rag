@@ -351,6 +351,9 @@ class ChatRepository:
     def reorder_learning_lessons(self, module_id: str, lesson_orders: list[tuple[str, int]]) -> list[LearningLesson]:
         return self.postgres_client.reorder_learning_lessons(module_id, lesson_orders)
 
+    def replace_learning_path_structure(self, learning_path_id: str, modules: list[dict[str, object]]) -> list[LearningModule]:
+        return self.postgres_client.replace_learning_path_structure(learning_path_id, modules)
+
     def replace_learning_path_allowed_files(self, learning_path_id: str, file_ids: list[int]) -> None:
         self.postgres_client.replace_learning_path_allowed_files(learning_path_id, file_ids)
 

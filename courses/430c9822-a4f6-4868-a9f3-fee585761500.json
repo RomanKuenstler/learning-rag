@@ -1,0 +1,27 @@
+{
+  "schema_version": 1,
+  "id": "430c9822-a4f6-4868-a9f3-fee585761500",
+  "title": "test",
+  "description": "",
+  "scope": "user",
+  "owner_user_id": 3,
+  "subject": "",
+  "difficulty_level": "",
+  "estimated_duration_minutes": null,
+  "status": "published",
+  "allowed_file_ids": [
+    5,
+    7
+  ],
+  "allowed_tags": [],
+  "modules": [
+    {
+      "id": "f24b65d4-e0c6-4b3d-8a15-043fcd65f82f",
+      "order_index": 0,
+      "title": "test",
+      "description": "",
+      "learning_objectives": [],
+      "lessons": []
+    }
+  ]
+}

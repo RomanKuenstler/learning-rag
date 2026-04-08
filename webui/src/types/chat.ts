@@ -326,6 +326,58 @@ export type LearningPathResponse = {
   paths: LearningPath[];
 };
 
+export type CourseSort =
+  | "name_asc"
+  | "name_desc"
+  | "updated_desc"
+  | "updated_asc"
+  | "modules_desc"
+  | "lessons_desc"
+  | "scope_global_first"
+  | "scope_user_first";
+
+export type CourseListItem = {
+  id: string;
+  title: string;
+  description: string;
+  scope: LearningPathScope | string;
+  owner_user_id: number | null;
+  owner_username: string | null;
+  owner_displayname: string | null;
+  status: LearningPathStatus | string;
+  subject: string;
+  difficulty_level: string;
+  module_count: number;
+  lesson_count: number;
+  updated_at: string;
+  created_at: string;
+};
+
+export type CourseListResponse = {
+  courses: CourseListItem[];
+  total: number;
+};
+
+export type CourseImportFileResult = {
+  file_name: string;
+  scope: LearningPathScope | string;
+  success: boolean;
+  course_id: string | null;
+  title: string | null;
+  error: string | null;
+};
+
+export type CourseImportResponse = {
+  imported_count: number;
+  failed_count: number;
+  results: CourseImportFileResult[];
+};
+
+export type CourseTemplateResponse = {
+  file_name: string;
+  template: Record<string, unknown>;
+};
+
 export type LearningPreferencePace = "slow" | "balanced" | "fast";
 export type LearningPreferenceDepth = "concise" | "balanced" | "detailed";
 export type LearningPreferenceExamplesTheory = "more_examples" | "balanced" | "more_theory";
@@ -385,6 +437,50 @@ export type LearningProfileBundle = {
   context: LearningProfileContext;
   goals: LearningGoal[];
   diagnostics_status: "not_started" | "in_progress" | "completed";
+};
+
+export type KSAValue = 1 | 2 | 3 | 4 | 5;
+
+export type KSAKnowledge = {
+  stem_fundamentals: KSAValue;
+  information_technology: KSAValue;
+  humanities_social_sciences: KSAValue;
+  languages_linguistics: KSAValue;
+  business_commerce: KSAValue;
+  legal_ethics: KSAValue;
+  health_wellness: KSAValue;
+};
+
+export type KSASkills = {
+  literacy_numeracy: KSAValue;
+  digital_craft: KSAValue;
+  strategic_execution: KSAValue;
+  operational_skills: KSAValue;
+  relational_skills: KSAValue;
+  research_inquiry: KSAValue;
+};
+
+export type KSAAbilities = {
+  quantitative_reasoning: KSAValue;
+  verbal_comprehension: KSAValue;
+  spatial_visualization: KSAValue;
+  executive_function: KSAValue;
+  sensory_perceptual: KSAValue;
+  social_emotional_capacity: KSAValue;
+  divergent_thinking: KSAValue;
+};
+
+export type KSAProfile = {
+  user_id: number;
+  has_assessment: boolean;
+  profile_source: "student_default_baseline" | "placeholder_baseline" | "assessment";
+  scale_min: 1;
+  scale_max: 5;
+  dreyfus_levels: string[];
+  knowledge: KSAKnowledge;
+  skills: KSASkills;
+  abilities: KSAAbilities;
+  updated_at: string | null;
 };
 
 export type DiagnosticQuestionType = "single_choice" | "multi_choice" | "likert" | "slider" | "text";

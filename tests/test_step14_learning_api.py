@@ -76,6 +76,126 @@ class LearningApiStubService:
             ]
         }
 
+    def list_courses(self, *_args, **_kwargs):
+        return {
+            "courses": [
+                {
+                    "id": "lp-1",
+                    "title": "Docker Basics",
+                    "description": "Intro path",
+                    "scope": "global",
+                    "owner_user_id": None,
+                    "owner_username": None,
+                    "owner_displayname": None,
+                    "status": "published",
+                    "subject": "Docker",
+                    "difficulty_level": "beginner",
+                    "module_count": 1,
+                    "lesson_count": 2,
+                    "created_at": "2026-04-04T00:00:00Z",
+                    "updated_at": "2026-04-04T00:00:00Z",
+                }
+            ],
+            "total": 1,
+        }
+
+    def get_course_template(self):
+        return {
+            "file_name": "path-template.json",
+            "template": {"schema_version": 1, "id": "course-template", "title": "Template"},
+        }
+
+    def get_ksa_profile(self, user: UserAccount):
+        if user.role == "student":
+            return {
+                "user_id": user.id,
+                "has_assessment": False,
+                "profile_source": "student_default_baseline",
+                "scale_min": 1,
+                "scale_max": 5,
+                "dreyfus_levels": ["Novice", "Advanced", "Competent", "Proficient", "Expert"],
+                "knowledge": {
+                    "stem_fundamentals": 2,
+                    "information_technology": 2,
+                    "humanities_social_sciences": 3,
+                    "languages_linguistics": 3,
+                    "business_commerce": 2,
+                    "legal_ethics": 1,
+                    "health_wellness": 2,
+                },
+                "skills": {
+                    "literacy_numeracy": 3,
+                    "digital_craft": 2,
+                    "strategic_execution": 2,
+                    "operational_skills": 2,
+                    "relational_skills": 3,
+                    "research_inquiry": 2,
+                },
+                "abilities": {
+                    "quantitative_reasoning": 2,
+                    "verbal_comprehension": 3,
+                    "spatial_visualization": 2,
+                    "executive_function": 2,
+                    "sensory_perceptual": 3,
+                    "social_emotional_capacity": 3,
+                    "divergent_thinking": 3,
+                },
+                "updated_at": None,
+            }
+        return {
+            "user_id": user.id,
+            "has_assessment": False,
+            "profile_source": "placeholder_baseline",
+            "scale_min": 1,
+            "scale_max": 5,
+            "dreyfus_levels": ["Novice", "Advanced", "Competent", "Proficient", "Expert"],
+            "knowledge": {
+                "stem_fundamentals": 2,
+                "information_technology": 2,
+                "humanities_social_sciences": 2,
+                "languages_linguistics": 2,
+                "business_commerce": 2,
+                "legal_ethics": 2,
+                "health_wellness": 2,
+            },
+            "skills": {
+                "literacy_numeracy": 2,
+                "digital_craft": 2,
+                "strategic_execution": 2,
+                "operational_skills": 2,
+                "relational_skills": 2,
+                "research_inquiry": 2,
+            },
+            "abilities": {
+                "quantitative_reasoning": 2,
+                "verbal_comprehension": 2,
+                "spatial_visualization": 2,
+                "executive_function": 2,
+                "sensory_perceptual": 2,
+                "social_emotional_capacity": 2,
+                "divergent_thinking": 2,
+            },
+            "updated_at": None,
+        }
+
+    def import_courses_from_uploads(self, user: UserAccount, _uploads, _scopes_by_file_raw):
+        if user.role == "student":
+            raise PermissionError("Students cannot create learning paths")
+        return {
+            "imported_count": 1,
+            "failed_count": 0,
+            "results": [
+                {
+                    "file_name": "course.json",
+                    "scope": "global",
+                    "success": True,
+                    "course_id": "lp-2",
+                    "title": "Admin Path",
+                    "error": None,
+                }
+            ],
+        }
+
     def create_learning_path(self, user: UserAccount, _payload):
         if user.role == "student":
             raise PermissionError("Students cannot create learning paths")
@@ -165,3 +285,26 @@ def test_student_can_access_library_api() -> None:
     client = build_client(student=True)
     response = client.get("/api/library/files")
     assert response.status_code == 200
+
+
+def test_courses_routes_available() -> None:
+    client = build_client(student=False)
+    list_response = client.get("/api/courses?sort=updated_desc")
+    assert list_response.status_code == 200
+    assert list_response.json()["total"] == 1
+
+    template_response = client.get("/api/courses/template")
+    assert template_response.status_code == 200
+    assert template_response.json()["file_name"] == "path-template.json"
+
+
+def test_ksa_profile_route_uses_student_default_values() -> None:
+    student_client = build_client(student=True)
+    response = student_client.get("/api/learning-profile/ksa")
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["profile_source"] == "student_default_baseline"
+    assert payload["knowledge"]["legal_ethics"] == 1
+    assert payload["skills"]["literacy_numeracy"] == 3
+    assert payload["abilities"]["divergent_thinking"] == 3
+    assert payload["dreyfus_levels"] == ["Novice", "Advanced", "Competent", "Proficient", "Expert"]

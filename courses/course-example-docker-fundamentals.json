@@ -1,0 +1,71 @@
+{
+  "schema_version": 1,
+  "id": "course-example-docker-fundamentals",
+  "title": "Example: Docker Fundamentals",
+  "description": "Starter path demonstrating a complete learning setup.",
+  "scope": "global",
+  "owner_user_id": null,
+  "subject": "Docker",
+  "difficulty_level": "beginner",
+  "estimated_duration_minutes": 120,
+  "status": "published",
+  "allowed_file_ids": [],
+  "allowed_tags": [],
+  "modules": [
+    {
+      "id": "0cc4cd7f-2fe8-469e-9151-5141eb16dbf6",
+      "order_index": 0,
+      "title": "Getting Started",
+      "description": "Core concepts and first practical steps.",
+      "learning_objectives": [
+        "Understand images/containers",
+        "Run and inspect containers"
+      ],
+      "lessons": [
+        {
+          "id": "1e217f0e-83d5-4c8e-ba04-8ef01175ea0c",
+          "order_index": 0,
+          "title": "What Docker Is",
+          "description": "Mental model for images, containers, and registries.",
+          "objectives": [
+            "Differentiate image vs container",
+            "Know when to use Docker"
+          ],
+          "teaching_notes": ""
+        },
+        {
+          "id": "9b2a0886-5128-4de2-83c0-e08b3cce60e6",
+          "order_index": 1,
+          "title": "First Container Run",
+          "description": "Run, stop, and inspect a hello-world style container.",
+          "objectives": [
+            "Use run/ps/stop/logs"
+          ],
+          "teaching_notes": ""
+        }
+      ]
+    },
+    {
+      "id": "741bd5f9-5e71-482a-a017-b2ff4e39dcff",
+      "order_index": 1,
+      "title": "Compose Basics",
+      "description": "Model multi-service local development.",
+      "learning_objectives": [
+        "Read compose files",
+        "Start and manage service stacks"
+      ],
+      "lessons": [
+        {
+          "id": "a343008e-7efe-48dc-9984-299bf3c80429",
+          "order_index": 0,
+          "title": "Compose File Structure",
+          "description": "Services, volumes, ports, and environment basics.",
+          "objectives": [
+            "Understand core compose keys"
+          ],
+          "teaching_notes": ""
+        }
+      ]
+    }
+  ]
+}

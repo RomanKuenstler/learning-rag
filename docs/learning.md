@@ -1,6 +1,64 @@
-# Learning Diagnostics (Step B.1)
+# Learning And Courses
 
-## Source Of Truth
+## Learning Page Tabs
+
+The Learning page now contains:
+
+- `Profile`
+- `Preferences`
+- `KSA` (big-map foundation)
+
+The old `Paths` tab has been removed. Course/path management moved to the dedicated Courses page.
+
+## KSA Big-Map (Step Foundation)
+
+The `KSA` tab now renders a first real capability overview:
+
+- top-right `Start Assessment` button
+- 3-column radar layout (`Knowledge`, `Skills`, `Abilities`)
+- each radar uses a 1-5 Dreyfus scale (`Novice`, `Advanced`, `Competent`, `Proficient`, `Expert`)
+- a placeholder `KSA Assessment` dialog shell using the diagnostic modal style
+- a deep-dive placeholder section below the charts
+
+Authoritative radar axes:
+
+- Knowledge: `STEM Fundamentals`, `Information Technology`, `Humanities & Social Sciences`, `Languages & Linguistics`, `Business & Commerce`, `Legal & Ethics`, `Health & Wellness`
+- Skills: `Literacy & Numeracy`, `Digital Craft`, `Strategic Execution`, `Operational Skills`, `Relational Skills`, `Research & Inquiry`
+- Abilities: `Quantitative Reasoning`, `Verbal Comprehension`, `Spatial Visualization`, `Executive Function`, `Sensory-Perceptual`, `Social-Emotional Capacity`, `Divergent Thinking`
+
+Profile source behavior in this step:
+
+- endpoint: `GET /api/learning-profile/ksa`
+- student users receive a non-persisted default baseline profile (sample values, no completed assessment yet)
+- non-student users receive a neutral placeholder baseline profile
+- this is intentionally structured so real assessment persistence can replace defaults later without UI refactors
+
+## Courses Page
+
+A new `/courses` page manages learning paths as courses with:
+
+- table view
+- search
+- filtering (`scope`, `status`)
+- sorting (`name`, `updated`, `modules`, `lessons`, scope-first variants)
+- `Download Template` action
+- `Add Paths` dialog for uploading up to 5 JSON files
+
+The upload dialog supports per-file scope (`global` or `user`) using styled dropdown controls.
+
+## Course JSON Source Of Truth
+
+Course definitions are file-backed in `courses/`.
+
+- one `.json` file = one course/path
+- files are validated at startup
+- valid files are synced into learning-path tables
+- invalid files are rejected and logged with file-specific errors
+- existing DB paths are exported back to `courses/` so each path has a corresponding JSON file
+
+`global` vs `user` scope is validated from JSON. User-scoped courses require `owner_user_id` in file-based bootstrap.
+
+## Diagnostics (Step B.1)
 
 Diagnostic definitions are parsed from:
 
@@ -8,46 +66,12 @@ Diagnostic definitions are parsed from:
 - `data/diagnostics/source/MythriQ-MOA-Motivationsanalyse-20250703a.docx`
 - `data/diagnostics/source/MythriQ-LTA-Lerntypanalyse-20250703a.docx`
 
-## Parsing And Versioning
+At startup, definitions are versioned and persisted. Runtime data remains in:
 
-At retriever startup, Step B.1 parser/import does:
+- `user_diagnostic_attempts`
+- `user_diagnostic_answers`
+- `user_diagnostic_results`
+- `learning_state_checks`
+- `explanation_feedback`
 
-1. Reads `.docx` XML paragraphs.
-2. Converts `LAA`, `MOA`, `LTA` into structured definitions.
-3. Stores versioned immutable records in `diagnostic_versions`.
-4. Flattens questions/options/rules into dedicated relational tables.
-
-Version is derived from filename suffix (e.g. `20250703a`).
-
-## Scoring
-
-Scoring is deterministic and backend-only (`services/retriever/services/diagnostic_scoring.py`):
-
-- `MOA`: 10 slider values mapped to motive dimensions (0..10, normalized to 0..1).
-- `LTA`: option mapping (`A/V/K/L`) aggregated to dominant learning type.
-- `LAA`: section-level aggregation derived from questionnaire structure.
-
-## Explicit Assumptions
-
-The source docs are used exactly for question and option text.
-Where no formula is explicitly defined:
-
-- assumptions are stored in definition metadata (`assumptions`)
-- behavior is documented (not silent)
-
-## Runtime Data
-
-- attempts: `user_diagnostic_attempts`
-- answers: `user_diagnostic_answers`
-- results: `user_diagnostic_results`
-- state signals: `learning_state_checks`
-- explanation feedback: `explanation_feedback`
-
-## Frontend Flow
-
-The learning page renders diagnostics dynamically from backend definitions:
-
-- stepper: `LAA -> MOA -> LTA`
-- per-step answer save
-- deterministic completion and chart rendering
-- attempt history and latest result display
+Scoring remains deterministic and backend-only.

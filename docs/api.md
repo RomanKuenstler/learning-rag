@@ -120,6 +120,37 @@ Student restriction:
 
 Lists learning paths visible to the authenticated user.
 
+## Courses
+
+### `GET /api/courses`
+
+Lists course/path records for the authenticated user with optional query params:
+
+- `search`
+- `scope` (`global|user`)
+- `status` (`draft|published|archived`)
+- `owner_user_id`
+- `sort` (`name_asc|name_desc|updated_desc|updated_asc|modules_desc|lessons_desc|scope_global_first|scope_user_first`)
+
+### `GET /api/courses/template`
+
+Returns a reusable JSON template payload (`path-template.json`) that documents all supported course fields.
+
+### `POST /api/courses/import`
+
+Multipart upload endpoint for up to 5 `.json` course files.
+
+- form field `files`: one to five JSON files
+- form field `scopes_by_file`: optional JSON object mapping file name -> `global|user`
+
+Behavior:
+
+- files are schema validated
+- per-file scope is enforced against role permissions (`global` requires admin)
+- valid files are imported
+- invalid files are rejected with per-file errors
+- response includes partial-success details (`imported_count`, `failed_count`, per-file results)
+
 ### `POST /api/learning-paths`
 
 Creates a learning path.

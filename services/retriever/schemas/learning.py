@@ -52,6 +52,48 @@ class LearningPathListResponse(BaseModel):
     paths: list[LearningPathRead] = Field(default_factory=list)
 
 
+class CourseListItemRead(BaseModel):
+    id: str
+    title: str
+    description: str = ""
+    scope: str
+    owner_user_id: int | None = None
+    owner_username: str | None = None
+    owner_displayname: str | None = None
+    status: str
+    subject: str = ""
+    difficulty_level: str = ""
+    module_count: int = 0
+    lesson_count: int = 0
+    updated_at: datetime
+    created_at: datetime
+
+
+class CourseListResponse(BaseModel):
+    courses: list[CourseListItemRead] = Field(default_factory=list)
+    total: int = 0
+
+
+class CourseImportFileResultRead(BaseModel):
+    file_name: str
+    scope: str
+    success: bool
+    course_id: str | None = None
+    title: str | None = None
+    error: str | None = None
+
+
+class CourseImportResponse(BaseModel):
+    imported_count: int = 0
+    failed_count: int = 0
+    results: list[CourseImportFileResultRead] = Field(default_factory=list)
+
+
+class CourseTemplateResponse(BaseModel):
+    file_name: str
+    template: dict[str, object]
+
+
 class LearningPathCreateRequest(BaseModel):
     scope: str = Field(default="user", pattern="^(global|user)$")
     title: str = Field(min_length=1, max_length=255)

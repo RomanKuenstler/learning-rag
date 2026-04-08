@@ -1,5 +1,29 @@
 # Changelog
 
+## 2026-04-07 22:55 UTC
+
+- Implemented first real Learning-page KSA tab with a 3-column big-map radar visualization (`Knowledge`, `Skills`, `Abilities`).
+- Added `Start Assessment` action and placeholder `KSA Assessment` dialog shell using the existing diagnostic modal pattern.
+- Added KSA deep-dive placeholder section below the charts for future expansion.
+- Added backend KSA profile foundation endpoint: `GET /api/learning-profile/ksa`.
+- Added explicit KSA schema models (`services/retriever/schemas/ksa.py`) with validated 1-5 Dreyfus scale values.
+- Added student default baseline KSA values (non-persisted placeholders) and neutral placeholder baseline for non-student users.
+- Wired frontend app state to load/render KSA profile data (`useChatApp`, API client types, Learning page integration).
+- Added API coverage for KSA endpoint behavior in `tests/test_step14_learning_api.py`.
+- Updated README and learning/frontend/architecture/testing documentation for the new KSA big-map foundation.
+
+## 2026-04-07 19:40 UTC
+
+- Moved learning-path/course management into a dedicated `Courses` page and added a new sidebar `Courses` entry below `Learning`.
+- Removed the old Learning `Paths` tab and added a new `KSA` tab placeholder with integrated styling.
+- Added courses API endpoints for listing with filtering/sorting, JSON template retrieval, and multipart JSON import with per-file scope handling.
+- Added strict course JSON schema parsing/validation (`services/retriever/services/course_files.py`) and startup bootstrap sync from `courses/`.
+- Added export-back sync so existing learning paths are written as course JSON files in `courses/`.
+- Added per-file upload scope enforcement with backend permission checks (`global` scope requires admin).
+- Added starter course definition JSON files for existing example courses under `courses/`.
+- Added/updated tests for courses routes and course JSON parser validation.
+- Updated documentation across README, setup, API, learning, architecture, and testing docs.
+
 ## 2026-04-04 20:15 UTC
 
 - Implemented Step B.1 diagnostic system driven by source `.docx` files (`LAA`, `MOA`, `LTA`) under `data/diagnostics/source`.

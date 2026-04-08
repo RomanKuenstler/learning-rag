@@ -8,6 +8,7 @@ import { Icon } from "../components/common/Icons";
 import { ChatFilterDialog } from "../components/filters/ChatFilterDialog";
 import { AppShell } from "../components/layout/AppShell";
 import { LibraryPage } from "../components/library/LibraryPage";
+import { CoursesPage } from "../components/courses/CoursesPage";
 import { LearningPathsPage } from "../components/learning/LearningPathsPage";
 import { PreferencesDialog } from "../components/preferences/PreferencesDialog";
 import { Sidebar } from "../components/sidebar/Sidebar";
@@ -43,6 +44,8 @@ function AppRoutes() {
   const currentGptId = location.pathname.startsWith("/gpts/") && location.pathname.endsWith("/chat") ? location.pathname.split("/")[2] ?? null : null;
   const activeView = location.pathname.startsWith("/learning")
     ? "learning"
+    : location.pathname.startsWith("/courses")
+      ? "courses"
     : location.pathname.startsWith("/library")
       ? "library"
       : location.pathname.startsWith("/admin")
@@ -67,7 +70,7 @@ function AppRoutes() {
     }
 
     if (app.isStudent) {
-      if (!location.pathname.startsWith("/learning") && !location.pathname.startsWith("/library")) {
+      if (!location.pathname.startsWith("/learning") && !location.pathname.startsWith("/library") && !location.pathname.startsWith("/courses")) {
         navigate("/learning", { replace: true });
       }
       return;
@@ -219,6 +222,7 @@ function AppRoutes() {
       onCreateGpt={handleCreateGpt}
       onCreateChat={() => void handleCreateChat()}
       onOpenLearning={() => navigate("/learning")}
+      onOpenCourses={() => navigate("/courses")}
       onOpenLibrary={() => navigate("/library")}
       onOpenAdmin={() => navigate("/admin")}
       onOpenArchive={() => void openPreferences("archive")}
@@ -334,26 +338,27 @@ function AppRoutes() {
               path="/learning"
               element={
                 <LearningPathsPage
-                  role={app.currentUser.role}
-                  paths={app.learningPaths}
-                  libraryFiles={app.library?.files ?? []}
-                  loading={app.learningLoading}
-                  saving={app.learningSaving}
                   error={app.learningError}
-                  canAuthor={app.canAuthorLearningPaths}
                   onLoad={async () => {
-                    if (!app.library) {
-                      await app.loadLibrary(false);
-                    }
-                    await app.loadLearningPaths();
+                    await Promise.all([
+                      app.loadLearningProfile(),
+                      app.loadKsaProfile(),
+                      app.loadDiagnosticCatalog(),
+                      app.loadDiagnosticAttempts(),
+                      app.loadLearningStateChecks(),
+                    ]);
                   }}
                   learningProfile={app.learningProfile}
                   learningProfileLoading={app.learningProfileLoading}
                   learningProfileSaving={app.learningProfileSaving}
                   learningProfileError={app.learningProfileError}
                   learningProfileSuccess={app.learningProfileSuccess}
+                  ksaProfile={app.ksaProfile}
+                  ksaLoading={app.ksaLoading}
+                  ksaError={app.ksaError}
                   currentUserDisplayName={app.currentUser.displayname}
                   onLoadLearningProfile={() => void app.loadLearningProfile()}
+                  onLoadKsaProfile={() => void app.loadKsaProfile()}
                   onSaveLearningPreferences={(payload) => app.saveLearningPreferences(payload).then(() => undefined)}
                   onSaveLearningContext={(payload) => app.saveLearningContext(payload).then(() => undefined)}
                   onCreateLearningGoal={(payload) => app.createLearningGoal(payload).then(() => undefined)}
@@ -376,17 +381,31 @@ function AppRoutes() {
                   onDeleteDiagnosticAttempt={(attemptId) => app.deleteDiagnosticAttempt(attemptId).then(() => undefined)}
                   onOpenDiagnosticAttempt={app.openDiagnosticAttempt}
                   onCreateLearningStateCheck={(payload) => app.createLearningStateCheck(payload).then(() => undefined)}
-                  onCreatePath={app.createLearningPath}
-                  onUpdatePath={app.updateLearningPath}
-                  onDeletePath={app.deleteLearningPath}
-                  onCreateModule={app.createLearningModule}
-                  onUpdateModule={app.updateLearningModule}
-                  onDeleteModule={app.deleteLearningModule}
-                  onReorderModules={app.reorderLearningModules}
-                  onCreateLesson={app.createLearningLesson}
-                  onUpdateLesson={app.updateLearningLesson}
-                  onDeleteLesson={app.deleteLearningLesson}
-                  onReorderLessons={app.reorderLearningLessons}
+                />
+              }
+            />
+            <Route
+              path="/courses"
+              element={
+                <CoursesPage
+                  courses={app.courses}
+                  loading={app.coursesLoading}
+                  error={app.coursesError}
+                  importing={app.coursesImporting}
+                  canCreateGlobal={app.canCreateGlobalCourses}
+                  canUploadPaths={app.canAuthorLearningPaths}
+                  currentUserId={app.currentUser.id}
+                  onLoad={app.loadCourses}
+                  onLoadDetails={(courseId) => app.getLearningPathDetails(courseId)}
+                  onImport={app.importCourseFiles}
+                  onDownloadTemplate={app.downloadCourseTemplate}
+                  onStartContinue={() => navigate("/learning")}
+                  onToggleArchived={(courseId, nextArchived) =>
+                    app
+                      .updateLearningPath(courseId, { status: nextArchived ? "archived" : "published" })
+                      .then(() => app.loadCourses())
+                      .then(() => undefined)
+                  }
                 />
               }
             />
@@ -592,7 +611,16 @@ function AppRoutes() {
               <ul className="help-list">
                 <li>`Profile` tab: maintain learning context and goals.</li>
                 <li>`Preferences` tab: set learning preferences and run diagnostics (LAA/MOA/LTA).</li>
-                <li>`Paths` tab: review published learning paths.</li>
+                <li>`KSA` tab: placeholder area for Knowledge, Skills, and Abilities.</li>
+              </ul>
+            </section>
+
+            <section className="help-card">
+              <h4>Courses</h4>
+              <ul className="help-list">
+                <li>Use Courses to filter, sort, and review all learning paths.</li>
+                <li>Import up to 5 course JSON files from the Add Paths dialog.</li>
+                <li>Download the course JSON template to bootstrap new definitions.</li>
               </ul>
             </section>
 

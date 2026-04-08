@@ -12,6 +12,10 @@ import type {
   ExplanationFeedback,
   ChatDownload,
   ChatUpdate,
+  CourseImportResponse,
+  CourseListResponse,
+  CourseSort,
+  CourseTemplateResponse,
   CurrentUser,
   FilterFile,
   FilterFileResponse,
@@ -30,6 +34,7 @@ import type {
   LearningGoal,
   LearningGoalPriority,
   LearningProfileBundle,
+  KSAProfile,
   LearningProfileContext,
   LearningPreferences,
   LearningPath,
@@ -175,8 +180,51 @@ export const apiClient = {
   listLearningPaths() {
     return request<LearningPathResponse>("/api/learning-paths");
   },
+  listCourses(params?: {
+    search?: string;
+    scope?: "global" | "user" | "all";
+    status?: "draft" | "published" | "archived" | "all";
+    owner_user_id?: number;
+    sort?: CourseSort;
+  }) {
+    const query = new URLSearchParams();
+    if (params?.search?.trim()) {
+      query.set("search", params.search.trim());
+    }
+    if (params?.scope && params.scope !== "all") {
+      query.set("scope", params.scope);
+    }
+    if (params?.status && params.status !== "all") {
+      query.set("status", params.status);
+    }
+    if (params?.owner_user_id) {
+      query.set("owner_user_id", String(params.owner_user_id));
+    }
+    if (params?.sort) {
+      query.set("sort", params.sort);
+    }
+    const queryString = query.toString();
+    return request<CourseListResponse>(`/api/courses${queryString ? `?${queryString}` : ""}`);
+  },
+  getCourseTemplate() {
+    return request<CourseTemplateResponse>("/api/courses/template");
+  },
+  importCourseFiles(files: File[], scopesByFile: Record<string, "global" | "user">) {
+    const formData = new FormData();
+    for (const file of files) {
+      formData.append("files", file);
+    }
+    formData.append("scopes_by_file", JSON.stringify(scopesByFile));
+    return request<CourseImportResponse>("/api/courses/import", {
+      method: "POST",
+      body: formData,
+    });
+  },
   getLearningProfile() {
     return request<LearningProfileBundle>("/api/learning-profile");
+  },
+  getKsaProfile() {
+    return request<KSAProfile>("/api/learning-profile/ksa");
   },
   updateLearningPreferences(payload: Partial<Omit<LearningPreferences, "updated_at">>) {
     return request<LearningPreferences>("/api/learning-profile/preferences", {

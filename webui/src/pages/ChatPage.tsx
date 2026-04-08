@@ -47,6 +47,7 @@ export function ChatPage() {
           onCreateGpt={() => undefined}
           onCreateChat={() => void createChat()}
           onOpenLearning={() => undefined}
+          onOpenCourses={() => undefined}
           onOpenLibrary={() => undefined}
           onOpenAdmin={() => undefined}
           onOpenArchive={() => undefined}

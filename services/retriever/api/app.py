@@ -47,6 +47,9 @@ from services.retriever.schemas.chat import (
     SystemStatusResponse,
 )
 from services.retriever.schemas.learning import (
+    CourseImportResponse,
+    CourseListResponse,
+    CourseTemplateResponse,
     LearningLessonCreateRequest,
     LearningLessonRead,
     LearningLessonReorderRequest,
@@ -83,6 +86,7 @@ from services.retriever.schemas.diagnostics import (
     LearningStateCheckCreateRequest,
     LearningStateCheckRead,
 )
+from services.retriever.schemas.ksa import KSAProfileRead
 from services.retriever.services.library_manager import UploadFilePayload
 from services.retriever.services.retriever_service import RetrieverAppService
 
@@ -493,6 +497,48 @@ def create_app() -> FastAPI:
     ) -> LearningPathListResponse:
         return service.list_learning_paths(auth.user)
 
+    @app.get("/api/courses", response_model=CourseListResponse)
+    def list_courses(
+        search: str = Query(default=""),
+        scope: str | None = Query(default=None, pattern="^(global|user)$"),
+        status: str | None = Query(default=None, pattern="^(draft|published|archived)$"),
+        owner_user_id: int | None = Query(default=None, ge=1),
+        sort: str = Query(default="updated_desc"),
+        auth: AuthContext = Depends(get_app_auth_context),
+        service: RetrieverAppService = Depends(get_retriever_service),
+    ) -> CourseListResponse:
+        return service.list_courses(
+            auth.user,
+            search=search,
+            scope=scope,
+            status=status,
+            owner_user_id=owner_user_id,
+            sort=sort,
+        )
+
+    @app.get("/api/courses/template", response_model=CourseTemplateResponse)
+    def get_course_template(
+        auth: AuthContext = Depends(get_app_auth_context),
+        service: RetrieverAppService = Depends(get_retriever_service),
+    ) -> CourseTemplateResponse:
+        _ = auth
+        return service.get_course_template()
+
+    @app.post("/api/courses/import", response_model=CourseImportResponse, responses={422: {"model": ErrorResponse}, 403: {"model": ErrorResponse}})
+    async def import_courses(
+        files: list[UploadFile] = File(...),
+        scopes_by_file: str | None = Form(default=None),
+        auth: AuthContext = Depends(get_app_auth_context),
+        service: RetrieverAppService = Depends(get_retriever_service),
+    ) -> CourseImportResponse:
+        uploads = [UploadFilePayload(file_name=file.filename or "course.json", content=await file.read()) for file in files]
+        try:
+            return service.import_courses_from_uploads(auth.user, uploads, scopes_by_file)
+        except PermissionError as error:
+            raise HTTPException(status_code=403, detail=str(error)) from error
+        except ValueError as error:
+            raise HTTPException(status_code=422, detail=str(error)) from error
+
     @app.post("/api/learning-paths", response_model=LearningPathRead, responses={403: {"model": ErrorResponse}})
     def create_learning_path(
         payload: LearningPathCreateRequest,
@@ -668,6 +714,13 @@ def create_app() -> FastAPI:
         service: RetrieverAppService = Depends(get_retriever_service),
     ) -> LearningProfileBundleRead:
         return service.get_learning_profile_bundle(auth.user)
+
+    @app.get("/api/learning-profile/ksa", response_model=KSAProfileRead)
+    def get_ksa_profile(
+        auth: AuthContext = Depends(get_app_auth_context),
+        service: RetrieverAppService = Depends(get_retriever_service),
+    ) -> KSAProfileRead:
+        return service.get_ksa_profile(auth.user)
 
     @app.patch("/api/learning-profile/preferences", response_model=LearningPreferencesRead)
     def update_learning_preferences(
@@ -1065,5 +1118,11 @@ def create_app() -> FastAPI:
         service: RetrieverAppService = Depends(get_retriever_service),
     ) -> PersonalizationRead:
         return service.update_personalization(auth.user, payload)
+
+    @app.on_event("startup")
+    def warm_retriever_service() -> None:
+        # Initialize service eagerly so bootstrap jobs (users/courses sync) run
+        # on container startup, not only after the first API request.
+        get_retriever_service()
 
     return app

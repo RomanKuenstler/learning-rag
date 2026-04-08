@@ -6,6 +6,9 @@ import type {
   AttachmentMeta,
   AuthSession,
   Chat,
+  CourseImportResponse,
+  CourseListItem,
+  CourseSort,
   DiagnosticAttemptDetails,
   DiagnosticAttemptSummary,
   DiagnosticCatalog,
@@ -22,6 +25,7 @@ import type {
   LibraryResponse,
   LearningLesson,
   LearningGoal,
+  KSAProfile,
   LearningProfileBundle,
   LearningProfileContext,
   LearningPreferences,
@@ -109,7 +113,10 @@ function triggerJsonDownload(fileName: string, data: unknown) {
   const anchor = document.createElement("a");
   anchor.href = url;
   anchor.download = fileName;
+  anchor.rel = "noopener";
+  document.body.appendChild(anchor);
   anchor.click();
+  document.body.removeChild(anchor);
   URL.revokeObjectURL(url);
 }
 
@@ -145,7 +152,14 @@ export function useChatApp() {
   const [learningLoading, setLearningLoading] = useState(false);
   const [learningError, setLearningError] = useState<string | null>(null);
   const [learningSaving, setLearningSaving] = useState(false);
+  const [courses, setCourses] = useState<CourseListItem[]>([]);
+  const [coursesLoading, setCoursesLoading] = useState(false);
+  const [coursesError, setCoursesError] = useState<string | null>(null);
+  const [coursesImporting, setCoursesImporting] = useState(false);
   const [learningProfile, setLearningProfile] = useState<LearningProfileBundle | null>(null);
+  const [ksaProfile, setKsaProfile] = useState<KSAProfile | null>(null);
+  const [ksaLoading, setKsaLoading] = useState(false);
+  const [ksaError, setKsaError] = useState<string | null>(null);
   const [learningProfileLoading, setLearningProfileLoading] = useState(false);
   const [learningProfileSaving, setLearningProfileSaving] = useState(false);
   const [learningProfileError, setLearningProfileError] = useState<string | null>(null);
@@ -259,7 +273,7 @@ export function useChatApp() {
     setAppError(null);
     try {
       const isStudent = session.user.role === "student";
-      const [chatList, archivedList, runtimeSettings, personalizationSettings, gptList, learning, declaredLearningProfile, diagnostics, attempts, stateChecks] = await Promise.all([
+      const [chatList, archivedList, runtimeSettings, personalizationSettings, gptList, learning, declaredLearningProfile, ksa, diagnostics, attempts, stateChecks] = await Promise.all([
         isStudent ? Promise.resolve([]) : apiClient.listChats(),
         isStudent ? Promise.resolve([]) : apiClient.listArchivedChats(),
         apiClient.getSettings(),
@@ -267,6 +281,7 @@ export function useChatApp() {
         isStudent ? Promise.resolve([]) : apiClient.listGpts(),
         apiClient.listLearningPaths(),
         apiClient.getLearningProfile(),
+        apiClient.getKsaProfile(),
         apiClient.listDiagnosticDefinitions(),
         apiClient.listDiagnosticAttempts(),
         apiClient.listLearningStateChecks(),
@@ -275,6 +290,7 @@ export function useChatApp() {
       setGpts(gptList);
       setLearningPaths(learning.paths);
       setLearningProfile(declaredLearningProfile);
+      setKsaProfile(ksa);
       setDiagnosticCatalog(diagnostics);
       setDiagnosticDefinitions({
         LAA: diagnostics.definitions.find((item) => item.type === "LAA") ?? null,
@@ -326,7 +342,14 @@ export function useChatApp() {
     setChats([]);
     setGpts([]);
     setLearningPaths([]);
+    setCourses([]);
+    setCoursesError(null);
+    setCoursesLoading(false);
+    setCoursesImporting(false);
     setLearningProfile(null);
+    setKsaProfile(null);
+    setKsaLoading(false);
+    setKsaError(null);
     setLearningProfileLoading(false);
     setLearningProfileSaving(false);
     setLearningProfileError(null);
@@ -953,6 +976,53 @@ export function useChatApp() {
     }
   }
 
+  async function loadCourses(params?: {
+    search?: string;
+    scope?: "global" | "user" | "all";
+    status?: "draft" | "published" | "archived" | "all";
+    owner_user_id?: number;
+    sort?: CourseSort;
+  }) {
+    setCoursesLoading(true);
+    setCoursesError(null);
+    try {
+      const payload = await apiClient.listCourses(params);
+      setCourses(payload.courses);
+      return payload.courses;
+    } catch (error) {
+      setCoursesError(error instanceof Error ? error.message : "Failed to load courses");
+      return [];
+    } finally {
+      setCoursesLoading(false);
+    }
+  }
+
+  async function importCourseFiles(files: File[], scopesByFile: Record<string, "global" | "user">) {
+    setCoursesImporting(true);
+    setCoursesError(null);
+    try {
+      const payload: CourseImportResponse = await apiClient.importCourseFiles(files, scopesByFile);
+      await loadCourses();
+      return payload;
+    } catch (error) {
+      setCoursesError(error instanceof Error ? error.message : "Failed to import course files");
+      throw error;
+    } finally {
+      setCoursesImporting(false);
+    }
+  }
+
+  async function downloadCourseTemplate() {
+    setCoursesError(null);
+    try {
+      const payload = await apiClient.getCourseTemplate();
+      triggerJsonDownload(payload.file_name, payload.template);
+    } catch (error) {
+      setCoursesError(error instanceof Error ? error.message : "Failed to download course template");
+      throw error;
+    }
+  }
+
   async function loadLearningProfile() {
     setLearningProfileLoading(true);
     setLearningProfileError(null);
@@ -966,6 +1036,21 @@ export function useChatApp() {
       return null;
     } finally {
       setLearningProfileLoading(false);
+    }
+  }
+
+  async function loadKsaProfile() {
+    setKsaLoading(true);
+    setKsaError(null);
+    try {
+      const payload = await apiClient.getKsaProfile();
+      setKsaProfile(payload);
+      return payload;
+    } catch (error) {
+      setKsaError(error instanceof Error ? error.message : "Failed to load KSA profile");
+      return null;
+    } finally {
+      setKsaLoading(false);
     }
   }
 
@@ -1382,6 +1467,10 @@ export function useChatApp() {
     }
   }
 
+  async function getLearningPathDetails(pathId: string) {
+    return await apiClient.getLearningPath(pathId);
+  }
+
   async function deleteLearningPath(pathId: string) {
     setLearningSaving(true);
     setLearningError(null);
@@ -1795,11 +1884,18 @@ export function useChatApp() {
     chats,
     gpts,
     learningPaths,
+    courses,
     learningLoading,
     learningError,
     learningSaving,
+    coursesLoading,
+    coursesError,
+    coursesImporting,
     learningProfile,
+    ksaProfile,
     learningProfileLoading,
+    ksaLoading,
+    ksaError,
     learningProfileSaving,
     learningProfileError,
     learningProfileSuccess,
@@ -1853,6 +1949,7 @@ export function useChatApp() {
     canUseStandardChat,
     canUseGpts,
     canAuthorLearningPaths,
+    canCreateGlobalCourses: authSession?.user.role === "admin",
     setAssistantMode,
     ensureChatLoaded,
     createChat,
@@ -1884,7 +1981,11 @@ export function useChatApp() {
     toggleGlobalTagFilter,
     toggleChatTagFilter,
     loadLearningPaths,
+    loadCourses,
+    importCourseFiles,
+    downloadCourseTemplate,
     loadLearningProfile,
+    loadKsaProfile,
     saveLearningPreferences,
     saveLearningContext,
     createLearningGoal,
@@ -1901,6 +2002,7 @@ export function useChatApp() {
     loadLearningStateChecks,
     submitExplanationFeedback,
     createLearningPath,
+    getLearningPathDetails,
     updateLearningPath,
     deleteLearningPath,
     createLearningModule,

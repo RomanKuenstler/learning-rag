@@ -1411,6 +1411,36 @@ class PostgresClient:
             )
             return list(rows)
 
+    def replace_learning_path_structure(self, learning_path_id: str, modules: list[dict[str, object]]) -> list[LearningModule]:
+        with self.session() as session:
+            module_ids = list(
+                session.scalars(
+                    select(LearningModule.id).where(LearningModule.learning_path_id == learning_path_id)
+                )
+            )
+            if module_ids:
+                session.execute(delete(LearningLesson).where(LearningLesson.module_id.in_(module_ids)))
+            session.execute(delete(LearningModule).where(LearningModule.learning_path_id == learning_path_id))
+            # Ensure deletes are applied before inserts to avoid unique constraint
+            # collisions on (learning_path_id, order_index) during replacement.
+            session.flush()
+
+            for module_payload in modules:
+                lessons = list(module_payload.pop("lessons", []))
+                module_record = LearningModule(**module_payload)
+                session.add(module_record)
+                session.flush()
+                for lesson_payload in lessons:
+                    session.add(LearningLesson(module_id=module_record.id, **lesson_payload))
+
+            session.flush()
+            rows = session.scalars(
+                select(LearningModule)
+                .where(LearningModule.learning_path_id == learning_path_id)
+                .order_by(LearningModule.order_index.asc(), LearningModule.created_at.asc())
+            )
+            return list(rows)
+
     def replace_learning_path_allowed_files(self, learning_path_id: str, file_ids: list[int]) -> None:
         deduped = sorted(set(int(file_id) for file_id in file_ids))
         with self.session() as session:

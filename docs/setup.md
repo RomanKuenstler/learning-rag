@@ -25,6 +25,7 @@ docker compose up --build
 - web UI: `http://localhost:5173`
 - retriever API: `http://localhost:8000/docs`
 - learning paths page: `http://localhost:5173/learning`
+- courses page: `http://localhost:5173/courses`
 - declared learning profile sections are available on the learning page (preferences, context, goals)
 
 ## Step A Learning Setup Notes
@@ -33,7 +34,8 @@ docker compose up --build
 - Student accounts are intentionally restricted from normal chat and GPT flows.
 - Learning-path authoring in the UI is available to `admin` and `user` roles.
 - Declared learning profile editing is available to all authenticated roles, including `student`.
-- Step B.1 diagnostics are not included yet; Step B stores only explicit learner-provided inputs.
+- Step B.1 diagnostics are available in the Learning `Preferences` flow.
+- Course definitions are file-backed in `courses/` and are validated/bootstrapped at retriever startup.
 
 ## Optional CLI Retriever
 
@@ -77,6 +79,7 @@ docker compose --profile cli run --rm retriever
 - `PROCESSOR_VERSION`
 - `NORMALIZATION_VERSION`
 - `EXTRACTION_STRATEGY_VERSION`
+- `COURSES_DIR`
 
 ## Services
 

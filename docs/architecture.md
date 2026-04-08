@@ -62,6 +62,17 @@ Future learning chat support is prepared through:
 - `chats.chat_type` (`normal|gpt|learning`)
 - `chats.learning_path_id` nullable foreign key
 
+## Course File Bootstrap Layer
+
+Course/path definitions are also represented as declarative JSON files in `courses/`.
+
+- startup flow: validate files -> upsert valid courses into learning tables -> export current DB courses back to files
+- schema validation is strict (required fields, nested modules/lessons, enum checks)
+- invalid files are logged with file-specific error details and are not imported
+- user-scoped file definitions require `owner_user_id`
+
+This keeps learning-path persistence in relational tables while enabling maintainable file-based bootstrap and import workflows.
+
 ## Declared Learning Profile Model (Step B)
 
 Step B adds an explicit, user-declared learning profile layer that is separate from:
@@ -107,3 +118,24 @@ Design intent:
 
 - Step B declared preferences remain separate from Step B.1 diagnosed profiles
 - final composition target is `LearningContext = declared_preferences + diagnostic_profile + state_signals + feedback_signals`
+
+## KSA Profile Foundation
+
+KSA is modeled as a separate concept from Step B preferences and Step B.1 diagnostics.
+
+- API endpoint: `GET /api/learning-profile/ksa`
+- schema module: `services/retriever/schemas/ksa.py`
+- service assembly: `RetrieverAppService.get_ksa_profile`
+
+Current source model in this step:
+
+- `student_default_baseline`: non-persisted sample values for student users
+- `placeholder_baseline`: neutral non-persisted baseline for non-student users
+- future `assessment`: reserved for persisted post-assessment scores
+
+Scale model:
+
+- numeric `1..5` values mapped to Dreyfus levels (`Novice` -> `Expert`)
+- identical scale across `knowledge`, `skills`, and `abilities`
+
+This keeps the KSA read model stable now while allowing future assessment persistence and deep-dive scoring without breaking the frontend contract.

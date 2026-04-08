@@ -1,0 +1,73 @@
+{
+  "schema_version": 1,
+  "id": "course-example-python-learning-sprint",
+  "title": "Example: Python Learning Sprint",
+  "description": "Practical beginner path to write and reason about Python code quickly.",
+  "scope": "global",
+  "owner_user_id": null,
+  "subject": "Python",
+  "difficulty_level": "beginner",
+  "estimated_duration_minutes": 150,
+  "status": "published",
+  "allowed_file_ids": [],
+  "allowed_tags": [],
+  "modules": [
+    {
+      "id": "718eace4-c40d-4757-abd9-3253ed693a38",
+      "order_index": 0,
+      "title": "Python Basics",
+      "description": "Syntax, variables, conditionals, and loops.",
+      "learning_objectives": [
+        "Read basic Python",
+        "Write simple scripts"
+      ],
+      "lessons": [
+        {
+          "id": "1d2f19d7-a267-42f0-bb56-f1426138d071",
+          "order_index": 0,
+          "title": "Variables and Data Types",
+          "description": "Numbers, strings, booleans, and lists in small examples.",
+          "objectives": [
+            "Choose the right data type",
+            "Use simple transformations"
+          ],
+          "teaching_notes": ""
+        },
+        {
+          "id": "ab416670-8574-4412-980c-b026168c9c4d",
+          "order_index": 1,
+          "title": "Control Flow",
+          "description": "If statements and loops for basic program logic.",
+          "objectives": [
+            "Write conditional logic",
+            "Iterate with for/while"
+          ],
+          "teaching_notes": ""
+        }
+      ]
+    },
+    {
+      "id": "68d55833-d818-4b21-a3d1-2e23a33dc693",
+      "order_index": 1,
+      "title": "Functions and Small Projects",
+      "description": "Reusable functions and basic problem decomposition.",
+      "learning_objectives": [
+        "Define and call functions",
+        "Structure a tiny script project"
+      ],
+      "lessons": [
+        {
+          "id": "a0b24011-e12c-4d7c-9827-26e15295516c",
+          "order_index": 0,
+          "title": "Functions and Parameters",
+          "description": "Build reusable code with arguments and return values.",
+          "objectives": [
+            "Write functions",
+            "Use return values effectively"
+          ],
+          "teaching_notes": ""
+        }
+      ]
+    }
+  ]
+}

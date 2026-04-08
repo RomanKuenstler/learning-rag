@@ -79,6 +79,21 @@ npm run build
 - student-role access for declared learning profile endpoints
 - cross-user goal isolation (`404` on other-user goal mutate attempts)
 
+## Courses And KSA Checks Covered
+
+- courses API list/template route coverage
+- learning API compatibility coverage after introducing courses routes
+- course JSON parser validation tests (valid payload, invalid scope-owner, example files)
+- KSA profile API coverage (`/api/learning-profile/ksa`) including student default baseline values
+- frontend production build coverage with new KSA big-map UI, assessment-dialog shell, and courses updates
+
+Focused run:
+
+```bash
+python3 -m pytest tests/test_step14_learning_api.py tests/test_retriever_api.py tests/test_courses_files.py -q
+cd webui && npm run build
+```
+
 Recommended focused run:
 
 ```bash

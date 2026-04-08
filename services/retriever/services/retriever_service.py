@@ -55,12 +55,17 @@ from services.retriever.schemas.chat import (
 from services.retriever.schemas.learning import (
     LearningLessonCreateRequest,
     LearningLessonRead,
-    LearningLessonUpdateRequest,
     LearningLessonReorderRequest,
+    LearningLessonUpdateRequest,
     LearningModuleCreateRequest,
     LearningModuleRead,
     LearningModuleReorderRequest,
     LearningModuleUpdateRequest,
+    CourseImportFileResultRead,
+    CourseImportResponse,
+    CourseListItemRead,
+    CourseListResponse,
+    CourseTemplateResponse,
     LearningPathCreateRequest,
     LearningPathListResponse,
     LearningPathRead,
@@ -89,10 +94,12 @@ from services.retriever.schemas.diagnostics import (
     LearningStateCheckCreateRequest,
     LearningStateCheckRead,
 )
+from services.retriever.schemas.ksa import KSAAbilitiesRead, KSAKnowledgeRead, KSAProfileRead, KSASkillsRead
 from services.retriever.services.diagnostic_definitions import load_parsed_sources
 from services.retriever.services.diagnostic_scoring import score_attempt
 from services.retriever.services.chat_naming import generate_chat_name
 from services.retriever.services.library_manager import LibraryManager, UploadFilePayload
+from services.retriever.services.course_files import CourseDefinition, CourseFileParser
 from services.retriever.services.message_mapper import map_attachment, map_chat, map_filter_file, map_filter_tag, map_gpt, map_message, map_source
 
 RUNTIME_SETTING_KEYS = {
@@ -152,8 +159,78 @@ LEARNING_CONTEXT_DEFAULTS = {
 SUPPORTED_ROLES = {"admin", "user", "student"}
 EXAMPLE_LEARNING_PATH_TITLE = "Example: Docker Fundamentals"
 EXAMPLE_LEARNING_PATH_TITLE_SECOND = "Example: Python Learning Sprint"
+EXAMPLE_LEARNING_PATH_ID = "course-example-docker-fundamentals"
+EXAMPLE_LEARNING_PATH_ID_SECOND = "course-example-python-learning-sprint"
 DIAGNOSTIC_DOC_SOURCE_SUBDIR = "diagnostics/source"
 DIAGNOSTIC_PAGES_FALLBACK_SUBDIR = "prds"
+COURSE_SORT_OPTIONS = {
+    "name_asc",
+    "name_desc",
+    "updated_desc",
+    "updated_asc",
+    "modules_desc",
+    "lessons_desc",
+    "scope_global_first",
+    "scope_user_first",
+}
+
+STUDENT_DEFAULT_KNOWLEDGE = {
+    "stem_fundamentals": 2,
+    "information_technology": 2,
+    "humanities_social_sciences": 3,
+    "languages_linguistics": 3,
+    "business_commerce": 2,
+    "legal_ethics": 1,
+    "health_wellness": 2,
+}
+
+STUDENT_DEFAULT_SKILLS = {
+    "literacy_numeracy": 3,
+    "digital_craft": 2,
+    "strategic_execution": 2,
+    "operational_skills": 2,
+    "relational_skills": 3,
+    "research_inquiry": 2,
+}
+
+STUDENT_DEFAULT_ABILITIES = {
+    "quantitative_reasoning": 2,
+    "verbal_comprehension": 3,
+    "spatial_visualization": 2,
+    "executive_function": 2,
+    "sensory_perceptual": 3,
+    "social_emotional_capacity": 3,
+    "divergent_thinking": 3,
+}
+
+PLACEHOLDER_BASELINE_KNOWLEDGE = {
+    "stem_fundamentals": 2,
+    "information_technology": 2,
+    "humanities_social_sciences": 2,
+    "languages_linguistics": 2,
+    "business_commerce": 2,
+    "legal_ethics": 2,
+    "health_wellness": 2,
+}
+
+PLACEHOLDER_BASELINE_SKILLS = {
+    "literacy_numeracy": 2,
+    "digital_craft": 2,
+    "strategic_execution": 2,
+    "operational_skills": 2,
+    "relational_skills": 2,
+    "research_inquiry": 2,
+}
+
+PLACEHOLDER_BASELINE_ABILITIES = {
+    "quantitative_reasoning": 2,
+    "verbal_comprehension": 2,
+    "spatial_visualization": 2,
+    "executive_function": 2,
+    "sensory_perceptual": 2,
+    "social_emotional_capacity": 2,
+    "divergent_thinking": 2,
+}
 logger = logging.getLogger(__name__)
 
 
@@ -181,9 +258,15 @@ class RetrieverAppService:
         self.attachment_client = deps.attachment_client
         self.auth_manager = deps.auth_manager
         self.settings = deps.settings
+        self.course_file_parser = CourseFileParser()
+        self.courses_dir = Path(self.settings.courses_dir)
+        self.courses_dir.mkdir(parents=True, exist_ok=True)
         if self.auth_manager is not None:
             self.auth_manager.bootstrap_users()
         self._ensure_example_learning_path()
+        self._sync_courses_from_files()
+        self._dedupe_learning_paths()
+        self._export_courses_to_files()
         self._ensure_diagnostic_definitions()
 
     def login(self, username: str, password: str) -> AuthLoginResponse:
@@ -737,6 +820,27 @@ class RetrieverAppService:
             diagnostics_status=diagnostics_status,
         )
 
+    def get_ksa_profile(self, user: UserAccount) -> KSAProfileRead:
+        if str(user.role).lower() == "student":
+            return KSAProfileRead(
+                user_id=user.id,
+                has_assessment=False,
+                profile_source="student_default_baseline",
+                knowledge=KSAKnowledgeRead(**STUDENT_DEFAULT_KNOWLEDGE),
+                skills=KSASkillsRead(**STUDENT_DEFAULT_SKILLS),
+                abilities=KSAAbilitiesRead(**STUDENT_DEFAULT_ABILITIES),
+                updated_at=None,
+            )
+        return KSAProfileRead(
+            user_id=user.id,
+            has_assessment=False,
+            profile_source="placeholder_baseline",
+            knowledge=KSAKnowledgeRead(**PLACEHOLDER_BASELINE_KNOWLEDGE),
+            skills=KSASkillsRead(**PLACEHOLDER_BASELINE_SKILLS),
+            abilities=KSAAbilitiesRead(**PLACEHOLDER_BASELINE_ABILITIES),
+            updated_at=None,
+        )
+
     def update_learning_preferences(self, user: UserAccount, payload: LearningPreferencesUpdateRequest) -> LearningPreferencesRead:
         existing = self.chat_repository.get_user_learning_preference(user.id)
         fields = payload.model_dump(exclude_unset=True)
@@ -978,6 +1082,132 @@ class RetrieverAppService:
         paths = self.chat_repository.list_learning_paths(user_id=user.id, role=user.role)
         return LearningPathListResponse(paths=[self._build_learning_path_read(user, path) for path in paths])
 
+    def list_courses(
+        self,
+        user: UserAccount,
+        *,
+        search: str = "",
+        scope: str | None = None,
+        status: str | None = None,
+        owner_user_id: int | None = None,
+        sort: str = "updated_desc",
+    ) -> CourseListResponse:
+        records = self.chat_repository.list_learning_paths(user_id=user.id, role=user.role)
+        users_by_id = {account.id: account for account in self.chat_repository.list_users()}
+        items: list[CourseListItemRead] = []
+        lowered_search = search.strip().lower()
+        for record in records:
+            if user.role != "admin" and record.status == "archived":
+                continue
+            if scope and record.scope != scope:
+                continue
+            if status and record.status != status:
+                continue
+            if owner_user_id is not None and record.owner_user_id != owner_user_id:
+                continue
+            if lowered_search:
+                haystack = f"{record.title} {record.description or ''}".lower()
+                if lowered_search not in haystack:
+                    continue
+            modules = self.chat_repository.list_learning_modules(record.id)
+            module_count = len(modules)
+            lesson_count = sum(len(self.chat_repository.list_learning_lessons(module.id)) for module in modules)
+            owner = users_by_id.get(record.owner_user_id or -1)
+            items.append(
+                CourseListItemRead(
+                    id=record.id,
+                    title=record.title,
+                    description=record.description or "",
+                    scope=record.scope,
+                    owner_user_id=record.owner_user_id,
+                    owner_username=owner.username if owner else None,
+                    owner_displayname=owner.displayname if owner else None,
+                    status=record.status,
+                    subject=record.subject or "",
+                    difficulty_level=record.difficulty_level or "",
+                    module_count=module_count,
+                    lesson_count=lesson_count,
+                    updated_at=record.updated_at,
+                    created_at=record.created_at,
+                )
+            )
+        sorted_items = self._sort_courses(items, sort)
+        return CourseListResponse(courses=sorted_items, total=len(sorted_items))
+
+    def import_courses_from_uploads(
+        self,
+        user: UserAccount,
+        uploads: list[UploadFilePayload],
+        scopes_by_file_raw: str | None,
+    ) -> CourseImportResponse:
+        if len(uploads) > 5:
+            raise ValueError("Upload supports up to 5 JSON files at a time")
+        scopes_by_file = self._parse_course_scope_mapping(scopes_by_file_raw)
+        seen_names: set[str] = set()
+        results: list[CourseImportFileResultRead] = []
+        for upload in uploads:
+            file_name = Path(upload.file_name).name
+            if not file_name.lower().endswith(".json"):
+                results.append(
+                    CourseImportFileResultRead(
+                        file_name=file_name,
+                        scope="user",
+                        success=False,
+                        error="Only .json files are supported",
+                    )
+                )
+                continue
+            if file_name in seen_names:
+                results.append(
+                    CourseImportFileResultRead(
+                        file_name=file_name,
+                        scope="user",
+                        success=False,
+                        error="Duplicate file selected",
+                    )
+                )
+                continue
+            seen_names.add(file_name)
+            override_scope = scopes_by_file.get(file_name)
+            try:
+                definition = self.course_file_parser.parse_bytes(file_name, upload.content)
+                definition = definition.model_copy(update={"scope": override_scope or definition.scope})
+                self._validate_course_scope_for_user(user, definition.scope)
+                self._validate_embedded_course_ids(definition, file_name=file_name, target_learning_path_id=None)
+                upserted = self._upsert_course_definition(
+                    definition,
+                    owner_user_id=user.id if definition.scope == "user" else None,
+                    enforce_owner=True,
+                )
+                self._write_course_file_for_path(upserted.id)
+                results.append(
+                    CourseImportFileResultRead(
+                        file_name=file_name,
+                        scope=upserted.scope,
+                        success=True,
+                        course_id=upserted.id,
+                        title=upserted.title,
+                    )
+                )
+            except Exception as error:
+                results.append(
+                    CourseImportFileResultRead(
+                        file_name=file_name,
+                        scope=override_scope or "user",
+                        success=False,
+                        error=str(error),
+                    )
+                )
+        imported_count = sum(1 for item in results if item.success)
+        failed_count = len(results) - imported_count
+        return CourseImportResponse(imported_count=imported_count, failed_count=failed_count, results=results)
+
+    def get_course_template(self) -> CourseTemplateResponse:
+        return CourseTemplateResponse(
+            file_name=self.course_file_parser.TEMPLATE_FILE_NAME,
+            template=self.course_file_parser.template_payload(),
+        )
+
     def create_learning_path(self, user: UserAccount, payload: LearningPathCreateRequest) -> LearningPathRead:
         self._ensure_learning_path_create_allowed(user, payload.scope)
         normalized_tags = self._normalize_tags(payload.allowed_tags)
@@ -997,6 +1227,7 @@ class RetrieverAppService:
         self.chat_repository.replace_learning_path_allowed_tags(record.id, normalized_tags)
         refreshed = self.chat_repository.get_learning_path(record.id)
         assert refreshed is not None
+        self._write_course_file_for_path(refreshed.id)
         return self._build_learning_path_read(user, refreshed)
 
     def get_learning_path(self, user: UserAccount, learning_path_id: str) -> LearningPathRead | None:
@@ -1035,6 +1266,7 @@ class RetrieverAppService:
             self.chat_repository.replace_learning_path_allowed_tags(updated.id, self._normalize_tags(payload.allowed_tags))
         refreshed = self.chat_repository.get_learning_path(updated.id)
         assert refreshed is not None
+        self._write_course_file_for_path(refreshed.id)
         return self._build_learning_path_read(user, refreshed)
 
     def delete_learning_path(self, user: UserAccount, learning_path_id: str) -> LearningPathRead | None:
@@ -1045,6 +1277,7 @@ class RetrieverAppService:
         deleted = self.chat_repository.delete_learning_path(learning_path_id)
         if deleted is None:
             return None
+        self._delete_course_file_for_course_id(learning_path_id)
         return self._build_learning_path_read(user, deleted)
 
     def create_learning_module(
@@ -1067,6 +1300,7 @@ class RetrieverAppService:
                 "learning_objectives": [item.strip() for item in payload.learning_objectives if item.strip()],
             }
         )
+        self._write_course_file_for_path(learning_path_id)
         return self._build_learning_module_read(module, lessons=[])
 
     def update_learning_module(
@@ -1095,6 +1329,7 @@ class RetrieverAppService:
         if updated is None:
             return None
         lessons = self.chat_repository.list_learning_lessons(updated.id)
+        self._write_course_file_for_path(learning_path.id)
         return self._build_learning_module_read(updated, lessons=lessons)
 
     def delete_learning_module(self, user: UserAccount, module_id: str) -> LearningModuleRead | None:
@@ -1108,6 +1343,7 @@ class RetrieverAppService:
         deleted = self.chat_repository.delete_learning_module(module_id)
         if deleted is None:
             return None
+        self._write_course_file_for_path(learning_path.id)
         return self._build_learning_module_read(deleted, lessons=[])
 
     def reorder_learning_modules(
@@ -1126,6 +1362,7 @@ class RetrieverAppService:
             module.id: self.chat_repository.list_learning_lessons(module.id)
             for module in modules
         }
+        self._write_course_file_for_path(learning_path_id)
         return [self._build_learning_module_read(module, lessons=lessons_by_module.get(module.id, [])) for module in modules]
 
     def create_learning_lesson(
@@ -1152,6 +1389,7 @@ class RetrieverAppService:
                 "teaching_notes": payload.teaching_notes.strip(),
             }
         )
+        self._write_course_file_for_path(learning_path.id)
         return self._build_learning_lesson_read(lesson)
 
     def update_learning_lesson(
@@ -1182,6 +1420,7 @@ class RetrieverAppService:
         updated = self.chat_repository.update_learning_lesson(lesson_id, fields)
         if updated is None:
             return None
+        self._write_course_file_for_path(learning_path.id)
         return self._build_learning_lesson_read(updated)
 
     def delete_learning_lesson(self, user: UserAccount, lesson_id: str) -> LearningLessonRead | None:
@@ -1198,6 +1437,7 @@ class RetrieverAppService:
         deleted = self.chat_repository.delete_learning_lesson(lesson_id)
         if deleted is None:
             return None
+        self._write_course_file_for_path(learning_path.id)
         return self._build_learning_lesson_read(deleted)
 
     def reorder_learning_lessons(
@@ -1215,6 +1455,7 @@ class RetrieverAppService:
         self._ensure_learning_path_edit_allowed(user, learning_path)
         lesson_orders = [(item.id, item.order_index) for item in payload.lessons]
         lessons = self.chat_repository.reorder_learning_lessons(module_id, lesson_orders)
+        self._write_course_file_for_path(learning_path.id)
         return [self._build_learning_lesson_read(lesson) for lesson in lessons]
 
     def send_message(
@@ -1610,6 +1851,313 @@ class RetrieverAppService:
             )
         )
 
+    def _sort_courses(self, items: list[CourseListItemRead], sort: str) -> list[CourseListItemRead]:
+        sort_key = sort if sort in COURSE_SORT_OPTIONS else "updated_desc"
+        if sort_key == "name_asc":
+            return sorted(items, key=lambda item: (item.title.lower(), item.updated_at), reverse=False)
+        if sort_key == "name_desc":
+            return sorted(items, key=lambda item: (item.title.lower(), item.updated_at), reverse=True)
+        if sort_key == "updated_asc":
+            return sorted(items, key=lambda item: item.updated_at, reverse=False)
+        if sort_key == "modules_desc":
+            return sorted(items, key=lambda item: (item.module_count, item.updated_at), reverse=True)
+        if sort_key == "lessons_desc":
+            return sorted(items, key=lambda item: (item.lesson_count, item.updated_at), reverse=True)
+        if sort_key == "scope_global_first":
+            return sorted(items, key=lambda item: (0 if item.scope == "global" else 1, item.title.lower()))
+        if sort_key == "scope_user_first":
+            return sorted(items, key=lambda item: (0 if item.scope == "user" else 1, item.title.lower()))
+        return sorted(items, key=lambda item: item.updated_at, reverse=True)
+
+    def _parse_course_scope_mapping(self, raw_value: str | None) -> dict[str, str]:
+        if not raw_value:
+            return {}
+        payload = json.loads(raw_value)
+        if not isinstance(payload, dict):
+            raise ValueError("scopes_by_file must be a JSON object")
+        mapping: dict[str, str] = {}
+        for key, value in payload.items():
+            file_name = Path(str(key)).name
+            scope = str(value).strip().lower()
+            if scope not in {"global", "user"}:
+                raise ValueError(f"Invalid scope for {file_name}: {value}")
+            mapping[file_name] = scope
+        return mapping
+
+    def _validate_course_scope_for_user(self, user: UserAccount, scope: str) -> None:
+        if user.role == "student":
+            raise PermissionError("Students cannot create learning paths")
+        if scope == "global" and user.role != "admin":
+            raise PermissionError("Only admins can create global learning paths")
+
+    def _sync_courses_from_files(self) -> None:
+        for path in sorted(self.courses_dir.glob("*.json")):
+            try:
+                definition = self.course_file_parser.parse_file(path)
+                target_course_id = path.stem if self.chat_repository.get_learning_path(path.stem) is not None else None
+                self._validate_embedded_course_ids(definition, file_name=path.name, target_learning_path_id=target_course_id)
+                upserted = self._upsert_course_definition(
+                    definition,
+                    owner_user_id=definition.owner_user_id,
+                    enforce_owner=False,
+                    target_learning_path_id=target_course_id,
+                )
+                self._write_course_file_for_path(upserted.id)
+                canonical_file_name = self.course_file_parser.safe_file_name(upserted.id, upserted.title)
+                if path.name != canonical_file_name:
+                    path.unlink(missing_ok=True)
+            except Exception as error:
+                logger.error("Course bootstrap skipped for %s: %s", path.name, error)
+
+    def _export_courses_to_files(self) -> None:
+        records = self.chat_repository.list_learning_paths(user_id=0, role="admin")
+        for path in records:
+            try:
+                self._write_course_file_for_path(path.id)
+            except Exception:
+                logger.exception("Failed to export course file for learning path %s", path.id)
+        self._delete_legacy_named_course_files({path.id for path in records})
+
+    def _upsert_course_definition(
+        self,
+        definition: CourseDefinition,
+        *,
+        owner_user_id: int | None,
+        enforce_owner: bool,
+        target_learning_path_id: str | None = None,
+    ) -> LearningPath:
+        existing: LearningPath | None = None
+        if target_learning_path_id:
+            existing = self.chat_repository.get_learning_path(target_learning_path_id)
+        resolved_owner = owner_user_id
+        if definition.scope == "user":
+            if enforce_owner and resolved_owner is None:
+                raise ValueError("owner_user_id is required for user scope")
+            if resolved_owner is not None:
+                owner = self.chat_repository.get_user_by_id(resolved_owner)
+                if owner is None:
+                    raise ValueError(f"owner_user_id does not exist: {resolved_owner}")
+            else:
+                resolved_owner = definition.owner_user_id
+        else:
+            resolved_owner = None
+
+        fields = {
+            "scope": definition.scope,
+            "owner_user_id": resolved_owner,
+            "title": definition.title,
+            "description": definition.description,
+            "subject": definition.subject,
+            "difficulty_level": definition.difficulty_level,
+            "estimated_duration_minutes": definition.estimated_duration_minutes,
+            "status": definition.status,
+        }
+        if existing is None:
+            existing = self.chat_repository.create_learning_path(fields)
+        else:
+            updated = self.chat_repository.update_learning_path(existing.id, fields)
+            if updated is not None:
+                existing = updated
+        modules_payload: list[dict[str, object]] = []
+        for module in sorted(definition.modules, key=lambda item: item.order_index):
+            lessons_payload: list[dict[str, object]] = []
+            for lesson in sorted(module.lessons, key=lambda item: item.order_index):
+                lesson_payload: dict[str, object] = {
+                    "order_index": lesson.order_index,
+                    "title": lesson.title,
+                    "description": lesson.description,
+                    "objectives": list(lesson.objectives),
+                    "teaching_notes": lesson.teaching_notes,
+                }
+                lessons_payload.append(lesson_payload)
+            module_payload: dict[str, object] = {
+                "learning_path_id": existing.id,
+                "order_index": module.order_index,
+                "title": module.title,
+                "description": module.description,
+                "learning_objectives": list(module.learning_objectives),
+                "lessons": lessons_payload,
+            }
+            modules_payload.append(module_payload)
+        self.chat_repository.replace_learning_path_structure(existing.id, modules_payload)
+        self.chat_repository.replace_learning_path_allowed_files(existing.id, definition.allowed_file_ids)
+        self.chat_repository.replace_learning_path_allowed_tags(existing.id, definition.allowed_tags)
+        refreshed = self.chat_repository.get_learning_path(existing.id)
+        if refreshed is None:
+            raise ValueError(f"Learning path not found after upsert: {existing.id}")
+        return refreshed
+
+    def _write_course_definition_file(self, definition: CourseDefinition) -> None:
+        if not definition.id:
+            raise ValueError("Cannot write course file without an id")
+        file_name = self.course_file_parser.safe_file_name(definition.id, definition.title)
+        payload = definition.model_dump()
+        target = self.courses_dir / file_name
+        target.write_text(json.dumps(payload, indent=2), encoding="utf-8")
+        self._delete_course_files_for_id(definition.id, keep=target.name)
+
+    def _write_course_file_for_path(self, learning_path_id: str) -> None:
+        try:
+            path = self.chat_repository.get_learning_path(learning_path_id)
+            if path is None:
+                return
+            modules = self.chat_repository.list_learning_modules(path.id)
+            module_payload = []
+            for module in modules:
+                lessons = self.chat_repository.list_learning_lessons(module.id)
+                module_payload.append(
+                    {
+                        "id": module.id,
+                        "order_index": module.order_index,
+                        "title": module.title,
+                        "description": module.description or "",
+                        "learning_objectives": list(module.learning_objectives or []),
+                        "lessons": [
+                            {
+                                "id": lesson.id,
+                                "order_index": lesson.order_index,
+                                "title": lesson.title,
+                                "description": lesson.description or "",
+                                "objectives": list(lesson.objectives or []),
+                                "teaching_notes": lesson.teaching_notes or "",
+                            }
+                            for lesson in lessons
+                        ],
+                    }
+                )
+            allowed_files = self.chat_repository.list_learning_path_allowed_files(path.id)
+            allowed_tags = self.chat_repository.list_learning_path_allowed_tags(path.id)
+            definition = CourseDefinition.model_validate(
+                {
+                    "schema_version": 1,
+                    "id": path.id,
+                    "title": path.title,
+                    "description": path.description or "",
+                    "scope": path.scope,
+                    "owner_user_id": path.owner_user_id,
+                    "subject": path.subject or "",
+                    "difficulty_level": path.difficulty_level or "",
+                    "estimated_duration_minutes": path.estimated_duration_minutes,
+                    "status": path.status,
+                    "allowed_file_ids": [item.file_id for item in allowed_files],
+                    "allowed_tags": [item.tag for item in allowed_tags],
+                    "modules": module_payload,
+                }
+            )
+            self._write_course_definition_file(definition)
+        except Exception:
+            logger.exception("Failed to export course file for learning path %s", learning_path_id)
+
+    def _delete_course_file_for_course_id(self, course_id: str) -> None:
+        self._delete_course_files_for_id(course_id)
+
+    def _delete_course_files_for_id(self, course_id: str, *, keep: str | None = None) -> None:
+        for path in self.courses_dir.glob("*.json"):
+            stem = path.stem
+            if stem == course_id or stem.endswith(f"-{course_id}"):
+                if keep is not None and path.name == keep:
+                    continue
+                path.unlink(missing_ok=True)
+
+    def _delete_legacy_named_course_files(self, valid_course_ids: set[str]) -> None:
+        for path in self.courses_dir.glob("*.json"):
+            stem = path.stem
+            if stem in valid_course_ids:
+                continue
+            for course_id in valid_course_ids:
+                if stem.endswith(f"-{course_id}"):
+                    path.unlink(missing_ok=True)
+                    break
+
+    def _validate_embedded_course_ids(
+        self,
+        definition: CourseDefinition,
+        *,
+        file_name: str,
+        target_learning_path_id: str | None,
+    ) -> None:
+        allowed_module_ids: set[str] = set()
+        allowed_lesson_ids: set[str] = set()
+        if target_learning_path_id:
+            for module in self.chat_repository.list_learning_modules(target_learning_path_id):
+                allowed_module_ids.add(module.id)
+                for lesson in self.chat_repository.list_learning_lessons(module.id):
+                    allowed_lesson_ids.add(lesson.id)
+
+        if definition.id:
+            existing = self.chat_repository.get_learning_path(definition.id)
+            if existing is not None and existing.id != target_learning_path_id:
+                raise ValueError(f"{file_name}: id '{definition.id}' already exists; remove id fields from the JSON file")
+
+        for module in definition.modules:
+            if not module.id:
+                continue
+            existing_module = self.chat_repository.get_learning_module(module.id)
+            if existing_module is not None and module.id not in allowed_module_ids:
+                raise ValueError(f"{file_name}: module id '{module.id}' already exists; remove id fields from the JSON file")
+            for lesson in module.lessons:
+                if not lesson.id:
+                    continue
+                existing_lesson = self.chat_repository.get_learning_lesson(lesson.id)
+                if existing_lesson is not None and lesson.id not in allowed_lesson_ids:
+                    raise ValueError(f"{file_name}: lesson id '{lesson.id}' already exists; remove id fields from the JSON file")
+
+    def _course_structure_signature(self, learning_path_id: str) -> tuple[tuple[object, ...], tuple[int, ...], tuple[str, ...]]:
+        modules = self.chat_repository.list_learning_modules(learning_path_id)
+        module_parts: list[object] = []
+        for module in sorted(modules, key=lambda item: (item.order_index, item.title)):
+            lessons = self.chat_repository.list_learning_lessons(module.id)
+            lesson_parts = tuple(
+                (
+                    lesson.order_index,
+                    lesson.title.strip(),
+                    (lesson.description or "").strip(),
+                    tuple(str(value).strip() for value in (lesson.objectives or [])),
+                    (lesson.teaching_notes or "").strip(),
+                )
+                for lesson in sorted(lessons, key=lambda item: (item.order_index, item.title))
+            )
+            module_parts.append(
+                (
+                    module.order_index,
+                    module.title.strip(),
+                    (module.description or "").strip(),
+                    tuple(str(value).strip() for value in (module.learning_objectives or [])),
+                    lesson_parts,
+                )
+            )
+        allowed_files = tuple(sorted(item.file_id for item in self.chat_repository.list_learning_path_allowed_files(learning_path_id)))
+        allowed_tags = tuple(sorted(item.tag for item in self.chat_repository.list_learning_path_allowed_tags(learning_path_id)))
+        return (tuple(module_parts), allowed_files, allowed_tags)
+
+    def _dedupe_learning_paths(self) -> None:
+        records = self.chat_repository.list_learning_paths(user_id=0, role="admin")
+        grouped: dict[tuple[object, ...], list[LearningPath]] = {}
+        for record in records:
+            signature = self._course_structure_signature(record.id)
+            key = (
+                record.scope,
+                record.owner_user_id,
+                record.title.strip().lower(),
+                (record.description or "").strip(),
+                (record.subject or "").strip(),
+                (record.difficulty_level or "").strip(),
+                record.estimated_duration_minutes,
+                record.status,
+                signature,
+            )
+            grouped.setdefault(key, []).append(record)
+
+        for group in grouped.values():
+            if len(group) < 2:
+                continue
+            ordered = sorted(group, key=lambda item: (item.updated_at, item.created_at, item.id), reverse=True)
+            keep = ordered[0]
+            for duplicate in ordered[1:]:
+                logger.warning("Deleting duplicate learning path %s (keeping %s)", duplicate.id, keep.id)
+                self.chat_repository.delete_learning_path(duplicate.id)
+                self._delete_course_file_for_course_id(duplicate.id)
+
     def _normalize_tags(self, tags: list[str]) -> list[str]:
         return sorted({tag.strip().lower() for tag in tags if tag.strip()})
 
@@ -1620,6 +2168,7 @@ class RetrieverAppService:
             if EXAMPLE_LEARNING_PATH_TITLE not in existing_titles:
                 path = self.chat_repository.create_learning_path(
                     {
+                        "id": EXAMPLE_LEARNING_PATH_ID,
                         "scope": "global",
                         "owner_user_id": None,
                         "title": EXAMPLE_LEARNING_PATH_TITLE,
@@ -1682,6 +2231,7 @@ class RetrieverAppService:
             if EXAMPLE_LEARNING_PATH_TITLE_SECOND not in existing_titles:
                 path = self.chat_repository.create_learning_path(
                     {
+                        "id": EXAMPLE_LEARNING_PATH_ID_SECOND,
                         "scope": "global",
                         "owner_user_id": None,
                         "title": EXAMPLE_LEARNING_PATH_TITLE_SECOND,

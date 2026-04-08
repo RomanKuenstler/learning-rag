@@ -22,8 +22,11 @@ This repository includes the learning foundation, declared learning profile laye
 - real-time learning state check persistence
 - explanation feedback persistence (rating, text, re-explain flag)
 - dynamic frontend diagnostic flow and backend-driven charts
-- dedicated learning UI sections for preferences, context, and goals
-- web UI learning-path management page and sidebar navigation entry
+- dedicated learning UI sections for preferences, context, goals, and KSA big-map visualization
+- KSA baseline profile API (`/api/learning-profile/ksa`) with student default values on a Dreyfus 1-5 scale
+- dedicated Courses page with filtering, sorting, template download, and JSON import dialog
+- file-backed course definitions under `courses/` with startup validation + bootstrap sync
+- web UI sidebar navigation entries for Learning and Courses
 - future learning-chat foundation fields (`chat_type`, `learning_path_id`)
 
 Step B (declared preferences) remains separate from Step B.1 (diagnosed preferences and runtime signals).
