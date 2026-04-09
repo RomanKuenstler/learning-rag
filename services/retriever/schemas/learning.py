@@ -59,6 +59,32 @@ class SkilltreeNodeRewardsRead(BaseModel):
     reward_tags: list[str] = Field(default_factory=list)
 
 
+class SkilltreeNodeRetrospectiveHooksRead(BaseModel):
+    retrospective_after: bool = False
+    review_recommended: bool = False
+    recap_checkpoint_available: bool = False
+
+
+class SkilltreeNodeKsaHooksRead(BaseModel):
+    mini_assessment_available: bool = False
+    recommended_reassessment_topics: list[str] = Field(default_factory=list)
+    unlocks_deeper_refinement: bool = False
+
+
+class SkilltreeNodeRemediationRead(BaseModel):
+    is_remediation_node: bool = False
+    recommended_if_failed_node_ids: list[str] = Field(default_factory=list)
+    supports_review_for_node_ids: list[str] = Field(default_factory=list)
+
+
+class SkilltreeNodeAdaptiveUnlockRuleRead(BaseModel):
+    ksa_thresholds: list[dict[str, object]] = Field(default_factory=list)
+    requires_branch_completion_ids: list[str] = Field(default_factory=list)
+    requires_checkpoint_node_ids: list[str] = Field(default_factory=list)
+    requires_review_recommended: bool = False
+    recommended_only: bool = False
+
+
 class SkilltreeNodeLayoutRead(BaseModel):
     x: float = 0
     y: float = 0
@@ -90,6 +116,10 @@ class SkilltreeNodeRead(BaseModel):
     ksa: list[SkilltreeNodeKsaRead] = Field(default_factory=list)
     unlocks: SkilltreeNodeUnlocksRead = Field(default_factory=SkilltreeNodeUnlocksRead)
     rewards: SkilltreeNodeRewardsRead = Field(default_factory=SkilltreeNodeRewardsRead)
+    retrospective_hooks: SkilltreeNodeRetrospectiveHooksRead = Field(default_factory=SkilltreeNodeRetrospectiveHooksRead)
+    ksa_hooks: SkilltreeNodeKsaHooksRead = Field(default_factory=SkilltreeNodeKsaHooksRead)
+    remediation: SkilltreeNodeRemediationRead = Field(default_factory=SkilltreeNodeRemediationRead)
+    adaptive_unlock: SkilltreeNodeAdaptiveUnlockRuleRead = Field(default_factory=SkilltreeNodeAdaptiveUnlockRuleRead)
 
 
 class SkilltreeEdgeRead(BaseModel):
@@ -129,7 +159,39 @@ class SkilltreeCompletionSummaryRead(BaseModel):
     required_completed: int
     optional_total: int
     optional_completed: int
+    required_branch_total: int = 0
+    required_branch_completed: int = 0
+    global_capstone_total: int = 0
+    global_capstone_completed: int = 0
     is_complete: bool
+
+
+class SkilltreeBranchProgressRead(BaseModel):
+    branch_id: str
+    title: str
+    required: bool
+    required_total: int
+    required_completed: int
+    optional_total: int
+    optional_completed: int
+    is_complete: bool
+
+
+class SkilltreeRecommendationRead(BaseModel):
+    next_best_node_id: str | None = None
+    next_branch_id: str | None = None
+    suggested_optional_node_id: str | None = None
+    suggested_review_node_id: str | None = None
+    suggested_ksa_assessment_node_id: str | None = None
+    rationale: list[str] = Field(default_factory=list)
+
+
+class SkilltreeHookSummaryRead(BaseModel):
+    retrospective_node_ids: list[str] = Field(default_factory=list)
+    review_node_ids: list[str] = Field(default_factory=list)
+    ksa_assessment_node_ids: list[str] = Field(default_factory=list)
+    remediation_candidate_node_ids: list[str] = Field(default_factory=list)
+    adaptive_unlock_candidate_node_ids: list[str] = Field(default_factory=list)
 
 
 class SkilltreeNodeRuntimeRead(BaseModel):
@@ -167,7 +229,10 @@ class LearningPathRead(BaseModel):
     node_progress: dict[str, str] = Field(default_factory=dict)
     node_runtime: dict[str, SkilltreeNodeRuntimeRead] = Field(default_factory=dict)
     chapter_progress: list[SkilltreeChapterProgressRead] = Field(default_factory=list)
+    branch_progress: list[SkilltreeBranchProgressRead] = Field(default_factory=list)
     completion_summary: SkilltreeCompletionSummaryRead | None = None
+    recommendations: SkilltreeRecommendationRead | None = None
+    hook_summary: SkilltreeHookSummaryRead | None = None
     modules: list[LearningModuleRead] = Field(default_factory=list)
     can_edit: bool = False
     can_delete: bool = False

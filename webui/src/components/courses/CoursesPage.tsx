@@ -41,6 +41,7 @@ type CoursesPageProps = {
   onDownloadTemplate: () => Promise<unknown>;
   onStartContinue: (course: CourseListItem) => void;
   onToggleArchived: (courseId: string, nextArchived: boolean) => Promise<unknown>;
+  onDeleteCourse: (courseId: string) => Promise<unknown>;
 };
 
 type ScopeMenuProps = {
@@ -51,16 +52,26 @@ type ScopeMenuProps = {
 };
 
 function ScopeMenu({ value, canCreateGlobal, disabled, onChange }: ScopeMenuProps) {
+  const rootRef = useRef<HTMLDivElement | null>(null);
   const [open, setOpen] = useState(false);
+  const [openUpward, setOpenUpward] = useState(false);
+
+  const MENU_ESTIMATED_HEIGHT = 140;
 
   return (
-    <div className={`gpt-editor-select${open ? " open" : ""}`}>
+    <div ref={rootRef} className={`gpt-editor-select${open ? " open" : ""}${openUpward ? " open-upward" : ""}`}>
       <button
         type="button"
         className="gpt-editor-select-trigger"
         aria-expanded={open}
         onClick={() => {
           if (!disabled) {
+            if (!open && rootRef.current) {
+              const rect = rootRef.current.getBoundingClientRect();
+              const roomBelow = window.innerHeight - rect.bottom;
+              const roomAbove = rect.top;
+              setOpenUpward(roomBelow < MENU_ESTIMATED_HEIGHT && roomAbove > roomBelow);
+            }
             setOpen((current) => !current);
           }
         }}
@@ -252,6 +263,7 @@ export function CoursesPage({
   onDownloadTemplate,
   onStartContinue,
   onToggleArchived,
+  onDeleteCourse,
 }: CoursesPageProps) {
   const [search, setSearch] = useState("");
   const [scope, setScope] = useState<CourseScopeFilter>("all");
@@ -297,6 +309,12 @@ export function CoursesPage({
         map[chapter.id] = CHAPTER_COLORS[index % CHAPTER_COLORS.length];
       });
     return map;
+  }, [selectedDetails]);
+  const branchById = useMemo(() => {
+    if (!selectedDetails) {
+      return {} as Record<string, { title: string; required: boolean }>;
+    }
+    return Object.fromEntries(selectedDetails.branches.map((branch) => [branch.id, { title: branch.title, required: branch.required }]));
   }, [selectedDetails]);
   const selectedNode = useMemo(() => {
     if (!selectedDetails || selectedDetails.nodes.length === 0) {
@@ -619,7 +637,15 @@ export function CoursesPage({
                                 <Icon name="edit" />
                                 Edit
                               </button>
-                              <button className="chat-item-actions-option delete" type="button" onClick={() => setMenuCourseId(null)}>
+                              <button
+                                className="chat-item-actions-option delete"
+                                type="button"
+                                onClick={() => {
+                                  void onDeleteCourse(course.id);
+                                  setMenuCourseId(null);
+                                  setMenuCoursePosition(null);
+                                }}
+                              >
                                 <Icon name="trash" />
                                 Delete
                               </button>
@@ -766,23 +792,23 @@ export function CoursesPage({
                           </div>
                         </div>
                       </div>
-                    </div>
-                    <div className="skilltree-completion-block">
-                      {selectedDetails.chapter_progress.length > 0 ? (
-                        <div className="skilltree-chapter-progress-strip">
-                          {selectedDetails.chapter_progress.map((chapter) => (
-                            <span key={chapter.chapter_id} className="skilltree-chapter-progress-item">
-                              <span className="skilltree-chapter-progress-value" style={{ color: chapterColorById[chapter.chapter_id] ?? "#94a3b8" }}>
-                                {chapter.required_completed}/{chapter.required_total}
-                              </span>
-                              <span className="skilltree-chapter-progress-label">{chapter.title}</span>
-                            </span>
-                          ))}
-                        </div>
-                      ) : null}
-                    </div>
                   </div>
-                  <aside className="skilltree-sidepanel">
+                  <div className="skilltree-completion-block">
+                    {selectedDetails.chapter_progress.length > 0 ? (
+                      <div className="skilltree-chapter-progress-strip">
+                        {selectedDetails.chapter_progress.map((chapter) => (
+                          <span key={chapter.chapter_id} className="skilltree-chapter-progress-item">
+                            <span className="skilltree-chapter-progress-value" style={{ color: chapterColorById[chapter.chapter_id] ?? "#94a3b8" }}>
+                              {chapter.required_completed}/{chapter.required_total}
+                            </span>
+                            <span className="skilltree-chapter-progress-label">{chapter.title}</span>
+                          </span>
+                        ))}
+                      </div>
+                    ) : null}
+                  </div>
+                </div>
+                <aside className="skilltree-sidepanel">
                     {selectedNode ? (
                       <>
                         <h5>{selectedNode.title}</h5>
@@ -796,6 +822,14 @@ export function CoursesPage({
                           {selectedDetails.node_runtime[selectedNode.id]?.awaiting_checkpoint ? <span>Checkpoint pending</span> : null}
                           {selectedDetails.node_runtime[selectedNode.id]?.capstone_locked ? <span>Capstone locked</span> : null}
                           <span>{selectedNode.estimated_duration_minutes ? `${selectedNode.estimated_duration_minutes} min` : "Duration n/a"}</span>
+                        </div>
+                        <div className="skilltree-sidepanel-list">
+                          <strong>Branch & Role</strong>
+                          <p>
+                            Branch: {selectedNode.branch_id ? branchById[selectedNode.branch_id]?.title ?? selectedNode.branch_id : "none"}
+                            <br />
+                            Completion role: {selectedNode.type === "capstone" ? "capstone" : selectedNode.required ? "required" : "optional"}
+                          </p>
                         </div>
                         <div className="skilltree-sidepanel-list">
                           <strong>Prerequisites</strong>
@@ -827,15 +861,37 @@ export function CoursesPage({
                         </div>
                         <div className="skilltree-sidepanel-list">
                           <strong>Unlocks & Rewards</strong>
+                          <p>none</p>
+                        </div>
+                        <div className="skilltree-sidepanel-list">
+                          <strong>Hooks & Adaptation</strong>
                           <p>
-                            Unlock nodes: {selectedNode.unlocks.node_ids.join(", ") || "none"}
+                            Retrospective: {selectedNode.retrospective_hooks.retrospective_after ? "after node" : "none"}
                             <br />
-                            Unlock branches: {selectedNode.unlocks.branch_ids.join(", ") || "none"}
+                            Review signal: {selectedNode.retrospective_hooks.review_recommended ? "recommended" : "none"}
                             <br />
-                            Recommended next: {selectedNode.unlocks.recommended_next_node_ids.join(", ") || "none"}
+                            KSA mini-check: {selectedNode.ksa_hooks.mini_assessment_available ? "available" : "none"}
                             <br />
-                            Reward tags: {selectedNode.rewards.reward_tags.join(", ") || "none"}
+                            Remediation: {selectedNode.remediation.is_remediation_node ? "yes" : "no"}
+                            <br />
+                            Adaptive unlock prep: {selectedNode.adaptive_unlock.recommended_only ? "recommended only" : "gated/required ready"}
                           </p>
+                        </div>
+                        {selectedDetails.completion_summary ? (
+                          <div className="skilltree-sidepanel-list">
+                            <strong>Course Progress</strong>
+                            <p>
+                              Required branches: {selectedDetails.completion_summary.required_branch_completed}/{selectedDetails.completion_summary.required_branch_total}
+                              <br />
+                              Global capstones: {selectedDetails.completion_summary.global_capstone_completed}/{selectedDetails.completion_summary.global_capstone_total}
+                              <br />
+                              Required nodes: {selectedDetails.completion_summary.required_completed}/{selectedDetails.completion_summary.required_total}
+                            </p>
+                          </div>
+                        ) : null}
+                        <div className="skilltree-sidepanel-list">
+                          <strong>Course Hooks</strong>
+                          <p>none</p>
                         </div>
                         {(() => {
                           const runtime = selectedDetails.node_runtime[selectedNode.id];
@@ -1014,7 +1070,7 @@ function CourseImportDialog({
             + Add Files
           </button>
         ) : (
-          <div className="upload-file-list library-upload-list">
+          <div className="upload-file-list library-upload-list courses-upload-list">
             {files.map((file) => (
               <div key={file.name} className="upload-file-row library-upload-row courses-upload-row">
                 <div>

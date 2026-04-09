@@ -85,7 +85,8 @@ npm run build
 - course node-progress update route coverage (status transition validation and error handling)
 - learning API compatibility coverage after introducing courses routes
 - course JSON parser validation tests (v2 payload, v1 migration, cycle rejection, branch reference validation, example files)
-- skilltree runtime tests (unlock logic, optional/parallel branches, requires-any merge, awaiting-checkpoint/capstone semantics, effective-required completion)
+- skilltree runtime tests (unlock logic, optional/parallel branches, requires-any merge, awaiting-checkpoint/capstone semantics, effective-required completion, branch progress, recommendation outputs, hook summaries)
+- schema tests for Phase 3 metadata (`retrospective_hooks`, `ksa_hooks`, `remediation`, `adaptive_unlock`)
 - KSA profile API coverage (`/api/learning-profile/ksa`) including baseline fallback values
 - KSA assessment API route coverage (`/api/ksa/assessment/*`) for start, read, save, and complete flows
 - deterministic KSA scoring tests (sieve logic, knowledge multipliers, skills mapping, abilities weighting, divergent heuristic)

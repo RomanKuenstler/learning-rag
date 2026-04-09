@@ -355,7 +355,10 @@ export type LearningPath = {
   node_progress: Record<string, SkilltreeNodeProgressState | string>;
   node_runtime: Record<string, SkilltreeNodeRuntime>;
   chapter_progress: SkilltreeChapterProgress[];
+  branch_progress: SkilltreeBranchProgress[];
   completion_summary: SkilltreeCompletionSummary | null;
+  recommendations: SkilltreeRecommendation | null;
+  hook_summary: SkilltreeHookSummary | null;
   modules: LearningModule[];
   can_edit: boolean;
   can_delete: boolean;
@@ -426,6 +429,32 @@ export type SkilltreeNodeRewards = {
   reward_tags: string[];
 };
 
+export type SkilltreeNodeRetrospectiveHooks = {
+  retrospective_after: boolean;
+  review_recommended: boolean;
+  recap_checkpoint_available: boolean;
+};
+
+export type SkilltreeNodeKsaHooks = {
+  mini_assessment_available: boolean;
+  recommended_reassessment_topics: string[];
+  unlocks_deeper_refinement: boolean;
+};
+
+export type SkilltreeNodeRemediation = {
+  is_remediation_node: boolean;
+  recommended_if_failed_node_ids: string[];
+  supports_review_for_node_ids: string[];
+};
+
+export type SkilltreeNodeAdaptiveUnlockRule = {
+  ksa_thresholds: Array<Record<string, unknown>>;
+  requires_branch_completion_ids: string[];
+  requires_checkpoint_node_ids: string[];
+  requires_review_recommended: boolean;
+  recommended_only: boolean;
+};
+
 export type SkilltreeNodeLayout = {
   x: number;
   y: number;
@@ -448,6 +477,10 @@ export type SkilltreeNode = {
   ksa: SkilltreeNodeKsa[];
   unlocks: SkilltreeNodeUnlocks;
   rewards: SkilltreeNodeRewards;
+  retrospective_hooks: SkilltreeNodeRetrospectiveHooks;
+  ksa_hooks: SkilltreeNodeKsaHooks;
+  remediation: SkilltreeNodeRemediation;
+  adaptive_unlock: SkilltreeNodeAdaptiveUnlockRule;
 };
 
 export type SkilltreeEdge = {
@@ -487,7 +520,39 @@ export type SkilltreeCompletionSummary = {
   required_completed: number;
   optional_total: number;
   optional_completed: number;
+  required_branch_total: number;
+  required_branch_completed: number;
+  global_capstone_total: number;
+  global_capstone_completed: number;
   is_complete: boolean;
+};
+
+export type SkilltreeBranchProgress = {
+  branch_id: string;
+  title: string;
+  required: boolean;
+  required_total: number;
+  required_completed: number;
+  optional_total: number;
+  optional_completed: number;
+  is_complete: boolean;
+};
+
+export type SkilltreeRecommendation = {
+  next_best_node_id: string | null;
+  next_branch_id: string | null;
+  suggested_optional_node_id: string | null;
+  suggested_review_node_id: string | null;
+  suggested_ksa_assessment_node_id: string | null;
+  rationale: string[];
+};
+
+export type SkilltreeHookSummary = {
+  retrospective_node_ids: string[];
+  review_node_ids: string[];
+  ksa_assessment_node_ids: string[];
+  remediation_candidate_node_ids: string[];
+  adaptive_unlock_candidate_node_ids: string[];
 };
 
 export type SkilltreeNodeRuntime = {

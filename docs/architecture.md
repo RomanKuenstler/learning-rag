@@ -85,9 +85,13 @@ Runtime progression behavior:
 - optional/recommended/optional edges are supported without forcing linear sequencing
 - node states computed as `locked`, `available`, `awaiting_checkpoint`, `in_progress`, `failed_needs_retry`, `completed`, `mastered`, `optional_skipped`
 - branch-level requiredness is applied through effective-required node computation
-- chapter completion and course completion are computed from effectively-required nodes
+- chapter completion and branch completion are computed from effectively-required nodes
+- course completion is computed from required-branch completion and required global-capstone completion
 - node runtime semantics expose blocked dependencies, parallel availability, checkpoint waiting, and capstone lock markers
+- deterministic progression recommendation engine emits next node/branch + optional review/KSA suggestions
+- hook-resolution layer emits retrospective, remediation, KSA mini-check, and adaptive-unlock candidate summaries
 - node progression transitions are persisted through `PUT /api/learning-paths/{learning_path_id}/nodes/{node_id}/progress` with completion-mode validation
+- node `reset` transition is supported by deleting persisted node progress for that node
 
 ## Declared Learning Profile Model (Step B)
 

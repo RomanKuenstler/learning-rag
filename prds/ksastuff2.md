@@ -295,3 +295,106 @@ Executive Function: Multi-tasking Switching Cost, Working Memory Span, Sustained
 Sensory-Perceptual: Visual Pattern Recognition, Auditory Processing, Fine Motor Precision.
 Social-Emotional Capacity: Cognitive Empathy, Emotional Self-Regulation, Social Boldness.
 Divergent Thinking: Associative Fluency, Idea Flexibility, Lateral Problem Solving.
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+To ensure consistency across your app, you need a standardized "formula" for these questions. Here is the structural template and the AI prompt to generate them.
+1. The 4-Archetype Content Template
+Use this as the "Rulebook" for any content creator or developer.
+Archetype 1: Reverse Definition (Knowledge)
+Goal: Identify if the user recognizes the concept in a real-world scenario.
+Formula: [Scenario describing a specific outcome] + "This is a primary example of..."
+Distractors: Use two related but incorrect terms from the same parent category.
+Archetype 2: Spot the Flaw (Skills)
+Goal: Identify if the user can distinguish "Novice" vs. "Competent" execution.
+Formula: [A person/system performs Task X] + [Description of a suboptimal action] + "What is the professional flaw here?"
+Distractors: One "distraction" answer (irrelevant) and one "Novice" answer (sounds okay but is inefficient).
+Archetype 3: Power Sprint (Abilities)
+Goal: Test raw cognitive speed or immediate recall.
+Formula: [Direct Logic/Pattern/Calculation Question] + "Answer in 15 seconds."
+Evaluation: Focus on accuracy and response time.
+Archetype 4: Analogy Match (Personalization)
+Goal: Test if the user can transfer the concept to a completely different domain.
+Formula: "Concept [A] in [Subtopic] is most functionally similar to [Concept B] in [Different Domain]."
+2. The LLM Prompt for Dynamic Creation
+Copy and paste this prompt into an LLM (like GPT-4 or Claude) to generate content for any new subtopic you add later.
+
+
+PROMPT:
+"Act as an expert Instructional Designer and Psychometrician. I am building a learning app that uses a KSA (Knowledge, Skills, Abilities) assessment.
+Your task is to generate 4 specific assessment questions (Archetypes) for the following subtopic: [INSERT SUBTOPIC HERE].
+Follow these strict rules for each archetype:
+REVERSE_DEFINITION: Create a short scenario where a real-world result happens. Ask the user to identify which concept from the subtopic explains it.
+SPOT_THE_FLAW: Describe a 'Novice' way of performing a task in this subtopic. Ask why it is flawed compared to a 'Competent' approach.
+POWER_SPRINT: Create a high-speed logic or pattern-recognition question based on this subtopic that can be answered in under 15 seconds.
+ANALOGY_MATCH: Create a cross-domain analogy. Compare a core concept in this subtopic to something common in a completely different field (e.g., Biology, Architecture, or Everyday Life).
+Output Format:
+Provide the output as a clear list. For each question, provide:
+The Question Text
+The Correct Answer
+Two Distractors (Incorrect options)"
+
+
+3. Example of the Prompt in Action
+If you input "Cybersecurity", the AI will follow your "Deep Dive" logic perfectly:
+Reverse Def: A scenario about a phishing attack.
+Spot the Flaw: A dev using a weak hashing algorithm.
+Power Sprint: Validating an IP address format.
+Analogy Match: Comparing a Firewall to a medieval castle moat.
+
+
+
+
+
+
+
+To keep these "Mini-Assessments" repeatable and engaging, you should use a Template-Based Content Generator. Instead of writing 100 fixed questions, you use 4 specific Interaction Archetypes.
+These can be injected into your courses every 15–20 minutes of learning or accessed via the user's profile as a "Skill Level Up" challenge.
+1. The "Reverse Definition" (Knowledge Refresh)
+Best for: Moving from Level 1 to Level 2.
+Concept: Instead of asking for a definition, show a real-world result and ask which concept caused it.
+Template: "Scenario: [Result X] just happened. Which [Knowledge Topic] best explains why?"
+Example (Finance): "Your company’s cash is tied up in unsold inventory. Which concept are you struggling with? A) ROI, B) Liquidity, C) Inflation."
+Repeatability: You can swap the scenario for different industries (Retail, Tech, Manufacturing).
+2. The "Spot the Flaw" (Skill Validation)
+Best for: Moving from Level 2 to Level 3.
+Concept: Show a "Novice" piece of work and ask the user to identify the "Competent" fix. This is much more effective than a multiple-choice quiz.
+Template: "Here is a [Draft/Code/Plan]. It’s failing because of [Problem]. What is the first thing you change?"
+Example (Project Management): "A project manager is adding more people to a late project to speed it up. Why is this a risk? A) It costs too much, B) It increases communication overhead (Brooks's Law)."
+3. The "Power Sprint" (Ability Sharpening)
+Best for: Updating the "Engine" scores (Logic, Attention).
+Concept: High-pressure, low-stakes gamified tasks. These should be strictly timed (15 seconds).
+Template: "Pattern Recognition: Identify the outlier in this group of 5 items."
+Example (Logic): Show 4 logical arguments. One is a fallacy (e.g., "If it rains the ground is wet; the ground is wet, so it must have rained"). The user must tap the fallacy before the timer hits zero.
+4. The "Analogy Match" (AI-Personalization Check)
+Best for: Connecting two KSA nodes.
+Concept: This checks if the user can transfer knowledge from one domain to another—the ultimate sign of mastery.
+Template: "[Concept A] in [Topic X] is most similar to [Concept B] in [Topic Y]."
+Example: "A Firewall in IT is most like which of the following in Biology? A) Heart, B) Cell Membrane, C) Nervous System."
+Implementation Strategy: The "Drip" Method
+Post-Module Check: After a user finishes a "STEM" lesson, trigger a Type 1 (Reverse Definition).
+Weekly Challenge: Every Monday, offer a Type 3 (Power Sprint) to update their Ability scores.
+The "Check-In": If a user hasn't touched a topic in 30 days, send a "Mini-Assessment" notification. Passing it prevents their "Map Decay" (where the colors on their map start to fade).
+How this updates the Algorithm:
+Each Mini-Assessment provides a Micro-XP boost.
+Pass: 
++0.05
++
+0
+.
+0
+5
+ to that topic's Dreyfus Level.
+Fail: No penalty, but the AI marks that specific sub-topic for review in the next course recommendation.

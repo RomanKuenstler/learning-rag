@@ -2094,6 +2094,11 @@ button.send:hover:not(:disabled) {
 
 .upload-dialog-compact {
   width: min(92vw, 460px);
+  overflow: visible;
+}
+
+.upload-dialog-compact .panel-modal-content {
+  overflow: visible;
 }
 
 .panel-modal-head {
@@ -4430,6 +4435,20 @@ button.send:hover:not(:disabled) {
 .courses-upload-row {
   grid-template-columns: minmax(0, 1fr) 180px;
   align-items: center;
+  overflow: visible;
+}
+
+.courses-upload-list {
+  max-height: none;
+  overflow: visible;
+}
+
+.courses-upload-row .gpt-editor-select {
+  z-index: 6;
+}
+
+.courses-upload-row .gpt-editor-select.open {
+  z-index: 12;
 }
 
 .learning-paths-head,
@@ -4938,6 +4957,46 @@ button.send:hover:not(:disabled) {
   margin-top: 0.55rem;
   padding: 0.45rem 0.55rem;
   background: #ffffff;
+}
+
+.skilltree-branch-progress-strip {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.6rem;
+  border: 1px solid #dbe3ec;
+  border-radius: 10px;
+  margin-top: 0.35rem;
+  padding: 0.45rem 0.55rem;
+  background: #ffffff;
+}
+
+.skilltree-recommendation-strip {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.38rem;
+  border: 1px solid #dbe3ec;
+  border-radius: 10px;
+  margin-top: 0.55rem;
+  padding: 0.45rem 0.55rem;
+  background: #ffffff;
+  font-size: 0.75rem;
+  color: #334155;
+}
+
+.skilltree-recommendation-strip strong {
+  color: #0f172a;
+  font-size: 0.72rem;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+}
+
+.skilltree-recommendation-strip span {
+  display: inline-flex;
+  align-items: center;
+  border-radius: 999px;
+  background: #f1f5f9;
+  padding: 0.15rem 0.42rem;
 }
 
 .skilltree-course-progress-summary {
@@ -5486,6 +5545,10 @@ button.send:hover:not(:disabled) {
   width: 100%;
 }
 
+.gpt-editor-select.open {
+  z-index: 60;
+}
+
 .gpt-editor-select-trigger {
   width: 100%;
   min-height: 2.8rem;
@@ -5519,6 +5582,11 @@ button.send:hover:not(:disabled) {
   min-width: 0;
   left: 0;
   right: auto;
+}
+
+.gpt-editor-select.open-upward .gpt-editor-select-menu {
+  top: auto;
+  bottom: calc(100% + 0.45rem);
 }
 
 .gpt-editor-select-option {

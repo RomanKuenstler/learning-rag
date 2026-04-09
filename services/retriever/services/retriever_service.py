@@ -74,17 +74,24 @@ from services.retriever.schemas.learning import (
     LearningPathRead,
     LearningPathUpdateRequest,
     SkilltreeBranchRead,
+    SkilltreeBranchProgressRead,
     SkilltreeChapterProgressRead,
     SkilltreeChapterRead,
     SkilltreeCompletionSummaryRead,
     SkilltreeEdgeRead,
+    SkilltreeHookSummaryRead,
+    SkilltreeNodeAdaptiveUnlockRuleRead,
     SkilltreeNodeKsaRead,
+    SkilltreeNodeKsaHooksRead,
     SkilltreeNodeLayoutRead,
     SkilltreeNodePrerequisitesRead,
+    SkilltreeNodeRemediationRead,
+    SkilltreeNodeRetrospectiveHooksRead,
     SkilltreeNodeRewardsRead,
     SkilltreeNodeRuntimeRead,
     SkilltreeNodeRead,
     SkilltreeNodeUnlocksRead,
+    SkilltreeRecommendationRead,
 )
 from services.retriever.schemas.learning_profile import (
     LearningGoalCreateRequest,
@@ -3479,6 +3486,35 @@ class RetrieverAppService:
                         effort_score=node.rewards.effort_score,
                         reward_tags=list(node.rewards.reward_tags),
                     ),
+                    retrospective_hooks=SkilltreeNodeRetrospectiveHooksRead(
+                        retrospective_after=node.retrospective_hooks.retrospective_after,
+                        review_recommended=node.retrospective_hooks.review_recommended,
+                        recap_checkpoint_available=node.retrospective_hooks.recap_checkpoint_available,
+                    ),
+                    ksa_hooks=SkilltreeNodeKsaHooksRead(
+                        mini_assessment_available=node.ksa_hooks.mini_assessment_available,
+                        recommended_reassessment_topics=list(node.ksa_hooks.recommended_reassessment_topics),
+                        unlocks_deeper_refinement=node.ksa_hooks.unlocks_deeper_refinement,
+                    ),
+                    remediation=SkilltreeNodeRemediationRead(
+                        is_remediation_node=node.remediation.is_remediation_node,
+                        recommended_if_failed_node_ids=list(node.remediation.recommended_if_failed_node_ids),
+                        supports_review_for_node_ids=list(node.remediation.supports_review_for_node_ids),
+                    ),
+                    adaptive_unlock=SkilltreeNodeAdaptiveUnlockRuleRead(
+                        ksa_thresholds=[
+                            {
+                                "dimension": item.dimension,
+                                "topic": item.topic,
+                                "min_level": item.min_level,
+                            }
+                            for item in node.adaptive_unlock.ksa_thresholds
+                        ],
+                        requires_branch_completion_ids=list(node.adaptive_unlock.requires_branch_completion_ids),
+                        requires_checkpoint_node_ids=list(node.adaptive_unlock.requires_checkpoint_node_ids),
+                        requires_review_recommended=node.adaptive_unlock.requires_review_recommended,
+                        recommended_only=node.adaptive_unlock.recommended_only,
+                    ),
                 )
                 for node in definition.nodes
             ],
@@ -3520,12 +3556,44 @@ class RetrieverAppService:
                 )
                 for item in runtime.chapter_summaries
             ],
+            branch_progress=[
+                SkilltreeBranchProgressRead(
+                    branch_id=item.branch_id,
+                    title=item.title,
+                    required=item.required,
+                    required_total=item.required_total,
+                    required_completed=item.required_completed,
+                    optional_total=item.optional_total,
+                    optional_completed=item.optional_completed,
+                    is_complete=item.is_complete,
+                )
+                for item in runtime.branch_summaries
+            ],
             completion_summary=SkilltreeCompletionSummaryRead(
                 required_total=runtime.completion_summary.required_total,
                 required_completed=runtime.completion_summary.required_completed,
                 optional_total=runtime.completion_summary.optional_total,
                 optional_completed=runtime.completion_summary.optional_completed,
                 is_complete=runtime.completion_summary.is_complete,
+                required_branch_total=runtime.completion_summary.required_branch_total,
+                required_branch_completed=runtime.completion_summary.required_branch_completed,
+                global_capstone_total=runtime.completion_summary.global_capstone_total,
+                global_capstone_completed=runtime.completion_summary.global_capstone_completed,
+            ),
+            recommendations=SkilltreeRecommendationRead(
+                next_best_node_id=runtime.recommendations.next_best_node_id,
+                next_branch_id=runtime.recommendations.next_branch_id,
+                suggested_optional_node_id=runtime.recommendations.suggested_optional_node_id,
+                suggested_review_node_id=runtime.recommendations.suggested_review_node_id,
+                suggested_ksa_assessment_node_id=runtime.recommendations.suggested_ksa_assessment_node_id,
+                rationale=list(runtime.recommendations.rationale),
+            ),
+            hook_summary=SkilltreeHookSummaryRead(
+                retrospective_node_ids=list(runtime.hook_summary.retrospective_node_ids),
+                review_node_ids=list(runtime.hook_summary.review_node_ids),
+                ksa_assessment_node_ids=list(runtime.hook_summary.ksa_assessment_node_ids),
+                remediation_candidate_node_ids=list(runtime.hook_summary.remediation_candidate_node_ids),
+                adaptive_unlock_candidate_node_ids=list(runtime.hook_summary.adaptive_unlock_candidate_node_ids),
             ),
             modules=[
                 self._build_learning_module_read(module, lessons=lessons_by_module.get(module.id, []))

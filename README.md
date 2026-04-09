@@ -19,6 +19,12 @@ This repository includes the learning foundation, declared learning profile laye
 - node-level KSA metadata support (`K/S/A`, topic, subtopic, start/target level, contribution weight, assessment-hook flags)
 - optional and required branch modeling with effective-required completion behavior
 - node reward/unlock metadata (`unlocks`, `recommended_next_node_ids`, `estimated_ksa_gain`, reward tags)
+- Phase 3 dynamic progression layer:
+  - branch-level completion summaries (`required` vs optional branches)
+  - stronger course-completion semantics (required-branch completion + global capstone completion)
+  - deterministic recommendation engine (`next_best_node`, `next_branch`, optional/review/KSA suggestions)
+  - retrospective and KSA mini-assessment hook summaries
+  - remediation and adaptive-unlock metadata on nodes for future adaptive routing
 - node progress update API for deterministic per-node transitions (`PUT /api/learning-paths/{id}/nodes/{node_id}/progress`)
 - learning-path source scoping through allowed files and tags
 - learning-path CRUD API with role-based authorization

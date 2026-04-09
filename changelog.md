@@ -1,5 +1,38 @@
 # Changelog
 
+## 2026-04-09 18:20 UTC
+
+- Implemented Phase 3 dynamic progression layer for skilltree courses:
+  - branch completion summaries with required/optional branch semantics
+  - stronger course completion semantics based on required-branch completion and required global-capstone completion
+  - deterministic recommendation engine (`next_best_node`, `next_branch`, optional/review/KSA suggestions)
+  - hook-resolution summaries for retrospective, review/remediation, KSA mini-assessment, and adaptive-unlock candidates
+- Extended v2 node schema contracts with dynamic metadata:
+  - `retrospective_hooks`
+  - `ksa_hooks`
+  - `remediation`
+  - `adaptive_unlock`
+- Added additional validation for remediation/adaptive references (node and branch id integrity checks).
+- Extended API payload contracts (`LearningPathRead`) with:
+  - `branch_progress`
+  - richer `completion_summary` (required-branch/global-capstone counters)
+  - `recommendations`
+  - `hook_summary`
+- Updated Courses page UX for dynamic progression visibility:
+  - recommendation strip below graph
+  - branch progress strip below chapter progress strip
+  - side-panel sections for branch/role, hooks/adaptation, and richer course progress semantics
+- Updated example DevOps skilltree course to include Phase 3 metadata/hook/adaptive/remediation structures and completion-rule metadata.
+- Expanded tests:
+  - runtime coverage for branch progress, recommendations, and hook-summary emission
+  - schema/parser coverage for new Phase 3 node metadata structures
+- Updated docs:
+  - `README.md`
+  - `docs/learning.md`
+  - `docs/courses.md`
+  - `docs/architecture.md`
+  - `docs/testing.md`
+
 ## 2026-04-08 23:05 UTC
 
 - Implemented Phase 2 skilltree semantics upgrade:

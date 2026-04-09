@@ -156,6 +156,8 @@ def test_runtime_course_completion_uses_effective_required_nodes() -> None:
     # n3 is flagged required but belongs to an optional branch, so it does not block completion.
     assert runtime.completion_summary.required_total == 4
     assert runtime.completion_summary.required_completed == 4
+    assert runtime.completion_summary.required_branch_total == 1
+    assert runtime.completion_summary.required_branch_completed == 1
     assert runtime.completion_summary.is_complete is True
 
 
@@ -171,3 +173,27 @@ def test_runtime_parallel_available_semantics() -> None:
     assert runtime.node_progress["n3"] == "available"
     assert runtime.node_runtime["n2"].is_parallel_available is True
     assert runtime.node_runtime["n3"].is_parallel_available is True
+
+
+def test_runtime_emits_branch_progress_and_recommendations() -> None:
+    runtime = build_skilltree_runtime(_definition(), persisted_node_progress={"n1": "completed"})
+    core_branch = next(item for item in runtime.branch_summaries if item.branch_id == "core")
+    assert core_branch.required_total == 4
+    assert core_branch.required_completed == 1
+    assert runtime.recommendations.next_best_node_id in {"n2", "n3"}
+    assert runtime.recommendations.next_branch_id == "core"
+
+
+def test_runtime_emits_hook_summary_for_adaptive_and_assessment_nodes() -> None:
+    definition = _definition()
+    for node in definition.nodes:
+        if node.id == "n3":
+            node.ksa_hooks.mini_assessment_available = True
+        if node.id == "n2":
+            node.remediation.is_remediation_node = True
+        if node.id == "n5":
+            node.adaptive_unlock.recommended_only = True
+    runtime = build_skilltree_runtime(definition, persisted_node_progress={"n1": "completed"})
+    assert "n3" in runtime.hook_summary.ksa_assessment_node_ids
+    assert "n2" in runtime.hook_summary.remediation_candidate_node_ids
+    assert "n5" in runtime.hook_summary.adaptive_unlock_candidate_node_ids

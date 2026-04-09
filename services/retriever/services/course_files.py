@@ -112,8 +112,40 @@ class CourseNodeUnlocksMetadata(BaseModel):
 
 class CourseNodeRewardMetadata(BaseModel):
     estimated_ksa_gain: dict[str, float] = Field(default_factory=dict)
-    effort_score: float | None = Field(default=None, ge=0, le=100)
+    effort_score: float | None = Field(default=None, ge=0)
     reward_tags: list[str] = Field(default_factory=list)
+
+
+class CourseNodeRetrospectiveHooks(BaseModel):
+    retrospective_after: bool = False
+    review_recommended: bool = False
+    recap_checkpoint_available: bool = False
+
+
+class CourseNodeKsaHooks(BaseModel):
+    mini_assessment_available: bool = False
+    recommended_reassessment_topics: list[str] = Field(default_factory=list)
+    unlocks_deeper_refinement: bool = False
+
+
+class CourseNodeRemediationMetadata(BaseModel):
+    is_remediation_node: bool = False
+    recommended_if_failed_node_ids: list[str] = Field(default_factory=list)
+    supports_review_for_node_ids: list[str] = Field(default_factory=list)
+
+
+class CourseNodeKsaThresholdRule(BaseModel):
+    dimension: Literal["K", "S", "A"]
+    topic: str = Field(min_length=1, max_length=255)
+    min_level: int = Field(ge=1, le=5)
+
+
+class CourseNodeAdaptiveUnlockMetadata(BaseModel):
+    ksa_thresholds: list[CourseNodeKsaThresholdRule] = Field(default_factory=list)
+    requires_branch_completion_ids: list[str] = Field(default_factory=list)
+    requires_checkpoint_node_ids: list[str] = Field(default_factory=list)
+    requires_review_recommended: bool = False
+    recommended_only: bool = False
 
 
 class CourseNodeLayout(BaseModel):
@@ -157,6 +189,10 @@ class CourseNodeDefinition(BaseModel):
     ksa: list[CourseNodeKsaMetadata] = Field(default_factory=list)
     unlocks: CourseNodeUnlocksMetadata = Field(default_factory=CourseNodeUnlocksMetadata)
     rewards: CourseNodeRewardMetadata = Field(default_factory=CourseNodeRewardMetadata)
+    retrospective_hooks: CourseNodeRetrospectiveHooks = Field(default_factory=CourseNodeRetrospectiveHooks)
+    ksa_hooks: CourseNodeKsaHooks = Field(default_factory=CourseNodeKsaHooks)
+    remediation: CourseNodeRemediationMetadata = Field(default_factory=CourseNodeRemediationMetadata)
+    adaptive_unlock: CourseNodeAdaptiveUnlockMetadata = Field(default_factory=CourseNodeAdaptiveUnlockMetadata)
 
 
 class CourseEdgeDefinition(BaseModel):
@@ -222,6 +258,15 @@ class CourseDefinition(BaseModel):
             for unlocked_branch_id in node.unlocks.branch_ids:
                 if unlocked_branch_id not in branch_id_set:
                     raise ValueError(f"node '{node.id}' references unknown unlock branch '{unlocked_branch_id}'")
+            for failed_node_id in node.remediation.recommended_if_failed_node_ids + node.remediation.supports_review_for_node_ids:
+                if failed_node_id not in node_id_set:
+                    raise ValueError(f"node '{node.id}' references unknown remediation node '{failed_node_id}'")
+            for required_branch_id in node.adaptive_unlock.requires_branch_completion_ids:
+                if required_branch_id not in branch_id_set:
+                    raise ValueError(f"node '{node.id}' references unknown adaptive branch '{required_branch_id}'")
+            for required_checkpoint_id in node.adaptive_unlock.requires_checkpoint_node_ids:
+                if required_checkpoint_id not in node_id_set:
+                    raise ValueError(f"node '{node.id}' references unknown adaptive checkpoint node '{required_checkpoint_id}'")
 
         for edge in self.edges:
             if edge.from_node_id not in node_id_set:
@@ -385,6 +430,10 @@ class CourseFileParser:
                     ],
                     "unlocks": {"node_ids": ["node-first-container"], "branch_ids": [], "recommended_next_node_ids": []},
                     "rewards": {"estimated_ksa_gain": {"K.information_technology": 0.2}, "effort_score": 18, "reward_tags": ["foundation"]},
+                    "retrospective_hooks": {"retrospective_after": False, "review_recommended": False, "recap_checkpoint_available": False},
+                    "ksa_hooks": {"mini_assessment_available": False, "recommended_reassessment_topics": [], "unlocks_deeper_refinement": False},
+                    "remediation": {"is_remediation_node": False, "recommended_if_failed_node_ids": [], "supports_review_for_node_ids": []},
+                    "adaptive_unlock": {"ksa_thresholds": [], "requires_branch_completion_ids": [], "requires_checkpoint_node_ids": [], "requires_review_recommended": False, "recommended_only": False},
                 },
                 {
                     "id": "node-first-container",
@@ -410,6 +459,10 @@ class CourseFileParser:
                     ],
                     "unlocks": {"node_ids": ["node-compose-basics"], "branch_ids": [], "recommended_next_node_ids": ["node-review-cleanup"]},
                     "rewards": {"estimated_ksa_gain": {"S.digital_craft": 0.25}, "effort_score": 28, "reward_tags": ["hands_on"]},
+                    "retrospective_hooks": {"retrospective_after": False, "review_recommended": False, "recap_checkpoint_available": False},
+                    "ksa_hooks": {"mini_assessment_available": False, "recommended_reassessment_topics": [], "unlocks_deeper_refinement": False},
+                    "remediation": {"is_remediation_node": False, "recommended_if_failed_node_ids": [], "supports_review_for_node_ids": []},
+                    "adaptive_unlock": {"ksa_thresholds": [], "requires_branch_completion_ids": [], "requires_checkpoint_node_ids": [], "requires_review_recommended": False, "recommended_only": False},
                 },
                 {
                     "id": "node-compose-basics",
@@ -426,6 +479,10 @@ class CourseFileParser:
                     "ksa": [],
                     "unlocks": {"node_ids": [], "branch_ids": [], "recommended_next_node_ids": []},
                     "rewards": {"estimated_ksa_gain": {"S.digital_craft": 0.2}, "effort_score": 30, "reward_tags": ["checkpoint"]},
+                    "retrospective_hooks": {"retrospective_after": True, "review_recommended": True, "recap_checkpoint_available": True},
+                    "ksa_hooks": {"mini_assessment_available": True, "recommended_reassessment_topics": ["S.digital_craft"], "unlocks_deeper_refinement": True},
+                    "remediation": {"is_remediation_node": False, "recommended_if_failed_node_ids": [], "supports_review_for_node_ids": []},
+                    "adaptive_unlock": {"ksa_thresholds": [], "requires_branch_completion_ids": [], "requires_checkpoint_node_ids": [], "requires_review_recommended": False, "recommended_only": False},
                 },
                 {
                     "id": "node-review-cleanup",
@@ -442,6 +499,10 @@ class CourseFileParser:
                     "ksa": [],
                     "unlocks": {"node_ids": [], "branch_ids": [], "recommended_next_node_ids": []},
                     "rewards": {"estimated_ksa_gain": {"K.information_technology": 0.1}, "effort_score": 10, "reward_tags": ["optional"]},
+                    "retrospective_hooks": {"retrospective_after": False, "review_recommended": True, "recap_checkpoint_available": False},
+                    "ksa_hooks": {"mini_assessment_available": False, "recommended_reassessment_topics": [], "unlocks_deeper_refinement": False},
+                    "remediation": {"is_remediation_node": True, "recommended_if_failed_node_ids": ["node-compose-basics"], "supports_review_for_node_ids": ["node-first-container"]},
+                    "adaptive_unlock": {"ksa_thresholds": [], "requires_branch_completion_ids": [], "requires_checkpoint_node_ids": ["node-compose-basics"], "requires_review_recommended": True, "recommended_only": True},
                 },
             ],
             "edges": [
@@ -537,6 +598,10 @@ class CourseFileParser:
                         "display": {},
                         "unlocks": {"node_ids": [], "branch_ids": [], "recommended_next_node_ids": []},
                         "rewards": {"estimated_ksa_gain": {}, "effort_score": None, "reward_tags": []},
+                        "retrospective_hooks": {"retrospective_after": False, "review_recommended": False, "recap_checkpoint_available": False},
+                        "ksa_hooks": {"mini_assessment_available": False, "recommended_reassessment_topics": [], "unlocks_deeper_refinement": False},
+                        "remediation": {"is_remediation_node": False, "recommended_if_failed_node_ids": [], "supports_review_for_node_ids": []},
+                        "adaptive_unlock": {"ksa_thresholds": [], "requires_branch_completion_ids": [], "requires_checkpoint_node_ids": [], "requires_review_recommended": False, "recommended_only": False},
                     }
                 )
                 previous_node_id = node_id
@@ -571,6 +636,10 @@ class CourseFileParser:
                     "display": {},
                     "unlocks": {"node_ids": [], "branch_ids": [], "recommended_next_node_ids": []},
                     "rewards": {"estimated_ksa_gain": {}, "effort_score": None, "reward_tags": []},
+                    "retrospective_hooks": {"retrospective_after": False, "review_recommended": False, "recap_checkpoint_available": False},
+                    "ksa_hooks": {"mini_assessment_available": False, "recommended_reassessment_topics": [], "unlocks_deeper_refinement": False},
+                    "remediation": {"is_remediation_node": False, "recommended_if_failed_node_ids": [], "supports_review_for_node_ids": []},
+                    "adaptive_unlock": {"ksa_thresholds": [], "requires_branch_completion_ids": [], "requires_checkpoint_node_ids": [], "requires_review_recommended": False, "recommended_only": False},
                 }
             )
             entry_node_ids = [node_id]
@@ -633,6 +702,45 @@ class CourseFileParser:
                             estimated_ksa_gain={str(key): float(value) for key, value in (node.rewards.estimated_ksa_gain or {}).items()},
                             effort_score=node.rewards.effort_score,
                             reward_tags=list(dict.fromkeys(tag.strip().lower() for tag in node.rewards.reward_tags if tag.strip())),
+                        ),
+                        "ksa_hooks": CourseNodeKsaHooks(
+                            mini_assessment_available=node.ksa_hooks.mini_assessment_available,
+                            recommended_reassessment_topics=list(
+                                dict.fromkeys(item.strip() for item in node.ksa_hooks.recommended_reassessment_topics if item.strip())
+                            ),
+                            unlocks_deeper_refinement=node.ksa_hooks.unlocks_deeper_refinement,
+                        ),
+                        "retrospective_hooks": CourseNodeRetrospectiveHooks(
+                            retrospective_after=node.retrospective_hooks.retrospective_after,
+                            review_recommended=node.retrospective_hooks.review_recommended,
+                            recap_checkpoint_available=node.retrospective_hooks.recap_checkpoint_available,
+                        ),
+                        "remediation": CourseNodeRemediationMetadata(
+                            is_remediation_node=node.remediation.is_remediation_node,
+                            recommended_if_failed_node_ids=list(
+                                dict.fromkeys(item.strip() for item in node.remediation.recommended_if_failed_node_ids if item.strip())
+                            ),
+                            supports_review_for_node_ids=list(
+                                dict.fromkeys(item.strip() for item in node.remediation.supports_review_for_node_ids if item.strip())
+                            ),
+                        ),
+                        "adaptive_unlock": CourseNodeAdaptiveUnlockMetadata(
+                            ksa_thresholds=[
+                                CourseNodeKsaThresholdRule(
+                                    dimension=item.dimension,
+                                    topic=item.topic.strip(),
+                                    min_level=item.min_level,
+                                )
+                                for item in node.adaptive_unlock.ksa_thresholds
+                            ],
+                            requires_branch_completion_ids=list(
+                                dict.fromkeys(item.strip() for item in node.adaptive_unlock.requires_branch_completion_ids if item.strip())
+                            ),
+                            requires_checkpoint_node_ids=list(
+                                dict.fromkeys(item.strip() for item in node.adaptive_unlock.requires_checkpoint_node_ids if item.strip())
+                            ),
+                            requires_review_recommended=node.adaptive_unlock.requires_review_recommended,
+                            recommended_only=node.adaptive_unlock.recommended_only,
                         ),
                     }
                 )

@@ -425,6 +425,12 @@ function AppRoutes() {
                       .then(() => app.loadCourses())
                       .then(() => undefined)
                   }
+                  onDeleteCourse={(courseId) =>
+                    app
+                      .deleteLearningPath(courseId)
+                      .then(() => app.loadCourses())
+                      .then(() => undefined)
+                  }
                 />
               }
             />

@@ -105,7 +105,8 @@ A new `/courses` page manages learning paths as graph-based skilltree courses wi
 - sorting (`name`, `updated`, `modules`, `lessons`, scope-first variants)
 - skilltree render in course details (graph nodes + edges)
 - right-side node detail panel
-- chapter and course completion summaries
+- chapter, branch, and course completion summaries
+- deterministic next-step recommendation strip (`next node`, `next branch`, optional/review/KSA suggestions)
 - `Download Template` action
 - `Add Paths` dialog for uploading up to 5 JSON files
 
@@ -132,6 +133,11 @@ Course definitions are file-backed in `courses/` and now use skilltree schema v2
 - optional and parallel progression are supported through node `required` and graph dependencies
 - node KSA metadata supports `start_level`, `target_level`, contribution weight, and assessment-hook hints
 - node metadata also supports unlock/reward contracts (`unlocks`, `rewards`)
+- dynamic progression metadata is now supported per node:
+  - `retrospective_hooks`
+  - `ksa_hooks`
+  - `remediation`
+  - `adaptive_unlock`
 
 ### Compatibility And Migration
 
@@ -154,12 +160,20 @@ Node runtime states currently support:
 
 The system computes deterministic unlock states from prerequisites and persisted node progress.
 
+Phase 3 runtime also computes:
+
+- branch progress (`required` vs optional branches)
+- stronger course completion (`required branches + global capstones`)
+- deterministic recommendations for next node/branch and optional review/KSA hooks
+- hook summaries for retrospective, remediation, KSA mini-assessment, and adaptive-unlock candidates
+
 ### Node Progress Update API
 
 Node progression can be persisted with:
 
 - `PUT /api/learning-paths/{learning_path_id}/nodes/{node_id}/progress`
 - payload: `status` (`in_progress|completed|mastered|optional_skipped|failed_needs_retry`) + optional `evidence`
+- reset support: `status=reset` clears persisted node progress for that node (when currently `in_progress` or `completed`)
 
 Mode-aware validation is enforced:
 

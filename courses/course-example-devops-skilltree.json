@@ -111,6 +111,28 @@
         "reward_tags": [
           "foundation"
         ]
+      },
+      "retrospective_hooks": {
+        "retrospective_after": false,
+        "review_recommended": false,
+        "recap_checkpoint_available": false
+      },
+      "ksa_hooks": {
+        "mini_assessment_available": false,
+        "recommended_reassessment_topics": [],
+        "unlocks_deeper_refinement": false
+      },
+      "remediation": {
+        "is_remediation_node": false,
+        "recommended_if_failed_node_ids": [],
+        "supports_review_for_node_ids": []
+      },
+      "adaptive_unlock": {
+        "ksa_thresholds": [],
+        "requires_branch_completion_ids": [],
+        "requires_checkpoint_node_ids": [],
+        "requires_review_recommended": false,
+        "recommended_only": false
       }
     },
     {
@@ -166,6 +188,28 @@
         "reward_tags": [
           "hands_on"
         ]
+      },
+      "retrospective_hooks": {
+        "retrospective_after": false,
+        "review_recommended": false,
+        "recap_checkpoint_available": false
+      },
+      "ksa_hooks": {
+        "mini_assessment_available": false,
+        "recommended_reassessment_topics": [],
+        "unlocks_deeper_refinement": false
+      },
+      "remediation": {
+        "is_remediation_node": false,
+        "recommended_if_failed_node_ids": [],
+        "supports_review_for_node_ids": []
+      },
+      "adaptive_unlock": {
+        "ksa_thresholds": [],
+        "requires_branch_completion_ids": [],
+        "requires_checkpoint_node_ids": [],
+        "requires_review_recommended": false,
+        "recommended_only": false
       }
     },
     {
@@ -207,6 +251,28 @@
         "reward_tags": [
           "delivery"
         ]
+      },
+      "retrospective_hooks": {
+        "retrospective_after": false,
+        "review_recommended": false,
+        "recap_checkpoint_available": false
+      },
+      "ksa_hooks": {
+        "mini_assessment_available": false,
+        "recommended_reassessment_topics": [],
+        "unlocks_deeper_refinement": false
+      },
+      "remediation": {
+        "is_remediation_node": false,
+        "recommended_if_failed_node_ids": [],
+        "supports_review_for_node_ids": []
+      },
+      "adaptive_unlock": {
+        "ksa_thresholds": [],
+        "requires_branch_completion_ids": [],
+        "requires_checkpoint_node_ids": [],
+        "requires_review_recommended": false,
+        "recommended_only": false
       }
     },
     {
@@ -250,6 +316,30 @@
         "reward_tags": [
           "quiz"
         ]
+      },
+      "retrospective_hooks": {
+        "retrospective_after": true,
+        "review_recommended": true,
+        "recap_checkpoint_available": true
+      },
+      "ksa_hooks": {
+        "mini_assessment_available": true,
+        "recommended_reassessment_topics": [
+          "S.strategic_execution"
+        ],
+        "unlocks_deeper_refinement": true
+      },
+      "remediation": {
+        "is_remediation_node": false,
+        "recommended_if_failed_node_ids": [],
+        "supports_review_for_node_ids": []
+      },
+      "adaptive_unlock": {
+        "ksa_thresholds": [],
+        "requires_branch_completion_ids": [],
+        "requires_checkpoint_node_ids": [],
+        "requires_review_recommended": false,
+        "recommended_only": false
       }
     },
     {
@@ -292,6 +382,28 @@
         "reward_tags": [
           "milestone"
         ]
+      },
+      "retrospective_hooks": {
+        "retrospective_after": true,
+        "review_recommended": true,
+        "recap_checkpoint_available": true
+      },
+      "ksa_hooks": {
+        "mini_assessment_available": false,
+        "recommended_reassessment_topics": [],
+        "unlocks_deeper_refinement": false
+      },
+      "remediation": {
+        "is_remediation_node": false,
+        "recommended_if_failed_node_ids": [],
+        "supports_review_for_node_ids": []
+      },
+      "adaptive_unlock": {
+        "ksa_thresholds": [],
+        "requires_branch_completion_ids": [],
+        "requires_checkpoint_node_ids": [],
+        "requires_review_recommended": false,
+        "recommended_only": false
       }
     },
     {
@@ -337,6 +449,28 @@
         "reward_tags": [
           "gate"
         ]
+      },
+      "retrospective_hooks": {
+        "retrospective_after": false,
+        "review_recommended": false,
+        "recap_checkpoint_available": false
+      },
+      "ksa_hooks": {
+        "mini_assessment_available": false,
+        "recommended_reassessment_topics": [],
+        "unlocks_deeper_refinement": false
+      },
+      "remediation": {
+        "is_remediation_node": false,
+        "recommended_if_failed_node_ids": [],
+        "supports_review_for_node_ids": []
+      },
+      "adaptive_unlock": {
+        "ksa_thresholds": [],
+        "requires_branch_completion_ids": [],
+        "requires_checkpoint_node_ids": [],
+        "requires_review_recommended": false,
+        "recommended_only": false
       }
     },
     {
@@ -394,6 +528,40 @@
         "reward_tags": [
           "checkpoint"
         ]
+      },
+      "retrospective_hooks": {
+        "retrospective_after": true,
+        "review_recommended": true,
+        "recap_checkpoint_available": true
+      },
+      "ksa_hooks": {
+        "mini_assessment_available": true,
+        "recommended_reassessment_topics": [
+          "A.executive_function"
+        ],
+        "unlocks_deeper_refinement": true
+      },
+      "remediation": {
+        "is_remediation_node": false,
+        "recommended_if_failed_node_ids": [],
+        "supports_review_for_node_ids": []
+      },
+      "adaptive_unlock": {
+        "ksa_thresholds": [
+          {
+            "dimension": "A",
+            "topic": "executive_function",
+            "min_level": 3
+          }
+        ],
+        "requires_branch_completion_ids": [
+          "branch-core"
+        ],
+        "requires_checkpoint_node_ids": [
+          "node-release-gate"
+        ],
+        "requires_review_recommended": false,
+        "recommended_only": false
       }
     },
     {
@@ -433,6 +601,35 @@
         "reward_tags": [
           "optional"
         ]
+      },
+      "retrospective_hooks": {
+        "retrospective_after": false,
+        "review_recommended": true,
+        "recap_checkpoint_available": false
+      },
+      "ksa_hooks": {
+        "mini_assessment_available": false,
+        "recommended_reassessment_topics": [],
+        "unlocks_deeper_refinement": false
+      },
+      "remediation": {
+        "is_remediation_node": true,
+        "recommended_if_failed_node_ids": [
+          "node-cicd-quiz",
+          "node-observability-checkpoint"
+        ],
+        "supports_review_for_node_ids": [
+          "node-release-capstone"
+        ]
+      },
+      "adaptive_unlock": {
+        "ksa_thresholds": [],
+        "requires_branch_completion_ids": [],
+        "requires_checkpoint_node_ids": [
+          "node-observability-checkpoint"
+        ],
+        "requires_review_recommended": true,
+        "recommended_only": true
       }
     },
     {
@@ -475,6 +672,41 @@
         "reward_tags": [
           "assessment_hook"
         ]
+      },
+      "retrospective_hooks": {
+        "retrospective_after": false,
+        "review_recommended": false,
+        "recap_checkpoint_available": false
+      },
+      "ksa_hooks": {
+        "mini_assessment_available": true,
+        "recommended_reassessment_topics": [
+          "A.executive_function",
+          "S.strategic_execution"
+        ],
+        "unlocks_deeper_refinement": true
+      },
+      "remediation": {
+        "is_remediation_node": false,
+        "recommended_if_failed_node_ids": [],
+        "supports_review_for_node_ids": []
+      },
+      "adaptive_unlock": {
+        "ksa_thresholds": [
+          {
+            "dimension": "S",
+            "topic": "strategic_execution",
+            "min_level": 3
+          }
+        ],
+        "requires_branch_completion_ids": [
+          "branch-operations"
+        ],
+        "requires_checkpoint_node_ids": [
+          "node-observability-checkpoint"
+        ],
+        "requires_review_recommended": false,
+        "recommended_only": true
       }
     },
     {
@@ -522,6 +754,35 @@
         "reward_tags": [
           "capstone"
         ]
+      },
+      "retrospective_hooks": {
+        "retrospective_after": true,
+        "review_recommended": true,
+        "recap_checkpoint_available": true
+      },
+      "ksa_hooks": {
+        "mini_assessment_available": false,
+        "recommended_reassessment_topics": [
+          "S.strategic_execution"
+        ],
+        "unlocks_deeper_refinement": false
+      },
+      "remediation": {
+        "is_remediation_node": false,
+        "recommended_if_failed_node_ids": [],
+        "supports_review_for_node_ids": []
+      },
+      "adaptive_unlock": {
+        "ksa_thresholds": [],
+        "requires_branch_completion_ids": [
+          "branch-core",
+          "branch-operations"
+        ],
+        "requires_checkpoint_node_ids": [
+          "node-observability-checkpoint"
+        ],
+        "requires_review_recommended": false,
+        "recommended_only": false
       }
     }
   ],
@@ -607,7 +868,9 @@
   ],
   "completion_rules": {
     "required_completion": "all_required_nodes",
-    "optional_branch_completion": "enrichment_only"
+    "optional_branch_completion": "enrichment_only",
+    "course_complete_when": "required_branches_and_global_capstones",
+    "recommendation_mode": "deterministic_rule_based"
   },
   "visual_layout": {
     "layout_engine": "auto-grid"
@@ -615,6 +878,6 @@
   "metadata": {
     "domain": "devops",
     "example": true,
-    "phase": 2
+    "phase": 3
   }
 }

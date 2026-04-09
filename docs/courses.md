@@ -68,6 +68,11 @@ Each node supports:
 - unlock/reward contracts:
   - `unlocks.node_ids|branch_ids|recommended_next_node_ids`
   - `rewards.estimated_ksa_gain|effort_score|reward_tags`
+- dynamic progression contracts:
+  - `retrospective_hooks.retrospective_after|review_recommended|recap_checkpoint_available`
+  - `ksa_hooks.mini_assessment_available|recommended_reassessment_topics|unlocks_deeper_refinement`
+  - `remediation.is_remediation_node|recommended_if_failed_node_ids|supports_review_for_node_ids`
+  - `adaptive_unlock.ksa_thresholds|requires_branch_completion_ids|requires_checkpoint_node_ids|requires_review_recommended|recommended_only`
 
 Supported node `type` values:
 
@@ -119,13 +124,37 @@ Unlock behavior:
 ## Completion Semantics
 
 - chapter completion: all effectively-required nodes in chapter are completed/mastered
+- branch completion: all effectively-required nodes in that branch are completed/mastered
 - optional branches do not block final completion unless configured as required
-- course completion: all effectively-required nodes across the course are completed/mastered
+- course completion: required branches must be complete and required global capstones must be complete
 
 Node transition API:
 
 - `PUT /api/learning-paths/{learning_path_id}/nodes/{node_id}/progress`
 - validates completion against node completion mode and prerequisites
+
+## Recommendation Logic
+
+Runtime emits deterministic recommendations:
+
+- `next_best_node_id`
+- `next_branch_id`
+- `suggested_optional_node_id`
+- `suggested_review_node_id`
+- `suggested_ksa_assessment_node_id`
+
+No LLM routing is used; recommendations are graph-rule based.
+
+## Hooks And Adaptive Preparation
+
+Runtime also emits hook summaries for:
+
+- retrospective-capable nodes
+- review/remediation candidates
+- KSA mini-assessment hook candidates
+- adaptive-unlock candidate nodes
+
+This prepares adaptive behavior without generating new nodes or auto-mutating the graph in this phase.
 
 ## Compatibility And Migration
 

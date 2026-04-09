@@ -47,6 +47,16 @@ def test_course_file_parser_accepts_valid_v2_payload() -> None:
                 "ksa": [{"dimension": "K", "topic": "information_technology", "start_level": 1, "target_level": 2}],
                 "unlocks": {"node_ids": [], "branch_ids": [], "recommended_next_node_ids": []},
                 "rewards": {"estimated_ksa_gain": {"K.information_technology": 0.1}, "effort_score": 10, "reward_tags": ["quiz"]},
+                "retrospective_hooks": {"retrospective_after": True, "review_recommended": True, "recap_checkpoint_available": True},
+                "ksa_hooks": {"mini_assessment_available": True, "recommended_reassessment_topics": ["K.information_technology"], "unlocks_deeper_refinement": True},
+                "remediation": {"is_remediation_node": False, "recommended_if_failed_node_ids": [], "supports_review_for_node_ids": []},
+                "adaptive_unlock": {
+                    "ksa_thresholds": [{"dimension": "K", "topic": "information_technology", "min_level": 2}],
+                    "requires_branch_completion_ids": ["core"],
+                    "requires_checkpoint_node_ids": [],
+                    "requires_review_recommended": False,
+                    "recommended_only": True
+                },
             }
         ],
         "edges": [],
@@ -62,6 +72,7 @@ def test_course_file_parser_accepts_valid_v2_payload() -> None:
     assert parsed.nodes[0].type == "quiz"
     assert parsed.nodes[0].completion_mode == "quiz_pass"
     assert parsed.nodes[0].branch_id == "core"
+    assert parsed.nodes[0].ksa_hooks.mini_assessment_available is True
 
 
 def test_course_file_parser_migrates_v1_payload_to_v2_graph() -> None:

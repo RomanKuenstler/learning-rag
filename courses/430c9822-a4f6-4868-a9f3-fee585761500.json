@@ -64,6 +64,28 @@
         "estimated_ksa_gain": {},
         "effort_score": null,
         "reward_tags": []
+      },
+      "retrospective_hooks": {
+        "retrospective_after": false,
+        "review_recommended": false,
+        "recap_checkpoint_available": false
+      },
+      "ksa_hooks": {
+        "mini_assessment_available": false,
+        "recommended_reassessment_topics": [],
+        "unlocks_deeper_refinement": false
+      },
+      "remediation": {
+        "is_remediation_node": false,
+        "recommended_if_failed_node_ids": [],
+        "supports_review_for_node_ids": []
+      },
+      "adaptive_unlock": {
+        "ksa_thresholds": [],
+        "requires_branch_completion_ids": [],
+        "requires_checkpoint_node_ids": [],
+        "requires_review_recommended": false,
+        "recommended_only": false
       }
     }
   ],
