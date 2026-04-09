@@ -415,6 +415,7 @@ function AppRoutes() {
                   currentUserId={app.currentUser.id}
                   onLoad={app.loadCourses}
                   onLoadDetails={(courseId) => app.getLearningPathDetails(courseId)}
+                  onUpdateNodeProgress={(courseId, nodeId, payload) => app.updateLearningNodeProgress(courseId, nodeId, payload)}
                   onImport={app.importCourseFiles}
                   onDownloadTemplate={app.downloadCourseTemplate}
                   onStartContinue={() => navigate("/learning")}

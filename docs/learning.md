@@ -125,11 +125,13 @@ Course definitions are file-backed in `courses/` and now use skilltree schema v2
 
 ### Schema v2 Overview
 
-- top-level: `schema_version`, metadata, `chapters`, `nodes`, `edges`, `entry_node_ids`, `completion_rules`, `visual_layout`
-- node types: `learning_unit`, `practice`, `checkpoint`, `review`, `milestone`
-- dependency relationships: `requires_all`, `requires_any`, `recommended`
+- top-level: `schema_version`, metadata, `chapters`, `branches`, `nodes`, `edges`, `entry_node_ids`, `completion_rules`, `visual_layout`
+- node types: `learning_unit`, `practice`, `quiz`, `checkpoint`, `review`, `milestone`, `capstone`, `unlock_gate`, `assessment_hook`
+- completion modes: `lesson_complete`, `practice_complete`, `quiz_pass`, `checkpoint_pass`, `review_complete`, `assessment_threshold`, `gate_unlock`, `manual`
+- dependency relationships: `requires_all`, `requires_any`, `recommended`, `optional`
 - optional and parallel progression are supported through node `required` and graph dependencies
-- node KSA metadata is supported on each node (`dimension`, `topic`, optional `subtopic`, `target_level`, `contribution_weight`)
+- node KSA metadata supports `start_level`, `target_level`, contribution weight, and assessment-hook hints
+- node metadata also supports unlock/reward contracts (`unlocks`, `rewards`)
 
 ### Compatibility And Migration
 
@@ -143,12 +145,28 @@ Node runtime states currently support:
 
 - `locked`
 - `available`
+- `awaiting_checkpoint`
 - `in_progress`
+- `failed_needs_retry`
 - `completed`
 - `mastered`
 - `optional_skipped`
 
 The system computes deterministic unlock states from prerequisites and persisted node progress.
+
+### Node Progress Update API
+
+Node progression can be persisted with:
+
+- `PUT /api/learning-paths/{learning_path_id}/nodes/{node_id}/progress`
+- payload: `status` (`in_progress|completed|mastered|optional_skipped|failed_needs_retry`) + optional `evidence`
+
+Mode-aware validation is enforced:
+
+- `quiz_pass`/`checkpoint_pass`: pass evidence (or score above threshold)
+- `assessment_threshold`: assessment score threshold in node metadata
+- `gate_unlock`: gate evidence (`gate_unlocked` or matching `gate_key`)
+- `assessment_hook` completion remains intentionally non-executable in this phase
 
 ## Diagnostics (Step B.1)
 

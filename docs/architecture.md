@@ -75,16 +75,19 @@ Course/path definitions are represented as declarative JSON files in `courses/`.
 
 Schema behavior:
 
-- v2 (`schema_version: 2`) is the canonical representation (`chapters`, `nodes`, `edges`, `entry_node_ids`, completion/layout metadata).
+- v2 (`schema_version: 2`) is the canonical representation (`chapters`, `branches`, `nodes`, `edges`, `entry_node_ids`, completion/layout metadata).
 - v1 (`schema_version: 1`) remains supported and is migrated into a linear v2 graph during import/bootstrap.
 - legacy module/lesson CRUD remains available; when used, the service regenerates the skilltree definition from linear structure for compatibility.
 
 Runtime progression behavior:
 
 - deterministic prerequisite evaluation with `requires_all` and `requires_any`
-- optional/recommended edges are supported without blocking required completion
-- node states computed as `locked`, `available`, `in_progress`, `completed`, `mastered`, `optional_skipped`
-- branch/chapter completion and course completion are computed from required nodes
+- optional/recommended/optional edges are supported without forcing linear sequencing
+- node states computed as `locked`, `available`, `awaiting_checkpoint`, `in_progress`, `failed_needs_retry`, `completed`, `mastered`, `optional_skipped`
+- branch-level requiredness is applied through effective-required node computation
+- chapter completion and course completion are computed from effectively-required nodes
+- node runtime semantics expose blocked dependencies, parallel availability, checkpoint waiting, and capstone lock markers
+- node progression transitions are persisted through `PUT /api/learning-paths/{learning_path_id}/nodes/{node_id}/progress` with completion-mode validation
 
 ## Declared Learning Profile Model (Step B)
 

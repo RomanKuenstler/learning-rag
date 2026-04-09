@@ -1657,6 +1657,28 @@ export function useChatApp() {
     return await apiClient.getLearningPath(pathId);
   }
 
+  async function updateLearningNodeProgress(
+    pathId: string,
+    nodeId: string,
+    payload: {
+      status: "in_progress" | "completed" | "mastered" | "optional_skipped" | "failed_needs_retry" | "reset";
+      evidence?: Record<string, unknown>;
+    },
+  ) {
+    setLearningSaving(true);
+    setLearningError(null);
+    try {
+      const updated = await apiClient.updateLearningNodeProgress(pathId, nodeId, payload);
+      setLearningPaths((current) => current.map((entry) => (entry.id === pathId ? updated : entry)));
+      return updated;
+    } catch (error) {
+      setLearningError(error instanceof Error ? error.message : "Failed to update node progress");
+      throw error;
+    } finally {
+      setLearningSaving(false);
+    }
+  }
+
   async function deleteLearningPath(pathId: string) {
     setLearningSaving(true);
     setLearningError(null);
@@ -2206,6 +2228,7 @@ export function useChatApp() {
     submitExplanationFeedback,
     createLearningPath,
     getLearningPathDetails,
+    updateLearningNodeProgress,
     updateLearningPath,
     deleteLearningPath,
     createLearningModule,

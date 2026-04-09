@@ -40,6 +40,7 @@
       }
     }
   ],
+  "branches": [],
   "nodes": [
     {
       "id": "89eb215f-d930-4799-b7a8-57bf74c183e1",
@@ -47,6 +48,7 @@
       "description": "Numbers, strings, booleans, and lists in small examples.",
       "type": "learning_unit",
       "chapter_id": "5563c243-09c4-4c4b-b108-1d9178eae77f",
+      "branch_id": null,
       "required": true,
       "prerequisites": {
         "requires_all": [],
@@ -68,7 +70,17 @@
         "migrated_from": "lesson"
       },
       "display": {},
-      "ksa": []
+      "ksa": [],
+      "unlocks": {
+        "node_ids": [],
+        "branch_ids": [],
+        "recommended_next_node_ids": []
+      },
+      "rewards": {
+        "estimated_ksa_gain": {},
+        "effort_score": null,
+        "reward_tags": []
+      }
     },
     {
       "id": "6f909729-42d5-411d-bd92-b55bafeb3a71",
@@ -76,6 +88,7 @@
       "description": "If statements and loops for basic program logic.",
       "type": "learning_unit",
       "chapter_id": "5563c243-09c4-4c4b-b108-1d9178eae77f",
+      "branch_id": null,
       "required": true,
       "prerequisites": {
         "requires_all": [
@@ -99,7 +112,17 @@
         "migrated_from": "lesson"
       },
       "display": {},
-      "ksa": []
+      "ksa": [],
+      "unlocks": {
+        "node_ids": [],
+        "branch_ids": [],
+        "recommended_next_node_ids": []
+      },
+      "rewards": {
+        "estimated_ksa_gain": {},
+        "effort_score": null,
+        "reward_tags": []
+      }
     },
     {
       "id": "cc8c1deb-9ac3-4081-b994-d043ce4e7657",
@@ -107,6 +130,7 @@
       "description": "Build reusable code with arguments and return values.",
       "type": "learning_unit",
       "chapter_id": "a3148d0e-7dbf-4c66-96cb-de03860092d2",
+      "branch_id": null,
       "required": true,
       "prerequisites": {
         "requires_all": [
@@ -130,7 +154,17 @@
         "migrated_from": "lesson"
       },
       "display": {},
-      "ksa": []
+      "ksa": [],
+      "unlocks": {
+        "node_ids": [],
+        "branch_ids": [],
+        "recommended_next_node_ids": []
+      },
+      "rewards": {
+        "estimated_ksa_gain": {},
+        "effort_score": null,
+        "reward_tags": []
+      }
     }
   ],
   "edges": [

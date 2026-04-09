@@ -40,6 +40,7 @@
       }
     }
   ],
+  "branches": [],
   "nodes": [
     {
       "id": "40811d45-7ee4-456d-9ac2-6a2c6ad48456",
@@ -47,6 +48,7 @@
       "description": "Mental model for images, containers, and registries.",
       "type": "learning_unit",
       "chapter_id": "6cddf606-fed6-47e3-bd8c-8624b57a0599",
+      "branch_id": null,
       "required": true,
       "prerequisites": {
         "requires_all": [],
@@ -68,7 +70,17 @@
         "migrated_from": "lesson"
       },
       "display": {},
-      "ksa": []
+      "ksa": [],
+      "unlocks": {
+        "node_ids": [],
+        "branch_ids": [],
+        "recommended_next_node_ids": []
+      },
+      "rewards": {
+        "estimated_ksa_gain": {},
+        "effort_score": null,
+        "reward_tags": []
+      }
     },
     {
       "id": "e6df951a-7550-4756-9fe2-95915205733e",
@@ -76,6 +88,7 @@
       "description": "Run, stop, and inspect a hello-world style container.",
       "type": "learning_unit",
       "chapter_id": "6cddf606-fed6-47e3-bd8c-8624b57a0599",
+      "branch_id": null,
       "required": true,
       "prerequisites": {
         "requires_all": [
@@ -98,7 +111,17 @@
         "migrated_from": "lesson"
       },
       "display": {},
-      "ksa": []
+      "ksa": [],
+      "unlocks": {
+        "node_ids": [],
+        "branch_ids": [],
+        "recommended_next_node_ids": []
+      },
+      "rewards": {
+        "estimated_ksa_gain": {},
+        "effort_score": null,
+        "reward_tags": []
+      }
     },
     {
       "id": "18ef7b23-b9d0-4f89-a14d-edacb138cc57",
@@ -106,6 +129,7 @@
       "description": "Services, volumes, ports, and environment basics.",
       "type": "learning_unit",
       "chapter_id": "144c9dc7-4826-4126-9e2e-8964aaf21633",
+      "branch_id": null,
       "required": true,
       "prerequisites": {
         "requires_all": [
@@ -128,7 +152,17 @@
         "migrated_from": "lesson"
       },
       "display": {},
-      "ksa": []
+      "ksa": [],
+      "unlocks": {
+        "node_ids": [],
+        "branch_ids": [],
+        "recommended_next_node_ids": []
+      },
+      "rewards": {
+        "estimated_ksa_gain": {},
+        "effort_score": null,
+        "reward_tags": []
+      }
     }
   ],
   "edges": [

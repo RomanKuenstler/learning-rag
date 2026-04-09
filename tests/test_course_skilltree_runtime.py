@@ -24,6 +24,10 @@ def _definition() -> CourseDefinition:
                 {"id": "c1", "title": "Foundations", "description": "", "order_index": 0, "metadata": {}},
                 {"id": "c2", "title": "Advanced", "description": "", "order_index": 1, "metadata": {}},
             ],
+            "branches": [
+                {"id": "core", "title": "Core", "description": "", "required": True, "metadata": {}},
+                {"id": "optional", "title": "Optional", "description": "", "required": False, "metadata": {}},
+            ],
             "nodes": [
                 {
                     "id": "n1",
@@ -31,6 +35,7 @@ def _definition() -> CourseDefinition:
                     "description": "",
                     "type": "learning_unit",
                     "chapter_id": "c1",
+                    "branch_id": "core",
                     "required": True,
                     "prerequisites": {"requires_all": [], "requires_any": [], "recommended": []},
                     "completion_mode": "lesson_complete",
@@ -38,6 +43,8 @@ def _definition() -> CourseDefinition:
                     "metadata": {},
                     "display": {},
                     "ksa": [],
+                    "unlocks": {"node_ids": [], "branch_ids": [], "recommended_next_node_ids": []},
+                    "rewards": {"estimated_ksa_gain": {}, "effort_score": None, "reward_tags": []},
                 },
                 {
                     "id": "n2",
@@ -45,6 +52,7 @@ def _definition() -> CourseDefinition:
                     "description": "",
                     "type": "practice",
                     "chapter_id": "c1",
+                    "branch_id": "core",
                     "required": True,
                     "prerequisites": {"requires_all": ["n1"], "requires_any": [], "recommended": []},
                     "completion_mode": "practice_complete",
@@ -52,34 +60,59 @@ def _definition() -> CourseDefinition:
                     "metadata": {},
                     "display": {},
                     "ksa": [],
+                    "unlocks": {"node_ids": [], "branch_ids": [], "recommended_next_node_ids": []},
+                    "rewards": {"estimated_ksa_gain": {}, "effort_score": None, "reward_tags": []},
                 },
                 {
                     "id": "n3",
-                    "title": "Branch B",
+                    "title": "Optional Branch",
                     "description": "",
-                    "type": "practice",
+                    "type": "quiz",
                     "chapter_id": "c1",
-                    "required": False,
+                    "branch_id": "optional",
+                    "required": True,
                     "prerequisites": {"requires_all": ["n1"], "requires_any": [], "recommended": []},
-                    "completion_mode": "practice_complete",
+                    "completion_mode": "quiz_pass",
                     "layout": {"x": 100, "y": 80},
-                    "metadata": {},
+                    "metadata": {"pass_threshold": 0.7},
                     "display": {},
                     "ksa": [],
+                    "unlocks": {"node_ids": [], "branch_ids": [], "recommended_next_node_ids": []},
+                    "rewards": {"estimated_ksa_gain": {}, "effort_score": None, "reward_tags": []},
                 },
                 {
                     "id": "n4",
                     "title": "Merge",
                     "description": "",
-                    "type": "checkpoint",
+                    "type": "unlock_gate",
                     "chapter_id": "c2",
+                    "branch_id": "core",
                     "required": True,
                     "prerequisites": {"requires_all": [], "requires_any": ["n2", "n3"], "recommended": []},
-                    "completion_mode": "checkpoint_pass",
+                    "completion_mode": "gate_unlock",
                     "layout": {"x": 220, "y": 40},
-                    "metadata": {},
+                    "metadata": {"gate_key": "release"},
                     "display": {},
                     "ksa": [],
+                    "unlocks": {"node_ids": [], "branch_ids": [], "recommended_next_node_ids": []},
+                    "rewards": {"estimated_ksa_gain": {}, "effort_score": None, "reward_tags": []},
+                },
+                {
+                    "id": "n5",
+                    "title": "Capstone",
+                    "description": "",
+                    "type": "capstone",
+                    "chapter_id": "c2",
+                    "branch_id": "core",
+                    "required": True,
+                    "prerequisites": {"requires_all": ["n4"], "requires_any": [], "recommended": []},
+                    "completion_mode": "checkpoint_pass",
+                    "layout": {"x": 320, "y": 40},
+                    "metadata": {"pass_threshold": 0.8},
+                    "display": {},
+                    "ksa": [],
+                    "unlocks": {"node_ids": [], "branch_ids": [], "recommended_next_node_ids": []},
+                    "rewards": {"estimated_ksa_gain": {}, "effort_score": None, "reward_tags": []},
                 },
             ],
             "edges": [
@@ -87,6 +120,7 @@ def _definition() -> CourseDefinition:
                 {"from_node_id": "n1", "to_node_id": "n3", "relationship": "requires_all"},
                 {"from_node_id": "n2", "to_node_id": "n4", "relationship": "requires_any"},
                 {"from_node_id": "n3", "to_node_id": "n4", "relationship": "requires_any"},
+                {"from_node_id": "n4", "to_node_id": "n5", "relationship": "requires_all"},
             ],
             "entry_node_ids": ["n1"],
             "completion_rules": {"required_completion": "all_required_nodes"},
@@ -114,11 +148,26 @@ def test_runtime_supports_requires_any_merge_completion() -> None:
     assert runtime.node_progress["n4"] == "available"
 
 
-def test_runtime_course_completion_uses_required_nodes_only() -> None:
+def test_runtime_course_completion_uses_effective_required_nodes() -> None:
     runtime = build_skilltree_runtime(
         _definition(),
-        persisted_node_progress={"n1": "completed", "n2": "completed", "n4": "mastered", "n3": "optional_skipped"},
+        persisted_node_progress={"n1": "completed", "n2": "completed", "n4": "mastered", "n5": "mastered", "n3": "optional_skipped"},
     )
-    assert runtime.completion_summary.required_total == 3
-    assert runtime.completion_summary.required_completed == 3
+    # n3 is flagged required but belongs to an optional branch, so it does not block completion.
+    assert runtime.completion_summary.required_total == 4
+    assert runtime.completion_summary.required_completed == 4
     assert runtime.completion_summary.is_complete is True
+
+
+def test_runtime_marks_checkpoint_wait_state_and_capstone_lock() -> None:
+    runtime = build_skilltree_runtime(_definition(), persisted_node_progress={"n1": "completed", "n2": "completed"})
+    assert runtime.node_progress["n5"] in {"awaiting_checkpoint", "locked"}
+    assert runtime.node_runtime["n5"].capstone_locked is True
+
+
+def test_runtime_parallel_available_semantics() -> None:
+    runtime = build_skilltree_runtime(_definition(), persisted_node_progress={"n1": "completed"})
+    assert runtime.node_progress["n2"] == "available"
+    assert runtime.node_progress["n3"] == "available"
+    assert runtime.node_runtime["n2"].is_parallel_available is True
+    assert runtime.node_runtime["n3"].is_parallel_available is True

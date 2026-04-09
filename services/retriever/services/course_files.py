@@ -7,9 +7,28 @@ from typing import Literal
 
 from pydantic import BaseModel, Field, ValidationError, model_validator
 
-COURSE_NODE_TYPES = {"learning_unit", "practice", "checkpoint", "review", "milestone"}
-EDGE_RELATIONSHIPS = {"requires_all", "requires_any", "recommended"}
-COMPLETION_MODES = {"lesson_complete", "manual", "practice_complete", "checkpoint_pass"}
+COURSE_NODE_TYPES = {
+    "learning_unit",
+    "practice",
+    "quiz",
+    "checkpoint",
+    "review",
+    "milestone",
+    "capstone",
+    "unlock_gate",
+    "assessment_hook",
+}
+EDGE_RELATIONSHIPS = {"requires_all", "requires_any", "recommended", "optional"}
+COMPLETION_MODES = {
+    "lesson_complete",
+    "manual",
+    "practice_complete",
+    "quiz_pass",
+    "checkpoint_pass",
+    "review_complete",
+    "assessment_threshold",
+    "gate_unlock",
+}
 
 
 class CourseLessonDefinition(BaseModel):
@@ -60,6 +79,14 @@ class CourseChapterDefinition(BaseModel):
     metadata: dict[str, object] = Field(default_factory=dict)
 
 
+class CourseBranchDefinition(BaseModel):
+    id: str
+    title: str = Field(min_length=1, max_length=255)
+    description: str = Field(default="", max_length=12000)
+    required: bool = True
+    metadata: dict[str, object] = Field(default_factory=dict)
+
+
 class CourseNodePrerequisites(BaseModel):
     requires_all: list[str] = Field(default_factory=list)
     requires_any: list[str] = Field(default_factory=list)
@@ -70,8 +97,23 @@ class CourseNodeKsaMetadata(BaseModel):
     dimension: Literal["K", "S", "A"]
     topic: str = Field(min_length=1, max_length=255)
     subtopic: str | None = Field(default=None, max_length=255)
+    start_level: int | None = Field(default=None, ge=1, le=5)
     target_level: int | None = Field(default=None, ge=1, le=5)
     contribution_weight: float | None = Field(default=None, gt=0, le=1)
+    unlocks_assessment_check: bool = False
+    recommends_assessment_check: bool = False
+
+
+class CourseNodeUnlocksMetadata(BaseModel):
+    node_ids: list[str] = Field(default_factory=list)
+    branch_ids: list[str] = Field(default_factory=list)
+    recommended_next_node_ids: list[str] = Field(default_factory=list)
+
+
+class CourseNodeRewardMetadata(BaseModel):
+    estimated_ksa_gain: dict[str, float] = Field(default_factory=dict)
+    effort_score: float | None = Field(default=None, ge=0, le=100)
+    reward_tags: list[str] = Field(default_factory=list)
 
 
 class CourseNodeLayout(BaseModel):
@@ -83,22 +125,44 @@ class CourseNodeDefinition(BaseModel):
     id: str
     title: str = Field(min_length=1, max_length=255)
     description: str = Field(default="", max_length=12000)
-    type: Literal["learning_unit", "practice", "checkpoint", "review", "milestone"] = "learning_unit"
+    type: Literal[
+        "learning_unit",
+        "practice",
+        "quiz",
+        "checkpoint",
+        "review",
+        "milestone",
+        "capstone",
+        "unlock_gate",
+        "assessment_hook",
+    ] = "learning_unit"
     chapter_id: str | None = Field(default=None)
+    branch_id: str | None = Field(default=None)
     required: bool = True
     prerequisites: CourseNodePrerequisites = Field(default_factory=CourseNodePrerequisites)
-    completion_mode: Literal["lesson_complete", "manual", "practice_complete", "checkpoint_pass"] = "lesson_complete"
+    completion_mode: Literal[
+        "lesson_complete",
+        "manual",
+        "practice_complete",
+        "quiz_pass",
+        "checkpoint_pass",
+        "review_complete",
+        "assessment_threshold",
+        "gate_unlock",
+    ] = "lesson_complete"
     estimated_duration_minutes: int | None = Field(default=None, ge=1, le=100000)
     layout: CourseNodeLayout = Field(default_factory=CourseNodeLayout)
     metadata: dict[str, object] = Field(default_factory=dict)
     display: dict[str, object] = Field(default_factory=dict)
     ksa: list[CourseNodeKsaMetadata] = Field(default_factory=list)
+    unlocks: CourseNodeUnlocksMetadata = Field(default_factory=CourseNodeUnlocksMetadata)
+    rewards: CourseNodeRewardMetadata = Field(default_factory=CourseNodeRewardMetadata)
 
 
 class CourseEdgeDefinition(BaseModel):
     from_node_id: str
     to_node_id: str
-    relationship: Literal["requires_all", "requires_any", "recommended"] = "requires_all"
+    relationship: Literal["requires_all", "requires_any", "recommended", "optional"] = "requires_all"
 
 
 class CourseDefinition(BaseModel):
@@ -116,6 +180,7 @@ class CourseDefinition(BaseModel):
     allowed_file_ids: list[int] = Field(default_factory=list)
     allowed_tags: list[str] = Field(default_factory=list)
     chapters: list[CourseChapterDefinition] = Field(default_factory=list)
+    branches: list[CourseBranchDefinition] = Field(default_factory=list)
     nodes: list[CourseNodeDefinition] = Field(default_factory=list)
     edges: list[CourseEdgeDefinition] = Field(default_factory=list)
     entry_node_ids: list[str] = Field(default_factory=list)
@@ -134,17 +199,29 @@ class CourseDefinition(BaseModel):
         chapter_ids = [chapter.id for chapter in self.chapters]
         if len(chapter_ids) != len(set(chapter_ids)):
             raise ValueError("chapters must have unique ids")
+        branch_ids = [branch.id for branch in self.branches]
+        if len(branch_ids) != len(set(branch_ids)):
+            raise ValueError("branches must have unique ids")
 
         node_id_set = set(node_ids)
         chapter_id_set = set(chapter_ids)
+        branch_id_set = set(branch_ids)
         for node in self.nodes:
             if node.chapter_id and node.chapter_id not in chapter_id_set:
                 raise ValueError(f"node '{node.id}' references unknown chapter_id '{node.chapter_id}'")
+            if node.branch_id and node.branch_id not in branch_id_set:
+                raise ValueError(f"node '{node.id}' references unknown branch_id '{node.branch_id}'")
             for required_id in node.prerequisites.requires_all + node.prerequisites.requires_any + node.prerequisites.recommended:
                 if required_id not in node_id_set:
                     raise ValueError(f"node '{node.id}' references unknown prerequisite node '{required_id}'")
                 if required_id == node.id:
                     raise ValueError(f"node '{node.id}' cannot depend on itself")
+            for unlocked_node_id in node.unlocks.node_ids + node.unlocks.recommended_next_node_ids:
+                if unlocked_node_id not in node_id_set:
+                    raise ValueError(f"node '{node.id}' references unknown unlock/recommend node '{unlocked_node_id}'")
+            for unlocked_branch_id in node.unlocks.branch_ids:
+                if unlocked_branch_id not in branch_id_set:
+                    raise ValueError(f"node '{node.id}' references unknown unlock branch '{unlocked_branch_id}'")
 
         for edge in self.edges:
             if edge.from_node_id not in node_id_set:
@@ -269,6 +346,20 @@ class CourseFileParser:
                     "description": "Multi-service local environments.",
                 },
             ],
+            "branches": [
+                {
+                    "id": "branch-core",
+                    "title": "Core Track",
+                    "description": "Required baseline branch.",
+                    "required": True,
+                },
+                {
+                    "id": "branch-reinforcement",
+                    "title": "Reinforcement",
+                    "description": "Optional reinforcement branch.",
+                    "required": False,
+                },
+            ],
             "nodes": [
                 {
                     "id": "node-images-containers",
@@ -276,6 +367,7 @@ class CourseFileParser:
                     "description": "Build a strong mental model.",
                     "type": "learning_unit",
                     "chapter_id": "chapter-foundations",
+                    "branch_id": "branch-core",
                     "required": True,
                     "completion_mode": "lesson_complete",
                     "estimated_duration_minutes": 20,
@@ -285,10 +377,14 @@ class CourseFileParser:
                         {
                             "dimension": "K",
                             "topic": "information_technology",
+                            "start_level": 1,
                             "target_level": 2,
                             "contribution_weight": 0.5,
+                            "recommends_assessment_check": True,
                         }
                     ],
+                    "unlocks": {"node_ids": ["node-first-container"], "branch_ids": [], "recommended_next_node_ids": []},
+                    "rewards": {"estimated_ksa_gain": {"K.information_technology": 0.2}, "effort_score": 18, "reward_tags": ["foundation"]},
                 },
                 {
                     "id": "node-first-container",
@@ -296,6 +392,7 @@ class CourseFileParser:
                     "description": "Use run, ps, logs, stop, rm.",
                     "type": "practice",
                     "chapter_id": "chapter-foundations",
+                    "branch_id": "branch-core",
                     "required": True,
                     "completion_mode": "practice_complete",
                     "estimated_duration_minutes": 30,
@@ -306,10 +403,13 @@ class CourseFileParser:
                             "dimension": "S",
                             "topic": "digital_craft",
                             "subtopic": "Full-Stack Development",
+                            "start_level": 1,
                             "target_level": 2,
                             "contribution_weight": 0.6,
                         }
                     ],
+                    "unlocks": {"node_ids": ["node-compose-basics"], "branch_ids": [], "recommended_next_node_ids": ["node-review-cleanup"]},
+                    "rewards": {"estimated_ksa_gain": {"S.digital_craft": 0.25}, "effort_score": 28, "reward_tags": ["hands_on"]},
                 },
                 {
                     "id": "node-compose-basics",
@@ -317,12 +417,15 @@ class CourseFileParser:
                     "description": "Read and run compose files.",
                     "type": "checkpoint",
                     "chapter_id": "chapter-compose",
+                    "branch_id": "branch-core",
                     "required": True,
                     "completion_mode": "checkpoint_pass",
                     "estimated_duration_minutes": 30,
                     "layout": {"x": 520, "y": 120},
                     "prerequisites": {"requires_all": ["node-first-container"], "requires_any": [], "recommended": []},
                     "ksa": [],
+                    "unlocks": {"node_ids": [], "branch_ids": [], "recommended_next_node_ids": []},
+                    "rewards": {"estimated_ksa_gain": {"S.digital_craft": 0.2}, "effort_score": 30, "reward_tags": ["checkpoint"]},
                 },
                 {
                     "id": "node-review-cleanup",
@@ -330,12 +433,15 @@ class CourseFileParser:
                     "description": "Optional consolidation and review.",
                     "type": "review",
                     "chapter_id": "chapter-compose",
+                    "branch_id": "branch-reinforcement",
                     "required": False,
-                    "completion_mode": "manual",
+                    "completion_mode": "review_complete",
                     "estimated_duration_minutes": 15,
                     "layout": {"x": 520, "y": 260},
                     "prerequisites": {"requires_all": ["node-first-container"], "requires_any": [], "recommended": []},
                     "ksa": [],
+                    "unlocks": {"node_ids": [], "branch_ids": [], "recommended_next_node_ids": []},
+                    "rewards": {"estimated_ksa_gain": {"K.information_technology": 0.1}, "effort_score": 10, "reward_tags": ["optional"]},
                 },
             ],
             "edges": [
@@ -412,6 +518,7 @@ class CourseFileParser:
                         "description": lesson.description,
                         "type": "learning_unit",
                         "chapter_id": chapter_id,
+                        "branch_id": None,
                         "required": True,
                         "completion_mode": "lesson_complete",
                         "estimated_duration_minutes": fallback_duration,
@@ -428,6 +535,8 @@ class CourseFileParser:
                         },
                         "ksa": [],
                         "display": {},
+                        "unlocks": {"node_ids": [], "branch_ids": [], "recommended_next_node_ids": []},
+                        "rewards": {"estimated_ksa_gain": {}, "effort_score": None, "reward_tags": []},
                     }
                 )
                 previous_node_id = node_id
@@ -451,6 +560,7 @@ class CourseFileParser:
                     "description": legacy.description,
                     "type": "milestone",
                     "chapter_id": chapter_id,
+                    "branch_id": None,
                     "required": True,
                     "completion_mode": "manual",
                     "estimated_duration_minutes": legacy.estimated_duration_minutes,
@@ -459,6 +569,8 @@ class CourseFileParser:
                     "metadata": {"generated": True},
                     "ksa": [],
                     "display": {},
+                    "unlocks": {"node_ids": [], "branch_ids": [], "recommended_next_node_ids": []},
+                    "rewards": {"estimated_ksa_gain": {}, "effort_score": None, "reward_tags": []},
                 }
             )
             entry_node_ids = [node_id]
@@ -477,6 +589,7 @@ class CourseFileParser:
             "allowed_file_ids": list(legacy.allowed_file_ids),
             "allowed_tags": list(legacy.allowed_tags),
             "chapters": chapters,
+            "branches": [],
             "nodes": nodes,
             "edges": edges,
             "entry_node_ids": entry_node_ids,
@@ -494,6 +607,7 @@ class CourseFileParser:
                         "title": node.title.strip(),
                         "description": node.description.strip(),
                         "chapter_id": node.chapter_id.strip() if node.chapter_id else None,
+                        "branch_id": node.branch_id.strip() if node.branch_id else None,
                         "prerequisites": CourseNodePrerequisites(
                             requires_all=list(dict.fromkeys(item.strip() for item in node.prerequisites.requires_all if item.strip())),
                             requires_any=list(dict.fromkeys(item.strip() for item in node.prerequisites.requires_any if item.strip())),
@@ -508,6 +622,18 @@ class CourseFileParser:
                             )
                             for item in node.ksa
                         ],
+                        "unlocks": CourseNodeUnlocksMetadata(
+                            node_ids=list(dict.fromkeys(item.strip() for item in node.unlocks.node_ids if item.strip())),
+                            branch_ids=list(dict.fromkeys(item.strip() for item in node.unlocks.branch_ids if item.strip())),
+                            recommended_next_node_ids=list(
+                                dict.fromkeys(item.strip() for item in node.unlocks.recommended_next_node_ids if item.strip())
+                            ),
+                        ),
+                        "rewards": CourseNodeRewardMetadata(
+                            estimated_ksa_gain={str(key): float(value) for key, value in (node.rewards.estimated_ksa_gain or {}).items()},
+                            effort_score=node.rewards.effort_score,
+                            reward_tags=list(dict.fromkeys(tag.strip().lower() for tag in node.rewards.reward_tags if tag.strip())),
+                        ),
                     }
                 )
             )
@@ -527,6 +653,15 @@ class CourseFileParser:
                         }
                     )
                     for chapter in sorted(parsed.chapters, key=lambda item: (item.order_index, item.title.lower()))
+                ],
+                "branches": [
+                    branch.model_copy(
+                        update={
+                            "title": branch.title.strip(),
+                            "description": branch.description.strip(),
+                        }
+                    )
+                    for branch in parsed.branches
                 ],
                 "nodes": normalized_nodes,
                 "edges": self._merged_edges_from_nodes_and_edges(normalized_nodes, parsed.edges),

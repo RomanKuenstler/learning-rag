@@ -278,9 +278,34 @@ export type GptPreviewRequest = {
 
 export type LearningPathScope = "global" | "user";
 export type LearningPathStatus = "draft" | "published" | "archived";
-export type SkilltreeNodeType = "learning_unit" | "practice" | "checkpoint" | "review" | "milestone";
-export type SkilltreeNodeCompletionMode = "lesson_complete" | "manual" | "practice_complete" | "checkpoint_pass";
-export type SkilltreeNodeProgressState = "locked" | "available" | "in_progress" | "completed" | "mastered" | "optional_skipped";
+export type SkilltreeNodeType =
+  | "learning_unit"
+  | "practice"
+  | "quiz"
+  | "checkpoint"
+  | "review"
+  | "milestone"
+  | "capstone"
+  | "unlock_gate"
+  | "assessment_hook";
+export type SkilltreeNodeCompletionMode =
+  | "lesson_complete"
+  | "manual"
+  | "practice_complete"
+  | "quiz_pass"
+  | "checkpoint_pass"
+  | "review_complete"
+  | "assessment_threshold"
+  | "gate_unlock";
+export type SkilltreeNodeProgressState =
+  | "locked"
+  | "available"
+  | "in_progress"
+  | "completed"
+  | "mastered"
+  | "optional_skipped"
+  | "failed_needs_retry"
+  | "awaiting_checkpoint";
 
 export type LearningLesson = {
   id: string;
@@ -320,6 +345,7 @@ export type LearningPath = {
   allowed_file_ids: number[];
   allowed_tags: string[];
   chapters: SkilltreeChapter[];
+  branches: SkilltreeBranch[];
   nodes: SkilltreeNode[];
   edges: SkilltreeEdge[];
   entry_node_ids: string[];
@@ -327,6 +353,7 @@ export type LearningPath = {
   visual_layout: Record<string, unknown>;
   metadata: Record<string, unknown>;
   node_progress: Record<string, SkilltreeNodeProgressState | string>;
+  node_runtime: Record<string, SkilltreeNodeRuntime>;
   chapter_progress: SkilltreeChapterProgress[];
   completion_summary: SkilltreeCompletionSummary | null;
   modules: LearningModule[];
@@ -380,8 +407,23 @@ export type SkilltreeNodeKsa = {
   dimension: "K" | "S" | "A";
   topic: string;
   subtopic: string | null;
+  start_level: number | null;
   target_level: number | null;
   contribution_weight: number | null;
+  unlocks_assessment_check: boolean;
+  recommends_assessment_check: boolean;
+};
+
+export type SkilltreeNodeUnlocks = {
+  node_ids: string[];
+  branch_ids: string[];
+  recommended_next_node_ids: string[];
+};
+
+export type SkilltreeNodeRewards = {
+  estimated_ksa_gain: Record<string, number>;
+  effort_score: number | null;
+  reward_tags: string[];
 };
 
 export type SkilltreeNodeLayout = {
@@ -395,6 +437,7 @@ export type SkilltreeNode = {
   description: string;
   type: SkilltreeNodeType;
   chapter_id: string | null;
+  branch_id: string | null;
   required: boolean;
   prerequisites: SkilltreeNodePrerequisites;
   completion_mode: SkilltreeNodeCompletionMode;
@@ -403,12 +446,14 @@ export type SkilltreeNode = {
   metadata: Record<string, unknown>;
   display: Record<string, unknown>;
   ksa: SkilltreeNodeKsa[];
+  unlocks: SkilltreeNodeUnlocks;
+  rewards: SkilltreeNodeRewards;
 };
 
 export type SkilltreeEdge = {
   from_node_id: string;
   to_node_id: string;
-  relationship: "requires_all" | "requires_any" | "recommended";
+  relationship: "requires_all" | "requires_any" | "recommended" | "optional";
 };
 
 export type SkilltreeChapter = {
@@ -416,6 +461,14 @@ export type SkilltreeChapter = {
   title: string;
   description: string;
   order_index: number;
+  metadata: Record<string, unknown>;
+};
+
+export type SkilltreeBranch = {
+  id: string;
+  title: string;
+  description: string;
+  required: boolean;
   metadata: Record<string, unknown>;
 };
 
@@ -435,6 +488,17 @@ export type SkilltreeCompletionSummary = {
   optional_total: number;
   optional_completed: number;
   is_complete: boolean;
+};
+
+export type SkilltreeNodeRuntime = {
+  blocked_by_all: string[];
+  blocked_by_any: string[];
+  is_entry: boolean;
+  is_parallel_available: boolean;
+  awaiting_checkpoint: boolean;
+  capstone_locked: boolean;
+  optional_branch: boolean;
+  completion_allowed: boolean;
 };
 
 export type CourseListResponse = {

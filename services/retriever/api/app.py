@@ -50,6 +50,7 @@ from services.retriever.schemas.learning import (
     CourseImportResponse,
     CourseListResponse,
     CourseTemplateResponse,
+    LearningNodeProgressUpdateRequest,
     LearningLessonCreateRequest,
     LearningLessonRead,
     LearningLessonReorderRequest,
@@ -574,6 +575,26 @@ def create_app() -> FastAPI:
         if record is None:
             raise HTTPException(status_code=404, detail="Learning path not found")
         return record
+
+    @app.put(
+        "/api/learning-paths/{learning_path_id}/nodes/{node_id}/progress",
+        response_model=LearningPathRead,
+        responses={404: {"model": ErrorResponse}, 422: {"model": ErrorResponse}},
+    )
+    def update_learning_node_progress(
+        learning_path_id: str,
+        node_id: str,
+        payload: LearningNodeProgressUpdateRequest,
+        auth: AuthContext = Depends(get_app_auth_context),
+        service: RetrieverAppService = Depends(get_retriever_service),
+    ) -> LearningPathRead:
+        try:
+            updated = service.update_learning_node_progress(auth.user, learning_path_id, node_id, payload)
+        except ValueError as error:
+            raise HTTPException(status_code=422, detail=str(error)) from error
+        if updated is None:
+            raise HTTPException(status_code=404, detail="Learning path or node not found")
+        return updated
 
     @app.patch("/api/learning-paths/{learning_path_id}", response_model=LearningPathRead, responses={404: {"model": ErrorResponse}, 403: {"model": ErrorResponse}})
     def update_learning_path(

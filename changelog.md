@@ -1,5 +1,40 @@
 # Changelog
 
+## 2026-04-08 23:05 UTC
+
+- Implemented Phase 2 skilltree semantics upgrade:
+  - expanded node types: `learning_unit`, `practice`, `quiz`, `checkpoint`, `review`, `milestone`, `capstone`, `unlock_gate`, `assessment_hook`
+  - expanded completion modes: `lesson_complete`, `practice_complete`, `quiz_pass`, `checkpoint_pass`, `review_complete`, `assessment_threshold`, `gate_unlock`, `manual`
+- Extended schema v2 models with richer progression metadata:
+  - `branches` (`required` vs optional branch routes)
+  - per-node `branch_id`
+  - richer KSA metadata (`start_level`, target, contribution, assessment hints)
+  - node unlock metadata (`unlocks.node_ids|branch_ids|recommended_next_node_ids`)
+  - node reward metadata (`rewards.estimated_ksa_gain|effort_score|reward_tags`)
+- Extended edge relationship support with `optional` alongside `requires_all|requires_any|recommended`.
+- Upgraded runtime progression logic:
+  - new runtime states: `awaiting_checkpoint`, `failed_needs_retry`
+  - effective-required completion semantics (required nodes inside optional branches do not block final completion)
+  - per-node runtime semantics map (`blocked_by_*`, parallel availability, checkpoint wait, capstone lock, completion-allowed)
+- Added deterministic node progress transition API:
+  - `PUT /api/learning-paths/{learning_path_id}/nodes/{node_id}/progress`
+  - mode-aware validation for quiz/checkpoint pass thresholds, assessment thresholds, and gate unlock evidence
+  - assessment-hook nodes remain explicit non-executable placeholders in this phase
+- Updated courses frontend and contracts:
+  - richer node-type icon handling
+  - detail panel now shows completion rule, runtime semantics, KSA start/target/weight/hints, and unlock/reward metadata
+  - added node progress action controls (`Start`, `Complete`, `Master`, `Skip Optional`, `Mark Retry`)
+- Updated DevOps example course JSON to a richer Phase 2 graph with quiz, milestone, unlock gate, assessment hook, and capstone nodes plus branch metadata.
+- Added/updated tests:
+  - expanded `tests/test_courses_files.py` for branch + richer schema validation
+  - expanded `tests/test_course_skilltree_runtime.py` for effective-required completion, checkpoint wait, capstone lock, and parallel semantics
+- Updated docs:
+  - `README.md`
+  - `docs/learning.md`
+  - `docs/courses.md`
+  - `docs/architecture.md`
+  - `docs/testing.md`
+
 ## 2026-04-08 22:10 UTC
 
 - Reworked course model into graph-based skilltree foundation with schema v2.

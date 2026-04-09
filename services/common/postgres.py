@@ -1796,6 +1796,22 @@ class PostgresClient:
             session.refresh(record)
             return record
 
+    def delete_user_learning_node_progress(
+        self,
+        *,
+        user_id: int,
+        learning_path_id: str,
+        node_id: str,
+    ) -> None:
+        with self.session() as session:
+            session.execute(
+                delete(UserLearningNodeProgress).where(
+                    UserLearningNodeProgress.user_id == user_id,
+                    UserLearningNodeProgress.learning_path_id == learning_path_id,
+                    UserLearningNodeProgress.node_id == node_id,
+                )
+            )
+
     def get_diagnostic_definition(self, diagnostic_type: str) -> DiagnosticDefinition | None:
         with self.session() as session:
             return session.scalar(

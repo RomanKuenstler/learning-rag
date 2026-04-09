@@ -25,21 +25,28 @@ def test_course_file_parser_accepts_valid_v2_payload() -> None:
         "chapters": [
             {"id": "chapter-1", "order_index": 0, "title": "Chapter", "description": "", "metadata": {}},
         ],
+        "branches": [
+            {"id": "core", "title": "Core", "description": "", "required": True, "metadata": {}},
+            {"id": "optional", "title": "Optional", "description": "", "required": False, "metadata": {}},
+        ],
         "nodes": [
             {
                 "id": "node-1",
                 "title": "Node",
                 "description": "",
-                "type": "learning_unit",
+                "type": "quiz",
                 "chapter_id": "chapter-1",
+                "branch_id": "core",
                 "required": True,
                 "prerequisites": {"requires_all": [], "requires_any": [], "recommended": []},
-                "completion_mode": "lesson_complete",
+                "completion_mode": "quiz_pass",
                 "estimated_duration_minutes": 10,
                 "layout": {"x": 100, "y": 100},
-                "metadata": {},
+                "metadata": {"pass_threshold": 0.75},
                 "display": {},
-                "ksa": [{"dimension": "K", "topic": "information_technology", "target_level": 2}],
+                "ksa": [{"dimension": "K", "topic": "information_technology", "start_level": 1, "target_level": 2}],
+                "unlocks": {"node_ids": [], "branch_ids": [], "recommended_next_node_ids": []},
+                "rewards": {"estimated_ksa_gain": {"K.information_technology": 0.1}, "effort_score": 10, "reward_tags": ["quiz"]},
             }
         ],
         "edges": [],
@@ -52,7 +59,9 @@ def test_course_file_parser_accepts_valid_v2_payload() -> None:
     parsed = parser.parse_payload("course.json", payload)
     assert parsed.schema_version == 2
     assert parsed.allowed_tags == ["docker"]
-    assert parsed.nodes[0].type == "learning_unit"
+    assert parsed.nodes[0].type == "quiz"
+    assert parsed.nodes[0].completion_mode == "quiz_pass"
+    assert parsed.nodes[0].branch_id == "core"
 
 
 def test_course_file_parser_migrates_v1_payload_to_v2_graph() -> None:
@@ -129,6 +138,7 @@ def test_course_file_parser_rejects_user_scope_without_owner() -> None:
         "allowed_file_ids": [],
         "allowed_tags": [],
         "chapters": [],
+        "branches": [],
         "nodes": [],
         "edges": [],
         "entry_node_ids": [],
@@ -157,6 +167,7 @@ def test_course_file_parser_rejects_cycles() -> None:
         "allowed_file_ids": [],
         "allowed_tags": [],
         "chapters": [{"id": "chapter-1", "order_index": 0, "title": "Chapter", "description": "", "metadata": {}}],
+        "branches": [],
         "nodes": [
             {
                 "id": "a",
@@ -171,6 +182,8 @@ def test_course_file_parser_rejects_cycles() -> None:
                 "metadata": {},
                 "display": {},
                 "ksa": [],
+                "unlocks": {"node_ids": [], "branch_ids": [], "recommended_next_node_ids": []},
+                "rewards": {"estimated_ksa_gain": {}, "effort_score": None, "reward_tags": []},
             },
             {
                 "id": "b",
@@ -185,6 +198,8 @@ def test_course_file_parser_rejects_cycles() -> None:
                 "metadata": {},
                 "display": {},
                 "ksa": [],
+                "unlocks": {"node_ids": [], "branch_ids": [], "recommended_next_node_ids": []},
+                "rewards": {"estimated_ksa_gain": {}, "effort_score": None, "reward_tags": []},
             },
         ],
         "edges": [],
@@ -206,3 +221,48 @@ def test_course_examples_are_valid_json() -> None:
     assert files
     for file in files:
         parser.parse_file(file)
+
+
+def test_course_file_parser_rejects_unknown_branch_reference() -> None:
+    parser = CourseFileParser()
+    payload = {
+        "schema_version": 2,
+        "id": "course-branch-test",
+        "title": "Branch Test",
+        "description": "",
+        "scope": "global",
+        "owner_user_id": None,
+        "subject": "",
+        "difficulty_level": "",
+        "estimated_duration_minutes": None,
+        "status": "draft",
+        "allowed_file_ids": [],
+        "allowed_tags": [],
+        "chapters": [{"id": "chapter-1", "order_index": 0, "title": "Chapter", "description": "", "metadata": {}}],
+        "branches": [{"id": "core", "title": "Core", "description": "", "required": True, "metadata": {}}],
+        "nodes": [
+            {
+                "id": "node-1",
+                "title": "Node",
+                "description": "",
+                "type": "capstone",
+                "chapter_id": "chapter-1",
+                "branch_id": "missing-branch",
+                "required": True,
+                "prerequisites": {"requires_all": [], "requires_any": [], "recommended": []},
+                "completion_mode": "checkpoint_pass",
+                "layout": {"x": 0, "y": 0},
+                "metadata": {},
+                "display": {},
+                "ksa": [],
+            }
+        ],
+        "edges": [],
+        "entry_node_ids": ["node-1"],
+        "completion_rules": {},
+        "visual_layout": {},
+        "metadata": {},
+    }
+
+    with pytest.raises(ValueError):
+        parser.parse_payload("course.json", payload)

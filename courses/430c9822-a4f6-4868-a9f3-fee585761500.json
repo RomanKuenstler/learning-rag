@@ -27,6 +27,7 @@
       }
     }
   ],
+  "branches": [],
   "nodes": [
     {
       "id": "node-1-1",
@@ -34,6 +35,7 @@
       "description": "",
       "type": "learning_unit",
       "chapter_id": "b30d9b6e-2897-407f-882e-8704f04944c1",
+      "branch_id": null,
       "required": true,
       "prerequisites": {
         "requires_all": [],
@@ -52,7 +54,17 @@
         "migrated_from": "lesson"
       },
       "display": {},
-      "ksa": []
+      "ksa": [],
+      "unlocks": {
+        "node_ids": [],
+        "branch_ids": [],
+        "recommended_next_node_ids": []
+      },
+      "rewards": {
+        "estimated_ksa_gain": {},
+        "effort_score": null,
+        "reward_tags": []
+      }
     }
   ],
   "edges": [],

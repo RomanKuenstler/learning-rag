@@ -29,6 +29,14 @@ type CoursesPageProps = {
     sort?: CourseSort;
   }) => Promise<unknown>;
   onLoadDetails: (courseId: string) => Promise<LearningPath>;
+  onUpdateNodeProgress: (
+    courseId: string,
+    nodeId: string,
+    payload: {
+      status: "in_progress" | "completed" | "mastered" | "optional_skipped" | "failed_needs_retry" | "reset";
+      evidence?: Record<string, unknown>;
+    },
+  ) => Promise<LearningPath>;
   onImport: (files: File[], scopesByFile: Record<string, "global" | "user">) => Promise<CourseImportResponse>;
   onDownloadTemplate: () => Promise<unknown>;
   onStartContinue: (course: CourseListItem) => void;
@@ -239,6 +247,7 @@ export function CoursesPage({
   currentUserId,
   onLoad,
   onLoadDetails,
+  onUpdateNodeProgress,
   onImport,
   onDownloadTemplate,
   onStartContinue,
@@ -254,6 +263,7 @@ export function CoursesPage({
   const [menuCoursePosition, setMenuCoursePosition] = useState<{ top: number; left: number } | null>(null);
   const [detailsByCourseId, setDetailsByCourseId] = useState<Record<string, LearningPath>>({});
   const [selectedNodeId, setSelectedNodeId] = useState<string | null>(null);
+  const [zoom, setZoom] = useState(1);
 
   useEffect(() => {
     void onLoad({ search, scope, status, sort });
@@ -461,7 +471,7 @@ export function CoursesPage({
   }, [menuCourseId]);
 
   useEffect(() => {
-    if (!selectedCourseId || detailsByCourseId[selectedCourseId]) {
+    if (!selectedCourseId) {
       return;
     }
     void onLoadDetails(selectedCourseId)
@@ -469,7 +479,7 @@ export function CoursesPage({
         setDetailsByCourseId((current) => ({ ...current, [selectedCourseId]: payload }));
       })
       .catch(() => undefined);
-  }, [detailsByCourseId, onLoadDetails, selectedCourseId]);
+  }, [onLoadDetails, selectedCourse?.updated_at, selectedCourseId]);
 
   useEffect(() => {
     if (!selectedDetails || selectedDetails.nodes.length === 0) {
@@ -480,6 +490,10 @@ export function CoursesPage({
       setSelectedNodeId(selectedDetails.nodes[0].id);
     }
   }, [selectedDetails, selectedNodeId]);
+
+  useEffect(() => {
+    setZoom(1);
+  }, [selectedCourseId]);
 
   return (
     <section className="chat-column library-column">
@@ -662,14 +676,6 @@ export function CoursesPage({
               <strong>{selectedCourse.lesson_count}</strong>
               <small>Lessons</small>
             </span>
-            <span className="learning-path-stat-card">
-              <strong>{selectedCourse.owner_displayname || selectedCourse.owner_username || (selectedCourse.scope === "global" ? "System" : "-")}</strong>
-              <small>Owner</small>
-            </span>
-            <span className="learning-path-stat-card">
-              <strong>{new Date(selectedCourse.updated_at).toLocaleDateString()}</strong>
-              <small>Updated</small>
-            </span>
           </div>
           <div className="skilltree-shell">
             {selectedDetails ? (
@@ -679,60 +685,86 @@ export function CoursesPage({
                 <>
                   <div className="skilltree-main-column">
                     <div className="skilltree-board">
-                      <div className="skilltree-canvas" style={{ width: `${skilltreeBoardSize.width}px`, height: `${skilltreeBoardSize.height}px` }}>
-                        <svg className="skilltree-lines" viewBox={`0 0 ${skilltreeBoardSize.width} ${skilltreeBoardSize.height}`}>
-                          {selectedDetails.edges.map((edge, index) => {
-                            const fromPosition = positionedNodeById.get(edge.from_node_id);
-                            const toPosition = positionedNodeById.get(edge.to_node_id);
-                            const toNode = selectedDetails.nodes.find((node) => node.id === edge.to_node_id);
-                            if (!fromPosition || !toPosition || !toNode) {
-                              return null;
-                            }
-                            const isRecommended = edge.relationship === "recommended";
-                            const edgeColor = chapterColorById[toNode.chapter_id ?? ""] ?? "#94a3b8";
+                      <div className="skilltree-zoom-controls">
+                        <button className="secondary-button skilltree-zoom-button" type="button" onClick={() => setZoom((current) => Math.max(0.6, Number((current - 0.1).toFixed(2))))}>
+                          -
+                        </button>
+                        <span className="skilltree-zoom-value">{Math.round(zoom * 100)}%</span>
+                        <button className="secondary-button skilltree-zoom-button" type="button" onClick={() => setZoom((current) => Math.min(1.8, Number((current + 0.1).toFixed(2))))}>
+                          +
+                        </button>
+                        <button className="secondary-button skilltree-zoom-reset" type="button" onClick={() => setZoom(1)}>
+                          Reset
+                        </button>
+                      </div>
+                      <div className="skilltree-canvas-viewport" style={{ width: `${skilltreeBoardSize.width}px`, height: `${skilltreeBoardSize.height}px` }}>
+                        <div className="skilltree-canvas-scroll-space" style={{ width: `${skilltreeBoardSize.width * zoom}px`, height: `${skilltreeBoardSize.height * zoom}px` }}>
+                          <div className="skilltree-canvas" style={{ width: `${skilltreeBoardSize.width}px`, height: `${skilltreeBoardSize.height}px`, transform: `scale(${zoom})`, transformOrigin: "top left" }}>
+                          <svg className="skilltree-lines" viewBox={`0 0 ${skilltreeBoardSize.width} ${skilltreeBoardSize.height}`}>
+                            {selectedDetails.edges.map((edge, index) => {
+                              const fromPosition = positionedNodeById.get(edge.from_node_id);
+                              const toPosition = positionedNodeById.get(edge.to_node_id);
+                              const toNode = selectedDetails.nodes.find((node) => node.id === edge.to_node_id);
+                              if (!fromPosition || !toPosition || !toNode) {
+                                return null;
+                              }
+                              const isRecommended = edge.relationship === "recommended";
+                              const edgeColor = chapterColorById[toNode.chapter_id ?? ""] ?? "#94a3b8";
+                              return (
+                                <line
+                                  key={`${edge.from_node_id}-${edge.to_node_id}-${edge.relationship}-${index}`}
+                                  x1={fromPosition.x + NODE_CENTER_X}
+                                  y1={fromPosition.y + NODE_CENTER_Y}
+                                  x2={toPosition.x + NODE_CENTER_X}
+                                  y2={toPosition.y + NODE_CENTER_Y}
+                                  className={`skilltree-edge${isRecommended ? " recommended" : ""}`}
+                                  style={{ stroke: edgeColor }}
+                                />
+                              );
+                            })}
+                          </svg>
+                          {positionedNodes.map(({ node, position }) => {
+                            const state = selectedDetails.node_progress[node.id] ?? "locked";
+                            const isSelected = selectedNode?.id === node.id;
+                            const chapterColor = chapterColorById[node.chapter_id ?? ""] ?? "#94a3b8";
+                            const nodeIcon: "play" | "check" | "archive" | "academic-hat" | "book" =
+                              node.type === "practice"
+                                ? "play"
+                                : node.type === "quiz"
+                                  ? "check"
+                                  : node.type === "checkpoint"
+                                    ? "check"
+                                    : node.type === "unlock_gate"
+                                      ? "archive"
+                                      : node.type === "review"
+                                        ? "archive"
+                                        : node.type === "milestone"
+                                          ? "academic-hat"
+                                          : node.type === "capstone"
+                                            ? "academic-hat"
+                                            : node.type === "assessment_hook"
+                                              ? "archive"
+                                              : "book";
                             return (
-                              <line
-                                key={`${edge.from_node_id}-${edge.to_node_id}-${edge.relationship}-${index}`}
-                                x1={fromPosition.x + NODE_CENTER_X}
-                                y1={fromPosition.y + NODE_CENTER_Y}
-                                x2={toPosition.x + NODE_CENTER_X}
-                                y2={toPosition.y + NODE_CENTER_Y}
-                                className={`skilltree-edge${isRecommended ? " recommended" : ""}`}
-                                style={{ stroke: edgeColor }}
-                              />
+                              <button
+                                key={node.id}
+                                type="button"
+                                data-node-type={node.type}
+                                data-node-mode={node.completion_mode}
+                                className={`skilltree-node skilltree-node-${state} skilltree-node-type-${node.type}${node.required ? "" : " optional"}${isSelected ? " selected" : ""}`}
+                                style={{ left: `${position.x}px`, top: `${position.y}px` }}
+                                onClick={() => setSelectedNodeId(node.id)}
+                                title={`${node.title} (${state.replace("_", " ")})`}
+                                aria-label={`${node.title} (${state.replace("_", " ")})`}
+                              >
+                                <span className="skilltree-node-icon-shell" style={{ borderColor: chapterColor, color: chapterColor }}>
+                                  <Icon name={nodeIcon} className="skilltree-node-icon" />
+                                </span>
+                              </button>
                             );
                           })}
-                        </svg>
-                        {positionedNodes.map(({ node, position }) => {
-                          const state = selectedDetails.node_progress[node.id] ?? "locked";
-                          const isSelected = selectedNode?.id === node.id;
-                          const chapterColor = chapterColorById[node.chapter_id ?? ""] ?? "#94a3b8";
-                          const nodeIcon: "play" | "check" | "archive" | "academic-hat" | "book" =
-                            node.type === "practice"
-                              ? "play"
-                              : node.type === "checkpoint"
-                                ? "check"
-                                : node.type === "review"
-                                  ? "archive"
-                                  : node.type === "milestone"
-                                    ? "academic-hat"
-                                    : "book";
-                          return (
-                            <button
-                              key={node.id}
-                              type="button"
-                              className={`skilltree-node skilltree-node-${state}${node.required ? "" : " optional"}${isSelected ? " selected" : ""}`}
-                              style={{ left: `${position.x}px`, top: `${position.y}px` }}
-                              onClick={() => setSelectedNodeId(node.id)}
-                              title={`${node.title} (${state.replace("_", " ")})`}
-                              aria-label={`${node.title} (${state.replace("_", " ")})`}
-                            >
-                              <span className="skilltree-node-icon-shell" style={{ borderColor: chapterColor, color: chapterColor }}>
-                                <Icon name={nodeIcon} className="skilltree-node-icon" />
-                              </span>
-                            </button>
-                          );
-                        })}
+                          </div>
+                        </div>
                       </div>
                     </div>
                     <div className="skilltree-completion-block">
@@ -748,16 +780,6 @@ export function CoursesPage({
                           ))}
                         </div>
                       ) : null}
-                      {selectedDetails.completion_summary ? (
-                        <div className="skilltree-course-progress-summary">
-                          <strong>Course</strong>
-                          <span>
-                            {selectedDetails.completion_summary.required_completed}/{selectedDetails.completion_summary.required_total} required
-                            {" · "}
-                            {selectedDetails.completion_summary.optional_completed}/{selectedDetails.completion_summary.optional_total} optional
-                          </span>
-                        </div>
-                      ) : null}
                     </div>
                   </div>
                   <aside className="skilltree-sidepanel">
@@ -767,8 +789,12 @@ export function CoursesPage({
                         <p>{selectedNode.description || "No description provided for this node."}</p>
                         <div className="skilltree-sidepanel-meta">
                           <span>{selectedNode.type.replace("_", " ")}</span>
+                          <span>{selectedNode.completion_mode.replace("_", " ")}</span>
                           <span>{selectedNode.required ? "Required" : "Optional"}</span>
                           <span>{selectedDetails.node_progress[selectedNode.id] ?? "locked"}</span>
+                          {selectedDetails.node_runtime[selectedNode.id]?.is_parallel_available ? <span>Parallel available</span> : null}
+                          {selectedDetails.node_runtime[selectedNode.id]?.awaiting_checkpoint ? <span>Checkpoint pending</span> : null}
+                          {selectedDetails.node_runtime[selectedNode.id]?.capstone_locked ? <span>Capstone locked</span> : null}
                           <span>{selectedNode.estimated_duration_minutes ? `${selectedNode.estimated_duration_minutes} min` : "Duration n/a"}</span>
                         </div>
                         <div className="skilltree-sidepanel-list">
@@ -790,11 +816,83 @@ export function CoursesPage({
                               <p key={`${selectedNode.id}-ksa-${index}`}>
                                 {item.dimension} · {item.topic}
                                 {item.subtopic ? ` · ${item.subtopic}` : ""}
+                                {item.start_level ? ` · start ${item.start_level}` : ""}
                                 {item.target_level ? ` · target ${item.target_level}` : ""}
+                                {item.contribution_weight ? ` · weight ${item.contribution_weight}` : ""}
+                                {item.unlocks_assessment_check ? " · unlocks KSA check" : ""}
+                                {item.recommends_assessment_check ? " · recommends KSA check" : ""}
                               </p>
                             ))
                           )}
                         </div>
+                        <div className="skilltree-sidepanel-list">
+                          <strong>Unlocks & Rewards</strong>
+                          <p>
+                            Unlock nodes: {selectedNode.unlocks.node_ids.join(", ") || "none"}
+                            <br />
+                            Unlock branches: {selectedNode.unlocks.branch_ids.join(", ") || "none"}
+                            <br />
+                            Recommended next: {selectedNode.unlocks.recommended_next_node_ids.join(", ") || "none"}
+                            <br />
+                            Reward tags: {selectedNode.rewards.reward_tags.join(", ") || "none"}
+                          </p>
+                        </div>
+                        {(() => {
+                          const runtime = selectedDetails.node_runtime[selectedNode.id];
+                          const state = selectedDetails.node_progress[selectedNode.id] ?? "locked";
+                          const prereqsSatisfied = runtime ? runtime.blocked_by_all.length === 0 && runtime.blocked_by_any.length === 0 : false;
+                          const showActions = prereqsSatisfied && state !== "locked" && state !== "awaiting_checkpoint";
+                          const canReset = state === "in_progress" || state === "completed";
+                          const actionLabel = state === "in_progress" ? "Continue" : "Start";
+                          if (!showActions) {
+                            return null;
+                          }
+                          return (
+                            <div className="skilltree-sidepanel-actions-row">
+                              {canReset ? (
+                                <button
+                                  className="skilltree-icon-action"
+                                  type="button"
+                                  title="Reset"
+                                  aria-label="Reset node progress"
+                                  onClick={() => {
+                                    void onUpdateNodeProgress(selectedCourse.id, selectedNode.id, { status: "reset" })
+                                      .then((payload) => setDetailsByCourseId((current) => ({ ...current, [selectedCourse.id]: payload })));
+                                  }}
+                                >
+                                  <Icon name="reset" />
+                                </button>
+                              ) : null}
+                              {!selectedNode.required ? (
+                                <button
+                                  className="skilltree-icon-action"
+                                  type="button"
+                                  title="Skip"
+                                  aria-label="Skip optional node"
+                                  onClick={() => {
+                                    void onUpdateNodeProgress(selectedCourse.id, selectedNode.id, { status: "optional_skipped" })
+                                      .then((payload) => setDetailsByCourseId((current) => ({ ...current, [selectedCourse.id]: payload })));
+                                  }}
+                                >
+                                  <Icon name="archive" />
+                                </button>
+                              ) : null}
+                              <button
+                                className="skilltree-icon-action primary"
+                                type="button"
+                                title={actionLabel}
+                                aria-label={`${actionLabel} node`}
+                                onClick={() => {
+                                  void onUpdateNodeProgress(selectedCourse.id, selectedNode.id, { status: "in_progress" })
+                                    .then((payload) => setDetailsByCourseId((current) => ({ ...current, [selectedCourse.id]: payload })));
+                                }}
+                              >
+                                <Icon name="play" />
+                                <span>{actionLabel}</span>
+                              </button>
+                            </div>
+                          );
+                        })()}
                       </>
                     ) : (
                       <p>Select a node to inspect details.</p>

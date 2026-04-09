@@ -427,6 +427,19 @@ export const apiClient = {
       body: JSON.stringify(payload),
     });
   },
+  updateLearningNodeProgress(
+    pathId: string,
+    nodeId: string,
+    payload: {
+      status: "in_progress" | "completed" | "mastered" | "optional_skipped" | "failed_needs_retry" | "reset";
+      evidence?: Record<string, unknown>;
+    },
+  ) {
+    return request<LearningPath>(`/api/learning-paths/${pathId}/nodes/${nodeId}/progress`, {
+      method: "PUT",
+      body: JSON.stringify(payload),
+    });
+  },
   deleteLearningPath(pathId: string) {
     return request<LearningPath>(`/api/learning-paths/${pathId}`, { method: "DELETE" });
   },

@@ -55,6 +55,7 @@ from services.retriever.schemas.chat import (
     SystemServiceStatusRead,
 )
 from services.retriever.schemas.learning import (
+    LearningNodeProgressUpdateRequest,
     LearningLessonCreateRequest,
     LearningLessonRead,
     LearningLessonReorderRequest,
@@ -72,6 +73,7 @@ from services.retriever.schemas.learning import (
     LearningPathListResponse,
     LearningPathRead,
     LearningPathUpdateRequest,
+    SkilltreeBranchRead,
     SkilltreeChapterProgressRead,
     SkilltreeChapterRead,
     SkilltreeCompletionSummaryRead,
@@ -79,7 +81,10 @@ from services.retriever.schemas.learning import (
     SkilltreeNodeKsaRead,
     SkilltreeNodeLayoutRead,
     SkilltreeNodePrerequisitesRead,
+    SkilltreeNodeRewardsRead,
+    SkilltreeNodeRuntimeRead,
     SkilltreeNodeRead,
+    SkilltreeNodeUnlocksRead,
 )
 from services.retriever.schemas.learning_profile import (
     LearningGoalCreateRequest,
@@ -125,7 +130,7 @@ from services.retriever.services.diagnostic_scoring import score_attempt
 from services.retriever.services.chat_naming import generate_chat_name
 from services.retriever.services.library_manager import LibraryManager, UploadFilePayload
 from services.retriever.services.course_files import CourseDefinition, CourseFileParser, LegacyCourseDefinition
-from services.retriever.services.course_skilltree import build_skilltree_runtime
+from services.retriever.services.course_skilltree import COMPLETED_STATES, build_skilltree_runtime
 from services.retriever.services.message_mapper import map_attachment, map_chat, map_filter_file, map_filter_tag, map_gpt, map_message, map_source
 from services.retriever.services.ksa_assessment import (
     ASSESSMENT_VERSION,
@@ -1489,6 +1494,7 @@ class RetrieverAppService:
                     "schema_version": 2,
                     "source_schema_version": 2,
                     "chapters": [],
+                    "branches": [],
                     "nodes": [],
                     "edges": [],
                     "entry_node_ids": [],
@@ -1510,6 +1516,140 @@ class RetrieverAppService:
         if record is None or not self._can_view_learning_path(user, record):
             return None
         return self._build_learning_path_read(user, record)
+
+    def update_learning_node_progress(
+        self,
+        user: UserAccount,
+        learning_path_id: str,
+        node_id: str,
+        payload: LearningNodeProgressUpdateRequest,
+    ) -> LearningPathRead | None:
+        path = self.chat_repository.get_learning_path(learning_path_id)
+        if path is None or not self._can_view_learning_path(user, path):
+            return None
+
+        definition = self._course_definition_from_learning_path(path)
+        node_by_id = {node.id: node for node in definition.nodes}
+        node = node_by_id.get(node_id)
+        if node is None:
+            raise ValueError(f"Unknown node_id '{node_id}'")
+
+        progress_entries = self.chat_repository.list_user_learning_node_progress(user_id=user.id, learning_path_id=path.id)
+        progress_map = {entry.node_id: entry.status for entry in progress_entries}
+        runtime = build_skilltree_runtime(definition, persisted_node_progress=progress_map)
+        current_state = runtime.node_progress.get(node_id, "locked")
+        node_runtime = runtime.node_runtime.get(node_id)
+
+        next_status = payload.status
+        evidence = dict(payload.evidence or {})
+        supported_states = {"in_progress", "completed", "mastered", "optional_skipped", "failed_needs_retry", "reset"}
+        if next_status not in supported_states:
+            raise ValueError(f"Unsupported status transition target '{next_status}'")
+
+        def _evidence_bool(key: str) -> bool:
+            value = evidence.get(key)
+            if isinstance(value, bool):
+                return value
+            if isinstance(value, str):
+                return value.strip().lower() in {"1", "true", "yes", "y"}
+            return False
+
+        def _evidence_float(key: str) -> float | None:
+            value = evidence.get(key)
+            if value is None:
+                return None
+            try:
+                return float(value)
+            except Exception:
+                return None
+
+        def _metadata_float(key: str, fallback: float) -> float:
+            value = node.metadata.get(key)
+            try:
+                parsed = float(value)
+            except Exception:
+                parsed = fallback
+            return max(0.0, min(1.0, parsed))
+
+        if next_status == "reset":
+            if current_state not in {"in_progress", "completed"}:
+                raise ValueError("Reset is only available for in-progress or completed nodes")
+            self.chat_repository.delete_user_learning_node_progress(
+                user_id=user.id,
+                learning_path_id=path.id,
+                node_id=node_id,
+            )
+        elif next_status == "in_progress":
+            if current_state not in {"available", "in_progress", "failed_needs_retry"}:
+                raise ValueError("Node is not startable in its current state")
+            self.chat_repository.upsert_user_learning_node_progress(
+                user_id=user.id,
+                learning_path_id=path.id,
+                node_id=node_id,
+                status="in_progress",
+                started_at=datetime.now(timezone.utc),
+                completed_at=None,
+            )
+        elif next_status == "optional_skipped":
+            is_optional = (not node.required) or (node_runtime.optional_branch if node_runtime else False)
+            if not is_optional:
+                raise ValueError("Only optional nodes can be skipped")
+            self.chat_repository.upsert_user_learning_node_progress(
+                user_id=user.id,
+                learning_path_id=path.id,
+                node_id=node_id,
+                status="optional_skipped",
+                completed_at=None,
+            )
+        elif next_status == "failed_needs_retry":
+            if node.completion_mode not in {"quiz_pass", "checkpoint_pass", "assessment_threshold"}:
+                raise ValueError("failed_needs_retry is only supported for assessment-like nodes")
+            if current_state not in {"available", "in_progress", "failed_needs_retry"}:
+                raise ValueError("Node is not in an assessable state")
+            self.chat_repository.upsert_user_learning_node_progress(
+                user_id=user.id,
+                learning_path_id=path.id,
+                node_id=node_id,
+                status="failed_needs_retry",
+                started_at=datetime.now(timezone.utc),
+                completed_at=None,
+            )
+        else:
+            if current_state not in {"available", "in_progress", "failed_needs_retry", "completed", "mastered"}:
+                raise ValueError("Node is not completable in its current state")
+            if node_runtime and not node_runtime.completion_allowed and next_status in {"completed", "mastered"}:
+                raise ValueError("Node completion is currently not allowed")
+            if node.type == "assessment_hook":
+                raise ValueError("assessment_hook nodes cannot be directly completed yet")
+            if node.completion_mode in {"quiz_pass", "checkpoint_pass"}:
+                score = _evidence_float("score")
+                passed = _evidence_bool("passed") or (score is not None and score >= _metadata_float("pass_threshold", 0.7))
+                if not passed:
+                    raise ValueError("Completion requires a pass result")
+            if node.completion_mode == "assessment_threshold":
+                score = _evidence_float("assessment_score")
+                threshold = _metadata_float("assessment_threshold", 0.7)
+                if score is None or score < threshold:
+                    raise ValueError(f"Completion requires assessment_score >= {threshold}")
+            if node.completion_mode == "gate_unlock":
+                gate_unlocked = _evidence_bool("gate_unlocked")
+                expected_gate_key = str(node.metadata.get("gate_key", "")).strip()
+                evidence_gate_key = str(evidence.get("gate_key", "")).strip()
+                if not gate_unlocked and not (expected_gate_key and expected_gate_key == evidence_gate_key):
+                    raise ValueError("Completion requires gate unlock evidence")
+            now = datetime.now(timezone.utc)
+            self.chat_repository.upsert_user_learning_node_progress(
+                user_id=user.id,
+                learning_path_id=path.id,
+                node_id=node_id,
+                status=next_status,
+                started_at=now,
+                completed_at=now if next_status in COMPLETED_STATES else None,
+            )
+
+        refreshed = self.chat_repository.get_learning_path(path.id)
+        assert refreshed is not None
+        return self._build_learning_path_read(user, refreshed)
 
     def update_learning_path(
         self,
@@ -3287,6 +3427,16 @@ class RetrieverAppService:
                 )
                 for chapter in definition.chapters
             ],
+            branches=[
+                SkilltreeBranchRead(
+                    id=branch.id,
+                    title=branch.title,
+                    description=branch.description,
+                    required=branch.required,
+                    metadata=dict(branch.metadata or {}),
+                )
+                for branch in definition.branches
+            ],
             nodes=[
                 SkilltreeNodeRead(
                     id=node.id,
@@ -3294,6 +3444,7 @@ class RetrieverAppService:
                     description=node.description,
                     type=node.type,
                     chapter_id=node.chapter_id,
+                    branch_id=node.branch_id,
                     required=node.required,
                     prerequisites=SkilltreeNodePrerequisitesRead(
                         requires_all=list(node.prerequisites.requires_all),
@@ -3310,11 +3461,24 @@ class RetrieverAppService:
                             dimension=item.dimension,
                             topic=item.topic,
                             subtopic=item.subtopic,
+                            start_level=item.start_level,
                             target_level=item.target_level,
                             contribution_weight=item.contribution_weight,
+                            unlocks_assessment_check=item.unlocks_assessment_check,
+                            recommends_assessment_check=item.recommends_assessment_check,
                         )
                         for item in node.ksa
                     ],
+                    unlocks=SkilltreeNodeUnlocksRead(
+                        node_ids=list(node.unlocks.node_ids),
+                        branch_ids=list(node.unlocks.branch_ids),
+                        recommended_next_node_ids=list(node.unlocks.recommended_next_node_ids),
+                    ),
+                    rewards=SkilltreeNodeRewardsRead(
+                        estimated_ksa_gain={str(key): float(value) for key, value in dict(node.rewards.estimated_ksa_gain or {}).items()},
+                        effort_score=node.rewards.effort_score,
+                        reward_tags=list(node.rewards.reward_tags),
+                    ),
                 )
                 for node in definition.nodes
             ],
@@ -3331,6 +3495,19 @@ class RetrieverAppService:
             visual_layout=dict(definition.visual_layout or {}),
             metadata=dict(definition.metadata or {}),
             node_progress=dict(runtime.node_progress),
+            node_runtime={
+                node_id: SkilltreeNodeRuntimeRead(
+                    blocked_by_all=list(item.blocked_by_all),
+                    blocked_by_any=list(item.blocked_by_any),
+                    is_entry=item.is_entry,
+                    is_parallel_available=item.is_parallel_available,
+                    awaiting_checkpoint=item.awaiting_checkpoint,
+                    capstone_locked=item.capstone_locked,
+                    optional_branch=item.optional_branch,
+                    completion_allowed=item.completion_allowed,
+                )
+                for node_id, item in runtime.node_runtime.items()
+            },
             chapter_progress=[
                 SkilltreeChapterProgressRead(
                     chapter_id=item.chapter_id,

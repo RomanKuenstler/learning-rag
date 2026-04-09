@@ -498,6 +498,19 @@ class ChatRepository:
             completed_at=completed_at,
         )
 
+    def delete_user_learning_node_progress(
+        self,
+        *,
+        user_id: int,
+        learning_path_id: str,
+        node_id: str,
+    ) -> None:
+        self.postgres_client.delete_user_learning_node_progress(
+            user_id=user_id,
+            learning_path_id=learning_path_id,
+            node_id=node_id,
+        )
+
     def get_diagnostic_definition(self, diagnostic_type: str) -> DiagnosticDefinition | None:
         return self.postgres_client.get_diagnostic_definition(diagnostic_type)
 

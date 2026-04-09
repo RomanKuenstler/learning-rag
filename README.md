@@ -13,8 +13,13 @@ This repository includes the learning foundation, declared learning profile laye
 - graph-based skilltree course structure (`schema_version: 2`)
 - compatibility migration from legacy linear module/lesson JSON (`schema_version: 1`)
 - node prerequisites (`requires_all`, `requires_any`, `recommended`) with deterministic unlock logic
-- node progress-state foundation (`locked`, `available`, `in_progress`, `completed`, `mastered`, `optional_skipped`)
-- node-level KSA metadata support (`K/S/A`, topic, subtopic, target level, contribution weight)
+- richer node semantics (`learning_unit`, `practice`, `quiz`, `checkpoint`, `review`, `milestone`, `capstone`, `unlock_gate`, `assessment_hook`)
+- node completion modes (`lesson_complete`, `practice_complete`, `quiz_pass`, `checkpoint_pass`, `review_complete`, `assessment_threshold`, `gate_unlock`, `manual`)
+- expanded node progress-state model (`locked`, `available`, `awaiting_checkpoint`, `in_progress`, `failed_needs_retry`, `completed`, `mastered`, `optional_skipped`)
+- node-level KSA metadata support (`K/S/A`, topic, subtopic, start/target level, contribution weight, assessment-hook flags)
+- optional and required branch modeling with effective-required completion behavior
+- node reward/unlock metadata (`unlocks`, `recommended_next_node_ids`, `estimated_ksa_gain`, reward tags)
+- node progress update API for deterministic per-node transitions (`PUT /api/learning-paths/{id}/nodes/{node_id}/progress`)
 - learning-path source scoping through allowed files and tags
 - learning-path CRUD API with role-based authorization
 - user-scoped declared learning preferences

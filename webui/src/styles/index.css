@@ -4695,6 +4695,57 @@ button.send:hover:not(:disabled) {
   background-size: 210px 130px, 210px 130px, 42px 42px, 42px 42px, auto;
 }
 
+.skilltree-zoom-controls {
+  position: sticky;
+  top: 0;
+  z-index: 4;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  margin: 0.35rem 0.35rem 0;
+  padding: 0.25rem 0.35rem;
+  border: 1px solid #dbe3ec;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.95);
+  backdrop-filter: blur(1px);
+}
+
+.skilltree-zoom-button {
+  min-width: 1.9rem;
+  height: 1.9rem;
+  padding: 0;
+  border-radius: 999px;
+  font-size: 1rem;
+  font-weight: 700;
+}
+
+.skilltree-zoom-reset {
+  height: 1.9rem;
+  border-radius: 999px;
+  padding: 0 0.55rem;
+  font-size: 0.72rem;
+  font-weight: 700;
+}
+
+.skilltree-zoom-value {
+  min-width: 2.7rem;
+  text-align: center;
+  color: #334155;
+  font-size: 0.73rem;
+  font-weight: 700;
+}
+
+.skilltree-canvas-viewport {
+  position: relative;
+  overflow: auto;
+  max-width: 100%;
+  max-height: 100%;
+}
+
+.skilltree-canvas-scroll-space {
+  position: relative;
+}
+
 .skilltree-canvas {
   position: relative;
   min-width: 960px;
@@ -4758,9 +4809,11 @@ button.send:hover:not(:disabled) {
   position: absolute;
   width: 56px;
   height: 56px;
-  background: #ffffff;
-  border-radius: 999px;
+  background: transparent;
+  border-radius: 0;
   border: none;
+  -webkit-appearance: none;
+  appearance: none;
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -4797,15 +4850,57 @@ button.send:hover:not(:disabled) {
 }
 
 .skilltree-node-locked {
-  opacity: 0.66;
+  opacity: 1;
+}
+
+.skilltree-node-locked .skilltree-node-icon-shell {
+  background: #eef2f6 !important;
+  color: #475569 !important;
+  filter: saturate(0.6) brightness(0.95);
 }
 
 .skilltree-node.optional .skilltree-node-icon-shell {
   border-style: dashed;
 }
 
-.skilltree-node-available .skilltree-node-icon-shell {
+.skilltree-node-type-checkpoint .skilltree-node-icon-shell,
+.skilltree-node-type-quiz .skilltree-node-icon-shell,
+.skilltree-node-type-unlock_gate .skilltree-node-icon-shell,
+.skilltree-node-type-assessment_hook .skilltree-node-icon-shell {
+  border-radius: 6px !important;
+  transform: rotate(45deg);
+  background: #ffffff;
+  box-shadow: none;
+}
+
+.skilltree-node-type-checkpoint .skilltree-node-icon,
+.skilltree-node-type-quiz .skilltree-node-icon,
+.skilltree-node-type-unlock_gate .skilltree-node-icon,
+.skilltree-node-type-assessment_hook .skilltree-node-icon {
+  transform: rotate(-45deg);
+}
+
+.skilltree-node-type-milestone .skilltree-node-icon-shell,
+.skilltree-node-type-capstone .skilltree-node-icon-shell {
+  border-width: 3px;
+  box-shadow: 0 0 0 3px rgba(148, 163, 184, 0.14), 0 3px 10px rgba(15, 23, 42, 0.11);
+}
+
+.skilltree-node-type-review .skilltree-node-icon-shell {
+  border-style: dashed;
+  background: #f9fafb;
+}
+
+.skilltree-node-type-unlock_gate .skilltree-node-icon-shell {
+  background: #fff7ed;
+}
+
+.skilltree-node-type-assessment_hook .skilltree-node-icon-shell {
   background: #eff6ff;
+}
+
+.skilltree-node-available .skilltree-node-icon-shell {
+  background: #ffffff;
 }
 
 .skilltree-node-in_progress .skilltree-node-icon-shell {
@@ -4819,7 +4914,19 @@ button.send:hover:not(:disabled) {
 }
 
 .skilltree-node-optional_skipped .skilltree-node-icon-shell {
-  background: #f8fafc;
+  background: #f3f4f6;
+}
+
+.skilltree-node-failed_needs_retry .skilltree-node-icon-shell {
+  background: #fef2f2;
+  border-color: #ef4444 !important;
+  color: #ef4444 !important;
+}
+
+.skilltree-node-awaiting_checkpoint .skilltree-node-icon-shell {
+  background: #f1f5f9;
+  color: #475569 !important;
+  filter: saturate(0.65) brightness(0.95);
 }
 
 .skilltree-chapter-progress-strip {
@@ -4884,9 +4991,11 @@ button.send:hover:not(:disabled) {
   border-radius: 12px;
   background: #ffffff;
   padding: 0.75rem;
-  display: grid;
+  display: flex;
+  flex-direction: column;
   gap: 0.55rem;
   align-content: start;
+  min-height: 100%;
 }
 
 .skilltree-sidepanel h5 {
@@ -4924,6 +5033,65 @@ button.send:hover:not(:disabled) {
 .skilltree-sidepanel-list {
   display: grid;
   gap: 0.2rem;
+}
+
+.skilltree-sidepanel-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem;
+}
+
+.skilltree-sidepanel-actions-row {
+  margin-top: auto;
+  padding-top: 0.5rem;
+  border-top: 1px solid #e2e8f0;
+  display: flex;
+  flex-wrap: nowrap;
+  justify-content: flex-end;
+  align-items: center;
+  gap: 0.42rem;
+}
+
+.skilltree-icon-action {
+  width: 1.85rem;
+  height: 1.85rem;
+  border-radius: 10px;
+  border: none;
+  background: transparent;
+  color: #334155;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.35rem;
+  padding: 0;
+}
+
+.skilltree-icon-action.primary {
+  width: auto;
+  height: 2rem;
+  padding: 0 0.72rem;
+  border-radius: 999px;
+  color: #ffffff;
+  background: #0f172a;
+  border: none;
+  font-size: 0.78rem;
+  font-weight: 700;
+  letter-spacing: 0.01em;
+}
+
+.skilltree-icon-action.primary span {
+  line-height: 1;
+}
+
+.skilltree-icon-action.warning {
+  color: #b45309;
+  border-color: #f59e0b;
+  background: #fff7ed;
+}
+
+.skilltree-icon-action .icon {
+  width: 1rem;
+  height: 1rem;
 }
 
 .skilltree-sidepanel-list strong {

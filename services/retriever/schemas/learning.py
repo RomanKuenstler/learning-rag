@@ -40,8 +40,23 @@ class SkilltreeNodeKsaRead(BaseModel):
     dimension: Literal["K", "S", "A"]
     topic: str
     subtopic: str | None = None
+    start_level: int | None = None
     target_level: int | None = None
     contribution_weight: float | None = None
+    unlocks_assessment_check: bool = False
+    recommends_assessment_check: bool = False
+
+
+class SkilltreeNodeUnlocksRead(BaseModel):
+    node_ids: list[str] = Field(default_factory=list)
+    branch_ids: list[str] = Field(default_factory=list)
+    recommended_next_node_ids: list[str] = Field(default_factory=list)
+
+
+class SkilltreeNodeRewardsRead(BaseModel):
+    estimated_ksa_gain: dict[str, float] = Field(default_factory=dict)
+    effort_score: float | None = None
+    reward_tags: list[str] = Field(default_factory=list)
 
 
 class SkilltreeNodeLayoutRead(BaseModel):
@@ -53,22 +68,34 @@ class SkilltreeNodeRead(BaseModel):
     id: str
     title: str
     description: str = ""
-    type: Literal["learning_unit", "practice", "checkpoint", "review", "milestone"]
+    type: Literal["learning_unit", "practice", "quiz", "checkpoint", "review", "milestone", "capstone", "unlock_gate", "assessment_hook"]
     chapter_id: str | None = None
+    branch_id: str | None = None
     required: bool = True
     prerequisites: SkilltreeNodePrerequisitesRead = Field(default_factory=SkilltreeNodePrerequisitesRead)
-    completion_mode: Literal["lesson_complete", "manual", "practice_complete", "checkpoint_pass"] = "lesson_complete"
+    completion_mode: Literal[
+        "lesson_complete",
+        "manual",
+        "practice_complete",
+        "quiz_pass",
+        "checkpoint_pass",
+        "review_complete",
+        "assessment_threshold",
+        "gate_unlock",
+    ] = "lesson_complete"
     estimated_duration_minutes: int | None = None
     layout: SkilltreeNodeLayoutRead = Field(default_factory=SkilltreeNodeLayoutRead)
     metadata: dict[str, object] = Field(default_factory=dict)
     display: dict[str, object] = Field(default_factory=dict)
     ksa: list[SkilltreeNodeKsaRead] = Field(default_factory=list)
+    unlocks: SkilltreeNodeUnlocksRead = Field(default_factory=SkilltreeNodeUnlocksRead)
+    rewards: SkilltreeNodeRewardsRead = Field(default_factory=SkilltreeNodeRewardsRead)
 
 
 class SkilltreeEdgeRead(BaseModel):
     from_node_id: str
     to_node_id: str
-    relationship: Literal["requires_all", "requires_any", "recommended"] = "requires_all"
+    relationship: Literal["requires_all", "requires_any", "recommended", "optional"] = "requires_all"
 
 
 class SkilltreeChapterRead(BaseModel):
@@ -76,6 +103,14 @@ class SkilltreeChapterRead(BaseModel):
     title: str
     description: str = ""
     order_index: int = 0
+    metadata: dict[str, object] = Field(default_factory=dict)
+
+
+class SkilltreeBranchRead(BaseModel):
+    id: str
+    title: str
+    description: str = ""
+    required: bool = True
     metadata: dict[str, object] = Field(default_factory=dict)
 
 
@@ -97,6 +132,17 @@ class SkilltreeCompletionSummaryRead(BaseModel):
     is_complete: bool
 
 
+class SkilltreeNodeRuntimeRead(BaseModel):
+    blocked_by_all: list[str] = Field(default_factory=list)
+    blocked_by_any: list[str] = Field(default_factory=list)
+    is_entry: bool = False
+    is_parallel_available: bool = False
+    awaiting_checkpoint: bool = False
+    capstone_locked: bool = False
+    optional_branch: bool = False
+    completion_allowed: bool = False
+
+
 class LearningPathRead(BaseModel):
     id: str
     scope: str
@@ -111,6 +157,7 @@ class LearningPathRead(BaseModel):
     allowed_file_ids: list[int] = Field(default_factory=list)
     allowed_tags: list[str] = Field(default_factory=list)
     chapters: list[SkilltreeChapterRead] = Field(default_factory=list)
+    branches: list[SkilltreeBranchRead] = Field(default_factory=list)
     nodes: list[SkilltreeNodeRead] = Field(default_factory=list)
     edges: list[SkilltreeEdgeRead] = Field(default_factory=list)
     entry_node_ids: list[str] = Field(default_factory=list)
@@ -118,6 +165,7 @@ class LearningPathRead(BaseModel):
     visual_layout: dict[str, object] = Field(default_factory=dict)
     metadata: dict[str, object] = Field(default_factory=dict)
     node_progress: dict[str, str] = Field(default_factory=dict)
+    node_runtime: dict[str, SkilltreeNodeRuntimeRead] = Field(default_factory=dict)
     chapter_progress: list[SkilltreeChapterProgressRead] = Field(default_factory=list)
     completion_summary: SkilltreeCompletionSummaryRead | None = None
     modules: list[LearningModuleRead] = Field(default_factory=list)
@@ -197,6 +245,18 @@ class LearningPathUpdateRequest(BaseModel):
     status: str | None = Field(default=None, pattern="^(draft|published|archived)$")
     allowed_file_ids: list[int] | None = None
     allowed_tags: list[str] | None = None
+
+
+class LearningNodeProgressUpdateRequest(BaseModel):
+    status: Literal[
+        "in_progress",
+        "completed",
+        "mastered",
+        "optional_skipped",
+        "failed_needs_retry",
+        "reset",
+    ]
+    evidence: dict[str, object] = Field(default_factory=dict)
 
 
 class LearningModuleCreateRequest(BaseModel):
