@@ -26,6 +26,7 @@ import type {
   LearningLesson,
   LearningGoal,
   KsaDrillAttempt,
+  KsaDrillTopicClassification,
   KsaDrillTopic,
   KsaAssessmentAttempt,
   KsaAssessmentDefinition,
@@ -1160,11 +1161,25 @@ export function useChatApp() {
     }
   }
 
-  async function startKsaDrillAttempt(topicKeys: string[]) {
+  async function classifyKsaDrillTopic(sourceTopicInput: string) {
     setKsaAssessmentSaving(true);
     setKsaError(null);
     try {
-      const started = await apiClient.startKsaDrillAttempt(topicKeys);
+      const payload = await apiClient.classifyKsaDrillTopic(sourceTopicInput);
+      return payload.classification;
+    } catch (error) {
+      setKsaError(error instanceof Error ? error.message : "Failed to classify KSA drill topic");
+      throw error;
+    } finally {
+      setKsaAssessmentSaving(false);
+    }
+  }
+
+  async function startKsaDrillAttempt(payload: { source_topic_input: string; topic_classification: KsaDrillTopicClassification }) {
+    setKsaAssessmentSaving(true);
+    setKsaError(null);
+    try {
+      const started = await apiClient.startKsaDrillAttempt(payload);
       const attempt = await apiClient.getKsaDrillAttempt(started.attempt_id);
       setKsaDrillAttempt(attempt);
       return attempt;
@@ -2206,6 +2221,7 @@ export function useChatApp() {
     saveKsaAssessmentAnswers,
     completeKsaAssessment,
     loadKsaDrillTopics,
+    classifyKsaDrillTopic,
     startKsaDrillAttempt,
     loadLatestKsaDrillAttempt,
     loadKsaDrillAttempts,

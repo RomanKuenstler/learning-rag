@@ -311,23 +311,30 @@ Divergent Thinking: Associative Fluency, Idea Flexibility, Lateral Problem Solvi
 
 
 To ensure consistency across your app, you need a standardized "formula" for these questions. Here is the structural template and the AI prompt to generate them.
+
 1. The 4-Archetype Content Template
+
 Use this as the "Rulebook" for any content creator or developer.
+
 Archetype 1: Reverse Definition (Knowledge)
 Goal: Identify if the user recognizes the concept in a real-world scenario.
 Formula: [Scenario describing a specific outcome] + "This is a primary example of..."
 Distractors: Use two related but incorrect terms from the same parent category.
+
 Archetype 2: Spot the Flaw (Skills)
 Goal: Identify if the user can distinguish "Novice" vs. "Competent" execution.
 Formula: [A person/system performs Task X] + [Description of a suboptimal action] + "What is the professional flaw here?"
 Distractors: One "distraction" answer (irrelevant) and one "Novice" answer (sounds okay but is inefficient).
+
 Archetype 3: Power Sprint (Abilities)
 Goal: Test raw cognitive speed or immediate recall.
 Formula: [Direct Logic/Pattern/Calculation Question] + "Answer in 15 seconds."
 Evaluation: Focus on accuracy and response time.
+
 Archetype 4: Analogy Match (Personalization)
 Goal: Test if the user can transfer the concept to a completely different domain.
 Formula: "Concept [A] in [Subtopic] is most functionally similar to [Concept B] in [Different Domain]."
+
 2. The LLM Prompt for Dynamic Creation
 Copy and paste this prompt into an LLM (like GPT-4 or Claude) to generate content for any new subtopic you add later.
 

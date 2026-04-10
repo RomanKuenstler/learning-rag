@@ -35,7 +35,31 @@ class KSADrillQuestionRead(BaseModel):
     related_subtopic: str | None = None
     prompt: str
     time_limit_seconds: int | None = None
-    topic_source: Literal["manual", "auto_good", "auto_bad"] | None = None
+    topic_source: Literal["manual", "auto_good", "auto_bad", "user_core", "user_variant", "llm_stretch", "llm_growth"] | None = None
+    choices: list[str] = Field(default_factory=list)
+    correct_answer: str | None = None
+    distractors: list[str] = Field(default_factory=list)
+
+
+class KSADrillTopicClassificationRead(BaseModel):
+    primary_type: Literal["K", "S", "A"]
+    secondary_type: Literal["K", "S", "A"] | None = None
+    type_combo: Literal["K", "S", "A", "K+S", "K+A", "S+A", "K+S+A"]
+    big_map_group: Literal["Knowledge", "Skills", "Abilities"]
+    big_map_subdomain: str = Field(min_length=1)
+    detailed_topic: str = Field(min_length=1)
+    user_explanation: str = Field(min_length=1)
+
+
+class KSADrillRoundRead(BaseModel):
+    round_number: Literal[1, 2, 3, 4]
+    origin: Literal["user_core", "user_variant", "llm_stretch", "llm_growth"]
+    type_combo: str = Field(min_length=1)
+    big_map_group: Literal["Knowledge", "Skills", "Abilities"]
+    big_map_subdomain: str = Field(min_length=1)
+    detailed_topic: str = Field(min_length=1)
+    rationale: str = ""
+    questions: list[KSADrillQuestionRead] = Field(default_factory=list)
 
 
 class KSADrillAttemptRead(BaseModel):
@@ -44,6 +68,9 @@ class KSADrillAttemptRead(BaseModel):
     version: str
     selected_topic_keys: list[str] = Field(default_factory=list)
     question_set: list[KSADrillQuestionRead] = Field(default_factory=list)
+    source_topic_input: str | None = None
+    topic_classification: KSADrillTopicClassificationRead | None = None
+    rounds: list[KSADrillRoundRead] = Field(default_factory=list)
     started_at: datetime
     completed_at: datetime | None = None
     answers: dict[str, object] = Field(default_factory=dict)
@@ -51,7 +78,8 @@ class KSADrillAttemptRead(BaseModel):
 
 
 class KSADrillAttemptStartRequest(BaseModel):
-    topic_keys: list[str] = Field(default_factory=list, min_length=1, max_length=3)
+    source_topic_input: str = Field(min_length=1, max_length=2000)
+    topic_classification: KSADrillTopicClassificationRead
 
 
 class KSADrillAttemptStartResponse(BaseModel):
@@ -60,7 +88,19 @@ class KSADrillAttemptStartResponse(BaseModel):
     version: str
     selected_topic_keys: list[str] = Field(default_factory=list)
     question_set: list[KSADrillQuestionRead] = Field(default_factory=list)
+    source_topic_input: str | None = None
+    topic_classification: KSADrillTopicClassificationRead | None = None
+    rounds: list[KSADrillRoundRead] = Field(default_factory=list)
     started_at: datetime
+
+
+class KSADrillTopicClassifyRequest(BaseModel):
+    source_topic_input: str = Field(min_length=1, max_length=2000)
+
+
+class KSADrillTopicClassifyResponse(BaseModel):
+    source_topic_input: str
+    classification: KSADrillTopicClassificationRead
 
 
 class KSADrillAnswersUpsertRequest(BaseModel):

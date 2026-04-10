@@ -125,11 +125,15 @@ from services.retriever.schemas.ksa_assessment import (
 )
 from services.retriever.schemas.ksa_drills import (
     KSADrillAnswersUpsertRequest,
+    KSADrillTopicClassifyRequest,
+    KSADrillTopicClassifyResponse,
     KSADrillAttemptsRead,
     KSADrillAttemptRead,
     KSADrillAttemptStartRequest,
     KSADrillAttemptStartResponse,
+    KSADrillTopicClassificationRead,
     KSADrillQuestionRead,
+    KSADrillRoundRead,
     KSADrillTopicsRead,
 )
 from services.retriever.services.diagnostic_definitions import load_parsed_sources
@@ -149,9 +153,12 @@ from services.retriever.services.ksa_assessment import (
 from services.retriever.services.ksa_drills import (
     DRILL_ASSESSMENT_VERSION,
     build_drill_topic_plan,
+    classify_drill_topic_input,
     evaluate_drill_attempt,
+    generate_round_archetypes,
     generate_drill_question_set,
     list_drill_topics,
+    plan_dynamic_drill_rounds,
 )
 
 RUNTIME_SETTING_KEYS = {
@@ -996,29 +1003,66 @@ class RetrieverAppService:
         records = self.chat_repository.list_user_ksa_drill_attempts(user_id=user.id, limit=limit)
         return KSADrillAttemptsRead(attempts=[self._build_ksa_drill_attempt_read(item) for item in records])
 
+    def classify_ksa_drill_topic(self, user: UserAccount, payload: KSADrillTopicClassifyRequest) -> KSADrillTopicClassifyResponse:
+        _ = user
+        source_topic_input = str(payload.source_topic_input or "").strip()
+        classification = classify_drill_topic_input(
+            source_topic_input=source_topic_input,
+            llm_invoke=self.llm_client.invoke,
+        )
+        return KSADrillTopicClassifyResponse(
+            source_topic_input=source_topic_input,
+            classification=KSADrillTopicClassificationRead(**classification),
+        )
+
     def start_ksa_drill_attempt(self, user: UserAccount, payload: KSADrillAttemptStartRequest) -> KSADrillAttemptStartResponse:
-        selected = [str(item).strip() for item in list(payload.topic_keys or []) if str(item).strip()]
+        source_topic_input = str(payload.source_topic_input or "").strip()
+        if not source_topic_input:
+            raise ValueError("Topic input cannot be empty")
+        topic_classification = payload.topic_classification.model_dump(exclude_none=True)
         persisted = self.chat_repository.get_user_ksa_profile(user.id)
         if persisted is not None and bool(persisted.profile_json):
             profile_json = dict(persisted.profile_json or {})
         else:
             profile_json = self._serialize_ksa_profile_read(self.get_ksa_profile(user))
-        plan = build_drill_topic_plan(selected_topic_keys=selected, profile_json=profile_json)
-        planned_topic_keys = list(plan.get("planned_topic_keys") or selected)
-        topic_roles = dict(plan.get("topic_roles") or {})
-        question_set = generate_drill_question_set(drill_topic_keys=planned_topic_keys, topic_roles=topic_roles)
+        round_plan = plan_dynamic_drill_rounds(
+            source_topic_input=source_topic_input,
+            topic_classification=topic_classification,
+            profile_json=profile_json,
+            llm_invoke=self.llm_client.invoke,
+        )
+        generated = generate_round_archetypes(
+            rounds=list(round_plan.get("rounds") or []),
+            llm_invoke=self.llm_client.invoke,
+        )
+        rounds = list(generated.get("rounds") or [])
+        question_set = list(generated.get("question_set") or [])
+        selected_topic_keys: list[str] = []
+        for item in rounds:
+            questions = list(item.get("questions") or [])
+            topic_key = str((questions[0] if questions else {}).get("topic_key") or "").strip()
+            if topic_key and topic_key not in selected_topic_keys:
+                selected_topic_keys.append(topic_key)
         attempt = self.chat_repository.create_user_ksa_drill_attempt(
             user_id=user.id,
             assessment_version=DRILL_ASSESSMENT_VERSION,
-            selected_topic_keys=planned_topic_keys,
+            selected_topic_keys=selected_topic_keys,
             question_set_json=question_set,
+            source_topic_input=source_topic_input,
+            topic_classification_json=topic_classification,
+            rounds_json=rounds,
         )
         return KSADrillAttemptStartResponse(
             attempt_id=attempt.id,
             status="in_progress",
             version=attempt.assessment_version,
-            selected_topic_keys=list(plan.get("selected_topic_keys") or selected),
+            selected_topic_keys=list(attempt.selected_topic_keys_json or []),
             question_set=[KSADrillQuestionRead(**item) for item in list(attempt.question_set_json or [])],
+            source_topic_input=str(attempt.source_topic_input_text or "") or None,
+            topic_classification=KSADrillTopicClassificationRead(**dict(attempt.topic_classification_json or {}))
+            if dict(attempt.topic_classification_json or {})
+            else None,
+            rounds=[KSADrillRoundRead(**item) for item in list(attempt.rounds_json or [])],
             started_at=attempt.started_at,
         )
 
@@ -1077,7 +1121,8 @@ class RetrieverAppService:
 
         drill_outcome = evaluate_drill_attempt(
             user_id=user.id,
-            selected_topic_keys=list(attempt.selected_topic_keys_json or []),
+            selected_topic_keys=list(attempt.selected_topic_keys_json or [])
+            or sorted({str(item.get("topic_key")) for item in list(attempt.question_set_json or []) if str(item.get("topic_key") or "").strip()}),
             question_set=list(attempt.question_set_json or []),
             answers=dict(attempt.answers_json or {}),
             base_profile_json=base_profile_json,
@@ -3307,6 +3352,11 @@ class RetrieverAppService:
             version=attempt.assessment_version,
             selected_topic_keys=list(attempt.selected_topic_keys_json or []),
             question_set=[KSADrillQuestionRead(**item) for item in list(attempt.question_set_json or [])],
+            source_topic_input=str(attempt.source_topic_input_text or "") or None,
+            topic_classification=KSADrillTopicClassificationRead(**dict(attempt.topic_classification_json or {}))
+            if dict(attempt.topic_classification_json or {})
+            else None,
+            rounds=[KSADrillRoundRead(**item) for item in list(attempt.rounds_json or [])],
             started_at=attempt.started_at,
             completed_at=attempt.completed_at,
             answers=dict(attempt.answers_json or {}),

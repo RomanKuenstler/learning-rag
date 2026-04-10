@@ -10,7 +10,7 @@ import type {
   KsaAssessmentDefinition,
   KsaDrillAttempt,
   KsaDrillQuestion,
-  KsaDrillTopic,
+  KsaDrillTopicClassification,
 } from "../../types/chat";
 import { Dialog } from "../common/Dialog";
 
@@ -18,7 +18,6 @@ type KsaPanelProps = {
   profile: KSAProfile | null;
   definition: KsaAssessmentDefinition | null;
   attempt: KsaAssessmentAttempt | null;
-  drillTopics: KsaDrillTopic[];
   drillAttempt: KsaDrillAttempt | null;
   drillAttempts: KsaDrillAttempt[];
   loading: boolean;
@@ -30,10 +29,10 @@ type KsaPanelProps = {
   onStartAssessment: () => Promise<unknown>;
   onSaveAnswers: (attemptId: string, answers: Record<string, unknown>) => Promise<unknown>;
   onCompleteAssessment: (attemptId: string) => Promise<unknown>;
-  onLoadDrillTopics: () => Promise<unknown>;
+  onClassifyDrillTopic: (sourceTopicInput: string) => Promise<KsaDrillTopicClassification>;
   onLoadLatestDrillAttempt: () => Promise<unknown>;
   onLoadDrillAttempts: () => Promise<unknown>;
-  onStartDrillAttempt: (topicKeys: string[]) => Promise<unknown>;
+  onStartDrillAttempt: (payload: { source_topic_input: string; topic_classification: KsaDrillTopicClassification }) => Promise<unknown>;
   onSaveDrillAnswers: (attemptId: string, answers: Record<string, unknown>) => Promise<unknown>;
   onCompleteDrillAttempt: (attemptId: string) => Promise<unknown>;
 };
@@ -132,6 +131,15 @@ function formatDrillDate(value: string | null): string {
   return `${dd}.${mm}.${yyyy} - ${hh}:${min}`;
 }
 
+function questionStem(prompt: string): string {
+  const value = String(prompt || "");
+  const index = value.indexOf("\nA)");
+  if (index <= 0) {
+    return value;
+  }
+  return value.slice(0, index).trim();
+}
+
 function RadarPanel({
   title,
   subtitle,
@@ -222,7 +230,6 @@ export function KsaPanel({
   profile,
   definition,
   attempt,
-  drillTopics,
   drillAttempt,
   drillAttempts,
   loading,
@@ -234,7 +241,7 @@ export function KsaPanel({
   onStartAssessment,
   onSaveAnswers,
   onCompleteAssessment,
-  onLoadDrillTopics,
+  onClassifyDrillTopic,
   onLoadLatestDrillAttempt,
   onLoadDrillAttempts,
   onStartDrillAttempt,
@@ -256,14 +263,16 @@ export function KsaPanel({
   const [sensoryError, setSensoryError] = useState<string | null>(null);
   const [localError, setLocalError] = useState<string | null>(null);
   const [drillDialogOpen, setDrillDialogOpen] = useState(false);
-  const [drillStep, setDrillStep] = useState<"topics" | "questions" | "complete">("topics");
-  const [selectedDrillTopicKeys, setSelectedDrillTopicKeys] = useState<string[]>([]);
+  const [drillStep, setDrillStep] = useState<"topic_input" | "confirm" | "questions" | "complete">("topic_input");
+  const [drillTopicInput, setDrillTopicInput] = useState("");
+  const [drillClassification, setDrillClassification] = useState<KsaDrillTopicClassification | null>(null);
   const [drillAttemptId, setDrillAttemptId] = useState<string | null>(null);
   const [drillQuestionIndex, setDrillQuestionIndex] = useState(0);
   const [drillAnswers, setDrillAnswers] = useState<Record<string, { answer: string; response_time_seconds: number }>>({});
   const [drillQuestionStartedAt, setDrillQuestionStartedAt] = useState<number>(Date.now());
   const [drillNowMs, setDrillNowMs] = useState<number>(Date.now());
   const [drillLocalError, setDrillLocalError] = useState<string | null>(null);
+  const [drillExpandedAttemptId, setDrillExpandedAttemptId] = useState<string | null>(null);
 
   useEffect(() => {
     if (!assessmentDialogOpen || !attempt?.attempt_id) {
@@ -438,16 +447,14 @@ export function KsaPanel({
 
   async function openDrills() {
     setDrillDialogOpen(true);
-    setDrillStep("topics");
-    setSelectedDrillTopicKeys([]);
+    setDrillStep("topic_input");
+    setDrillTopicInput("");
+    setDrillClassification(null);
     setDrillAttemptId(null);
     setDrillQuestionIndex(0);
     setDrillAnswers({});
     setDrillLocalError(null);
     try {
-      if (drillTopics.length === 0) {
-        await onLoadDrillTopics();
-      }
       await onLoadLatestDrillAttempt();
       await onLoadDrillAttempts();
     } catch (loadError) {
@@ -474,8 +481,9 @@ export function KsaPanel({
 
   function closeDrills() {
     setDrillDialogOpen(false);
-    setDrillStep("topics");
-    setSelectedDrillTopicKeys([]);
+    setDrillStep("topic_input");
+    setDrillTopicInput("");
+    setDrillClassification(null);
     setDrillAttemptId(null);
     setDrillQuestionIndex(0);
     setDrillAnswers({});
@@ -651,26 +659,34 @@ export function KsaPanel({
     }
   }
 
-  function toggleDrillTopic(topicKey: string) {
-    setSelectedDrillTopicKeys((current) => {
-      if (current.includes(topicKey)) {
-        return current.filter((item) => item !== topicKey);
-      }
-      if (current.length >= 3) {
-        return current;
-      }
-      return [...current, topicKey];
-    });
-  }
-
-  async function startDrillFlow() {
-    if (selectedDrillTopicKeys.length < 1 || selectedDrillTopicKeys.length > 3) {
-      setDrillLocalError("Choose between 1 and 3 topics.");
+  async function classifyDrillTopic() {
+    const sourceInput = drillTopicInput.trim();
+    if (!sourceInput) {
+      setDrillLocalError("Enter a topic or a short topic description.");
       return;
     }
     setDrillLocalError(null);
     try {
-      const started = (await onStartDrillAttempt(selectedDrillTopicKeys)) as { attempt_id?: string } | null;
+      const classification = await onClassifyDrillTopic(sourceInput);
+      setDrillClassification(classification);
+      setDrillStep("confirm");
+    } catch (startError) {
+      setDrillLocalError(startError instanceof Error ? startError.message : "Failed to classify topic");
+    }
+  }
+
+  async function startDrillFlow() {
+    const sourceInput = drillTopicInput.trim();
+    if (!sourceInput || !drillClassification) {
+      setDrillLocalError("Classify your topic before starting.");
+      return;
+    }
+    setDrillLocalError(null);
+    try {
+      const started = (await onStartDrillAttempt({
+        source_topic_input: sourceInput,
+        topic_classification: drillClassification,
+      })) as { attempt_id?: string } | null;
       const nextAttemptId = started?.attempt_id ?? drillAttempt?.attempt_id ?? null;
       setDrillAttemptId(nextAttemptId);
       setDrillQuestionIndex(0);
@@ -737,10 +753,16 @@ export function KsaPanel({
         const deltas = topicUpdates ? Object.values(topicUpdates).map((entry) => Number(entry?.delta ?? 0)) : [];
         const totalDelta = deltas.reduce((acc, value) => acc + value, 0);
         const topicKeys = item.selected_topic_keys ?? [];
+        const rounds = (item.rounds ?? []).slice(0, 4);
+        const badges = rounds.length > 0
+          ? rounds.map((round) => `${round.type_combo} - ${round.big_map_subdomain || round.big_map_group}`)
+          : topicKeys.map((topicKey) => TOPIC_LABEL_BY_KEY[topicKey] ?? topicKey);
         return {
           id: item.attempt_id,
           completedAt: item.completed_at,
           topicKeys,
+          rounds,
+          badges,
           totalDelta,
         };
       });
@@ -818,6 +840,7 @@ export function KsaPanel({
           </header>
           <div className="library-table">
             <div className="library-table-head ksa-drill-attempts-head">
+              <span aria-hidden="true" />
               <span>Completed</span>
               <span>Topics</span>
               <span>DELTA</span>
@@ -825,27 +848,55 @@ export function KsaPanel({
             <div className="library-table-body">
               {drillHistoryRows.length === 0 ? (
                 <div className="library-table-row">
+                  <span />
                   <span>No completed drill attempts yet.</span>
                   <span>-</span>
                   <span>-</span>
                 </div>
               ) : (
-                drillHistoryRows.map((row) => (
-                  <div key={row.id} className="library-table-row">
-                    <span>{formatDrillDate(row.completedAt)}</span>
-                    <span className="ksa-attempt-topic-badges">
-                      {row.topicKeys.map((topicKey) => (
-                        <span key={`${row.id}-${topicKey}`} className="tag-pill">
-                          {TOPIC_LABEL_BY_KEY[topicKey] ?? topicKey}
+                drillHistoryRows.map((row) => {
+                  const expanded = drillExpandedAttemptId === row.id;
+                  const panelId = `ksa-drill-attempt-${row.id}`;
+                  return (
+                    <div key={row.id} className="ksa-drill-attempt-row-wrap">
+                      <button
+                        type="button"
+                        className="library-table-row ksa-drill-attempt-row-toggle"
+                        aria-expanded={expanded}
+                        aria-controls={panelId}
+                        onClick={() => setDrillExpandedAttemptId(expanded ? null : row.id)}
+                      >
+                        <span className="ksa-drill-chevron" aria-hidden="true">{expanded ? "▴" : "▾"}</span>
+                        <span>{formatDrillDate(row.completedAt)}</span>
+                        <span className="ksa-attempt-topic-badges">
+                          {row.badges.map((badge, index) => (
+                            <span key={`${row.id}-badge-${index}`} className="tag-pill">
+                              {badge}
+                            </span>
+                          ))}
                         </span>
-                      ))}
-                    </span>
-                    <span className={row.totalDelta > 0 ? "trend-up" : row.totalDelta < 0 ? "trend-down" : ""}>
-                      {row.totalDelta > 0 ? "+" : ""}
-                      {row.totalDelta.toFixed(2)}
-                    </span>
-                  </div>
-                ))
+                        <span className={row.totalDelta > 0 ? "trend-up" : row.totalDelta < 0 ? "trend-down" : ""}>
+                          {row.totalDelta > 0 ? "+" : ""}
+                          {row.totalDelta.toFixed(2)}
+                        </span>
+                      </button>
+                      {expanded ? (
+                        <div id={panelId} className="diagnostic-laa-accordion-panel ksa-drill-attempt-panel">
+                          <div />
+                          <div />
+                          <div className="ksa-drill-attempt-panel-topics">
+                            {(row.rounds.length > 0 ? row.rounds : []).map((round) => (
+                              <p key={`${row.id}-round-${round.round_number}`}>
+                                Round {round.round_number}: {round.detailed_topic}
+                              </p>
+                            ))}
+                          </div>
+                          <div />
+                        </div>
+                      ) : null}
+                    </div>
+                  );
+                })
               )}
             </div>
           </div>
@@ -864,9 +915,14 @@ export function KsaPanel({
               <button className="secondary-button" type="button" onClick={closeDrills} disabled={saving}>
                 Cancel
               </button>
-              {drillStep === "topics" ? (
-                <button className="primary-button" type="button" onClick={() => void startDrillFlow()} disabled={saving || selectedDrillTopicKeys.length < 1}>
-                  Start Drills
+              {drillStep === "topic_input" ? (
+                <button className="primary-button" type="button" onClick={() => void classifyDrillTopic()} disabled={saving || !drillTopicInput.trim()}>
+                  {saving ? "Classifying..." : "Classify Topic"}
+                </button>
+              ) : null}
+              {drillStep === "confirm" ? (
+                <button className="primary-button" type="button" onClick={() => void startDrillFlow()} disabled={saving || !drillClassification}>
+                  {saving ? "Generating..." : "Start Assessment"}
                 </button>
               ) : null}
               {drillStep === "questions" ? (
@@ -883,27 +939,32 @@ export function KsaPanel({
           }
         >
           <div className="ksa-assessment-flow">
-            {drillStep === "topics" ? (
+            {drillStep === "topic_input" ? (
               <div className="ksa-drill-topics">
-                <h3>Select Drill Topics</h3>
-                <p>Choose 1 to 3 big-map topics. We auto-fill reinforcement and challenge topics to complete a 4-block drill.</p>
-                <div className="ksa-drill-topic-grid">
-                  {(drillTopics ?? []).map((topic) => {
-                    const selected = selectedDrillTopicKeys.includes(topic.key);
-                    return (
-                      <button
-                        key={topic.key}
-                        type="button"
-                        className={`ksa-drill-topic-card${selected ? " selected" : ""}`}
-                        onClick={() => toggleDrillTopic(topic.key)}
-                      >
-                        <strong>{topic.name}</strong>
-                        <small>{topic.group.toUpperCase()}</small>
-                      </button>
-                    );
-                  })}
-                </div>
-                <p className="ksa-drill-topic-meta">{selectedDrillTopicKeys.length} of 3 selected</p>
+                <h3>Enter Topic</h3>
+                <p>Enter a topic or describe a topic. We classify it, show you the mapping, then generate a 4-round drill.</p>
+                <textarea
+                  className="dialog-input diagnostic-textarea"
+                  rows={4}
+                  placeholder="Example: I want to improve cloud incident response under time pressure."
+                  value={drillTopicInput}
+                  onChange={(event) => setDrillTopicInput(event.target.value)}
+                />
+              </div>
+            ) : null}
+
+            {drillStep === "confirm" && drillClassification ? (
+              <div className="ksa-drill-topics">
+                <h3>Confirm Topic Classification</h3>
+                <p>Review this preflight mapping before the assessment is generated.</p>
+                <p><strong>Original Input:</strong> {drillTopicInput.trim()}</p>
+                <p><strong>Primary Type:</strong> {drillClassification.primary_type}</p>
+                {drillClassification.secondary_type ? <p><strong>Secondary Type:</strong> {drillClassification.secondary_type}</p> : null}
+                <p><strong>Type Combo:</strong> {drillClassification.type_combo}</p>
+                <p><strong>Big Map Group:</strong> {drillClassification.big_map_group}</p>
+                <p><strong>Big Map Subdomain:</strong> {drillClassification.big_map_subdomain}</p>
+                <p><strong>Detailed Topic:</strong> {drillClassification.detailed_topic}</p>
+                <p><strong>Why this fit:</strong> {drillClassification.user_explanation}</p>
               </div>
             ) : null}
 
@@ -923,24 +984,53 @@ export function KsaPanel({
                 {drillQuestionTimeLimit != null ? (
                   <p className="ksa-ability-timer">Time target: {drillQuestionTimeLimit}s | Remaining: {drillRemainingSeconds ?? 0}s</p>
                 ) : null}
-                <p>{currentDrillQuestion.prompt}</p>
-                <textarea
-                  className="dialog-input diagnostic-textarea"
-                  rows={4}
-                  placeholder="Enter your answer"
-                  value={drillAnswers[currentDrillQuestion.id]?.answer ?? ""}
-                  onChange={(event) =>
-                    setDrillAnswers((current) => ({
-                      ...current,
-                      [currentDrillQuestion.id]: {
-                        answer: event.target.value,
-                        response_time_seconds: drillQuestionTimeLimit != null
-                          ? Math.min(drillQuestionTimeLimit, Math.max(0, (Date.now() - drillQuestionStartedAt) / 1000))
-                          : Math.max(0, (Date.now() - drillQuestionStartedAt) / 1000),
-                      },
-                    }))
-                  }
-                />
+                <p>{questionStem(currentDrillQuestion.prompt)}</p>
+                {Array.isArray(currentDrillQuestion.choices) && currentDrillQuestion.choices.length > 0 ? (
+                  <div className="diagnostic-options-list">
+                    {currentDrillQuestion.choices.map((choice) => (
+                      <label
+                        key={`${currentDrillQuestion.id}-${choice}`}
+                        className={`diagnostic-option-card${drillAnswers[currentDrillQuestion.id]?.answer === choice ? " selected" : ""}`}
+                      >
+                        <input
+                          type="radio"
+                          name={currentDrillQuestion.id}
+                          checked={drillAnswers[currentDrillQuestion.id]?.answer === choice}
+                          onChange={() =>
+                            setDrillAnswers((current) => ({
+                              ...current,
+                              [currentDrillQuestion.id]: {
+                                answer: choice,
+                                response_time_seconds: drillQuestionTimeLimit != null
+                                  ? Math.min(drillQuestionTimeLimit, Math.max(0, (Date.now() - drillQuestionStartedAt) / 1000))
+                                  : Math.max(0, (Date.now() - drillQuestionStartedAt) / 1000),
+                              },
+                            }))
+                          }
+                        />
+                        <span>{choice}</span>
+                      </label>
+                    ))}
+                  </div>
+                ) : (
+                  <textarea
+                    className="dialog-input diagnostic-textarea"
+                    rows={4}
+                    placeholder="Enter your answer"
+                    value={drillAnswers[currentDrillQuestion.id]?.answer ?? ""}
+                    onChange={(event) =>
+                      setDrillAnswers((current) => ({
+                        ...current,
+                        [currentDrillQuestion.id]: {
+                          answer: event.target.value,
+                          response_time_seconds: drillQuestionTimeLimit != null
+                            ? Math.min(drillQuestionTimeLimit, Math.max(0, (Date.now() - drillQuestionStartedAt) / 1000))
+                            : Math.max(0, (Date.now() - drillQuestionStartedAt) / 1000),
+                        },
+                      }))
+                    }
+                  />
+                )}
               </div>
             ) : null}
 
@@ -952,6 +1042,12 @@ export function KsaPanel({
             ) : null}
 
             {drillLocalError ? <p className="inline-error">{drillLocalError}</p> : null}
+            {saving ? (
+              <p className="inline-loading" role="status" aria-live="polite">
+                <span className="inline-spinner" aria-hidden="true" />
+                {drillStep === "topic_input" ? "Classifying topic..." : drillStep === "confirm" ? "Planning rounds and generating questions..." : "Saving..."}
+              </p>
+            ) : null}
             {error ? <p className="inline-error">{error}</p> : null}
           </div>
         </Dialog>

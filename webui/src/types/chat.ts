@@ -766,7 +766,31 @@ export type KsaDrillQuestion = {
   related_subtopic?: string | null;
   prompt: string;
   time_limit_seconds?: number | null;
-  topic_source?: "manual" | "auto_good" | "auto_bad" | null;
+  topic_source?: "manual" | "auto_good" | "auto_bad" | "user_core" | "user_variant" | "llm_stretch" | "llm_growth" | null;
+  choices?: string[];
+  correct_answer?: string | null;
+  distractors?: string[];
+};
+
+export type KsaDrillTopicClassification = {
+  primary_type: "K" | "S" | "A";
+  secondary_type?: "K" | "S" | "A" | null;
+  type_combo: "K" | "S" | "A" | "K+S" | "K+A" | "S+A" | "K+S+A";
+  big_map_group: "Knowledge" | "Skills" | "Abilities";
+  big_map_subdomain: string;
+  detailed_topic: string;
+  user_explanation: string;
+};
+
+export type KsaDrillRound = {
+  round_number: 1 | 2 | 3 | 4;
+  origin: "user_core" | "user_variant" | "llm_stretch" | "llm_growth";
+  type_combo: string;
+  big_map_group: "Knowledge" | "Skills" | "Abilities";
+  big_map_subdomain: string;
+  detailed_topic: string;
+  rationale?: string;
+  questions: KsaDrillQuestion[];
 };
 
 export type KsaDrillAttempt = {
@@ -775,6 +799,9 @@ export type KsaDrillAttempt = {
   version: string;
   selected_topic_keys: string[];
   question_set: KsaDrillQuestion[];
+  source_topic_input?: string | null;
+  topic_classification?: KsaDrillTopicClassification | null;
+  rounds?: KsaDrillRound[];
   started_at: string;
   completed_at: string | null;
   answers: Record<string, unknown>;

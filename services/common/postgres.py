@@ -1238,6 +1238,9 @@ class PostgresClient:
         assessment_version: str,
         selected_topic_keys: list[str],
         question_set_json: list[dict[str, object]],
+        source_topic_input: str = "",
+        topic_classification_json: dict[str, object] | None = None,
+        rounds_json: list[dict[str, object]] | None = None,
     ) -> UserKSADrillAttempt:
         with self.session() as session:
             record = UserKSADrillAttempt(
@@ -1246,6 +1249,9 @@ class PostgresClient:
                 status="in_progress",
                 selected_topic_keys_json=list(selected_topic_keys),
                 question_set_json=list(question_set_json),
+                source_topic_input_text=str(source_topic_input or ""),
+                topic_classification_json=dict(topic_classification_json or {}),
+                rounds_json=list(rounds_json or []),
                 answers_json={},
                 result_json=None,
                 started_at=datetime.now(timezone.utc),

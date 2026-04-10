@@ -6,12 +6,17 @@ import json
 from pathlib import Path
 import random
 import re
-from typing import Any
+from typing import Any, Callable
 
 
 DRILL_ASSESSMENT_VERSION = "ksa-drill-v1"
 DRILL_STRESS_TIME_LIMIT_SECONDS = 15
 ARCHETYPE_FILE_RELATIVE_PATH = "prds/interaction-archetypes_ksa.json"
+PROMPTS_DIR_RELATIVE_PATH = "prompts"
+PROMPT_TOPIC_CLASSIFICATION = "ksa-topic-classification.md"
+PROMPT_SAME_TOPIC_VARIANT = "ksa-same-topic-variant.md"
+PROMPT_DYNAMIC_TOPIC_SELECTION = "ksa-dynamic-topic-selection.md"
+PROMPT_ARCHETYPE_GENERATION = "ksa-archetype-generation.md"
 
 
 TOPIC_REGISTRY: list[dict[str, Any]] = [
@@ -238,6 +243,20 @@ TOPIC_REGISTRY: list[dict[str, Any]] = [
 ]
 
 TOPIC_BY_KEY = {str(item["key"]): item for item in TOPIC_REGISTRY}
+TOPIC_GROUP_TO_BIG_MAP = {
+    "knowledge": "Knowledge",
+    "skills": "Skills",
+    "abilities": "Abilities",
+}
+BIG_MAP_TO_TOPIC_GROUP = {value: key for key, value in TOPIC_GROUP_TO_BIG_MAP.items()}
+TOPIC_NAME_TO_KEY = {str(item["name"]).casefold(): str(item["key"]) for item in TOPIC_REGISTRY}
+ARCHETYPE_KIND_MAP = {
+    "REVERSE_DEFINITION": ("recalibration", "reverse_definition"),
+    "SPOT_THE_FLAW": ("threshold", "spot_the_flaw"),
+    "ANALOGY_MATCH": ("sidestep", "analogy_match"),
+    "POWER_SPRINT": ("stress_test", "power_sprint"),
+}
+REQUIRED_ARCHETYPE_TYPES = {"REVERSE_DEFINITION", "SPOT_THE_FLAW", "POWER_SPRINT", "ANALOGY_MATCH"}
 
 
 def list_drill_topics() -> list[dict[str, Any]]:
@@ -256,6 +275,193 @@ def list_drill_topics() -> list[dict[str, Any]]:
             }
         )
     return topics
+
+
+def classify_drill_topic_input(
+    *,
+    source_topic_input: str,
+    llm_invoke: Callable[[list[tuple[str, str]]], str],
+) -> dict[str, Any]:
+    user_input = str(source_topic_input or "").strip()
+    if not user_input:
+        raise ValueError("Topic input cannot be empty")
+    prompt = render_ksa_prompt_template(PROMPT_TOPIC_CLASSIFICATION, {"USER_INPUT": user_input})
+    raw = llm_invoke([("system", prompt)])
+    parsed = _extract_json_object(raw)
+    return _validate_topic_classification(parsed)
+
+
+def plan_dynamic_drill_rounds(
+    *,
+    source_topic_input: str,
+    topic_classification: dict[str, Any],
+    profile_json: dict[str, Any],
+    llm_invoke: Callable[[list[tuple[str, str]]], str],
+) -> dict[str, Any]:
+    classification = _validate_topic_classification(topic_classification)
+    rankings = _rank_big_map_topics(profile_json=profile_json)
+
+    round_1 = {
+        "round_number": 1,
+        "origin": "user_core",
+        "type_combo": str(classification["type_combo"]),
+        "big_map_group": str(classification["big_map_group"]),
+        "big_map_subdomain": str(classification["big_map_subdomain"]),
+        "detailed_topic": str(classification["detailed_topic"]),
+        "rationale": "Core user-entered topic normalized through classification.",
+    }
+
+    variant_prompt = render_ksa_prompt_template(
+        PROMPT_SAME_TOPIC_VARIANT,
+        {
+            "USER_TOPIC": str(source_topic_input).strip(),
+            "ROUND_1_TOPIC": str(round_1["detailed_topic"]),
+        },
+    )
+    variant_raw = llm_invoke([("system", variant_prompt)])
+    variant_parsed = _extract_json_object(variant_raw)
+    round_2_topic = str(variant_parsed.get("round_2_detailed_topic") or "").strip()
+    if not round_2_topic:
+        raise ValueError("Round 2 topic generation returned empty topic")
+    round_2 = {
+        "round_number": 2,
+        "origin": "user_variant",
+        "type_combo": str(classification["type_combo"]),
+        "big_map_group": str(classification["big_map_group"]),
+        "big_map_subdomain": str(classification["big_map_subdomain"]),
+        "detailed_topic": round_2_topic,
+        "rationale": str(variant_parsed.get("rationale") or "").strip(),
+    }
+
+    selection_prompt = render_ksa_prompt_template(
+        PROMPT_DYNAMIC_TOPIC_SELECTION,
+        {
+            "USER_KSA_PROFILE": json.dumps(profile_json, ensure_ascii=False),
+            "BIG_MAP_STRENGTHS": json.dumps(rankings["strengths"], ensure_ascii=False),
+            "BIG_MAP_WEAKNESSES": json.dumps(rankings["weaknesses"], ensure_ascii=False),
+        },
+    )
+    selection_raw = llm_invoke([("system", selection_prompt)])
+    selection_parsed = _extract_json_object(selection_raw)
+    stretch = _validate_dynamic_topic_node(selection_parsed.get("stretch_topic"), label="stretch_topic")
+    growth = _validate_dynamic_topic_node(selection_parsed.get("growth_topic"), label="growth_topic")
+    stretch, growth = _enforce_dynamic_round_constraints(
+        stretch=stretch,
+        growth=growth,
+        rankings=rankings,
+        classification=classification,
+    )
+
+    rounds = [
+        round_1,
+        round_2,
+        {
+            "round_number": 3,
+            "origin": "llm_stretch",
+            "type_combo": _group_to_type_combo(str(stretch["big_map_group"])),
+            **stretch,
+        },
+        {
+            "round_number": 4,
+            "origin": "llm_growth",
+            "type_combo": _group_to_type_combo(str(growth["big_map_group"])),
+            **growth,
+        },
+    ]
+    return {
+        "rounds": rounds,
+        "ranking": rankings,
+    }
+
+
+def generate_round_archetypes(
+    *,
+    rounds: list[dict[str, Any]],
+    llm_invoke: Callable[[list[tuple[str, str]]], str],
+) -> dict[str, Any]:
+    generated_rounds: list[dict[str, Any]] = []
+    question_set: list[dict[str, Any]] = []
+
+    for round_node in rounds:
+        round_number = int(round_node.get("round_number") or 0)
+        detailed_topic = str(round_node.get("detailed_topic") or "").strip()
+        if round_number < 1 or not detailed_topic:
+            raise ValueError("Invalid round metadata for archetype generation")
+        prompt = render_ksa_prompt_template(PROMPT_ARCHETYPE_GENERATION, {"SUBTOPIC": detailed_topic})
+        raw = llm_invoke([("system", prompt)])
+        parsed = _extract_json_object(raw)
+        archetype_questions = _validate_archetype_payload(parsed)
+        topic_group = BIG_MAP_TO_TOPIC_GROUP.get(str(round_node.get("big_map_group") or ""), "skills")
+        topic_key = _topic_key_from_round(round_node=round_node)
+        topic_name = str(round_node.get("big_map_subdomain") or round_node.get("big_map_group") or "Dynamic Topic")
+        round_questions: list[dict[str, Any]] = []
+        for question_index, archetype_question in enumerate(archetype_questions, start=1):
+            archetype_type = str(archetype_question["type"])
+            kind, archetype = ARCHETYPE_KIND_MAP[archetype_type]
+            choices = [
+                str(archetype_question["correct_answer"]),
+                *[str(item) for item in list(archetype_question["distractors"])],
+            ]
+            prompt_text = _compose_multiple_choice_prompt(
+                question=str(archetype_question["question"]),
+                choices=choices,
+            )
+            question_id = f"{topic_key}-r{round_number}-q{question_index}"
+            payload = {
+                "id": question_id,
+                "topic_key": topic_key,
+                "topic_name": topic_name,
+                "topic_group": topic_group,
+                "topic_source": str(round_node.get("origin") or "manual"),
+                "block_index": round_number,
+                "block_label": f"Round {round_number}",
+                "question_index": question_index,
+                "kind": kind,
+                "archetype": archetype,
+                "focus_subtopic": detailed_topic,
+                "related_subtopic": None,
+                "prompt": prompt_text,
+                "choices": choices,
+                "correct_answer": str(archetype_question["correct_answer"]),
+                "distractors": [str(item) for item in list(archetype_question["distractors"])],
+                "time_limit_seconds": DRILL_STRESS_TIME_LIMIT_SECONDS if archetype_type == "POWER_SPRINT" else None,
+                "expected_keywords": _derive_keywords(
+                    topic_name=topic_name,
+                    subtopic_name=detailed_topic,
+                    prompt=str(archetype_question["correct_answer"]),
+                ),
+            }
+            question_set.append(payload)
+            round_questions.append(payload)
+
+        generated_rounds.append(
+            {
+                **round_node,
+                "questions": round_questions,
+            }
+        )
+
+    if len(question_set) != 16:
+        raise ValueError("Dynamic drill generation must produce exactly 16 questions")
+    return {
+        "rounds": generated_rounds,
+        "question_set": question_set,
+    }
+
+
+def render_ksa_prompt_template(template_name: str, variables: dict[str, str]) -> str:
+    template = _load_prompt_template(template_name)
+    rendered = template
+    missing_keys: list[str] = []
+    for match in re.finditer(r"\{\{([A-Z0-9_]+)\}\}", template):
+        key = str(match.group(1))
+        if key not in variables:
+            missing_keys.append(key)
+    if missing_keys:
+        raise ValueError(f"Missing prompt template variables for {template_name}: {', '.join(sorted(set(missing_keys)))}")
+    for key, value in variables.items():
+        rendered = rendered.replace(f"{{{{{key}}}}}", str(value))
+    return rendered
 
 
 def build_drill_topic_plan(*, selected_topic_keys: list[str], profile_json: dict[str, Any]) -> dict[str, Any]:
@@ -781,3 +987,337 @@ def _write_top_level(profile_json: dict[str, Any], group: str, topic_key: str, v
     section = dict(profile_json.get(group) or {})
     section[topic_key] = int(value)
     profile_json[group] = section
+
+
+def _load_prompt_template(template_name: str) -> str:
+    root = Path(__file__).resolve().parents[3]
+    path = root / PROMPTS_DIR_RELATIVE_PATH / template_name
+    if not path.exists():
+        raise ValueError(f"Prompt template not found: {template_name}")
+    return path.read_text(encoding="utf-8").strip()
+
+
+def _extract_json_object(text: str) -> dict[str, Any]:
+    raw = str(text or "").strip()
+    try:
+        parsed = json.loads(raw)
+        if isinstance(parsed, dict):
+            return parsed
+    except Exception:
+        pass
+    match = re.search(r"\{.*\}", raw, re.DOTALL)
+    if not match:
+        raise ValueError("No JSON object found in LLM response")
+    parsed = json.loads(match.group(0))
+    if not isinstance(parsed, dict):
+        raise ValueError("LLM response JSON is not an object")
+    return parsed
+
+
+def _validate_topic_classification(payload: dict[str, Any]) -> dict[str, Any]:
+    type_combo = _normalize_type_combo(payload.get("type_combo"))
+    primary = _normalize_single_type(payload.get("primary_type"))
+    secondary_raw = payload.get("secondary_type")
+    secondary = None if secondary_raw in (None, "", "null", "NULL") else _normalize_single_type(secondary_raw)
+    big_map_group = _normalize_big_map_group(payload.get("big_map_group"))
+    big_map_subdomain = str(payload.get("big_map_subdomain") or "").strip()
+    detailed_topic = str(payload.get("detailed_topic") or "").strip()
+    user_explanation = str(payload.get("user_explanation") or "").strip()
+
+    combo_parts = [part for part in type_combo.split("+") if part]
+    if primary is None:
+        primary = combo_parts[0] if combo_parts else None
+    if primary not in {"K", "S", "A"}:
+        raise ValueError("Invalid primary_type in topic classification")
+    if secondary is not None and secondary not in {"K", "S", "A"}:
+        raise ValueError("Invalid secondary_type in topic classification")
+    if type_combo not in {"K", "S", "A", "K+S", "K+A", "S+A", "K+S+A"}:
+        raise ValueError("Invalid type_combo in topic classification")
+    if big_map_group is None:
+        big_map_group = _infer_big_map_group_from_subdomain(big_map_subdomain) or _infer_big_map_group_from_type_combo(type_combo)
+    if big_map_group not in {"Knowledge", "Skills", "Abilities"}:
+        raise ValueError("Invalid big_map_group in topic classification")
+    if not big_map_subdomain:
+        raise ValueError("Missing big_map_subdomain in topic classification")
+    if not detailed_topic:
+        raise ValueError("Missing detailed_topic in topic classification")
+    if not user_explanation:
+        raise ValueError("Missing user_explanation in topic classification")
+    if big_map_subdomain.casefold() not in TOPIC_NAME_TO_KEY:
+        raise ValueError("Unknown big_map_subdomain in topic classification")
+
+    return {
+        "primary_type": primary,
+        "secondary_type": secondary,
+        "type_combo": type_combo,
+        "big_map_group": big_map_group,
+        "big_map_subdomain": big_map_subdomain,
+        "detailed_topic": detailed_topic,
+        "user_explanation": user_explanation,
+    }
+
+
+def _normalize_big_map_group(value: Any) -> str | None:
+    raw = str(value or "").strip()
+    if not raw:
+        return None
+    lowered = raw.casefold()
+    if lowered in {"knowledge", "k"}:
+        return "Knowledge"
+    if lowered in {"skills", "skill", "s"}:
+        return "Skills"
+    if lowered in {"abilities", "ability", "a"}:
+        return "Abilities"
+    return None
+
+
+def _infer_big_map_group_from_subdomain(subdomain: str) -> str | None:
+    key = TOPIC_NAME_TO_KEY.get(str(subdomain or "").casefold())
+    if not key:
+        return None
+    topic = TOPIC_BY_KEY.get(key)
+    if not topic:
+        return None
+    return TOPIC_GROUP_TO_BIG_MAP.get(str(topic.get("group") or ""))
+
+
+def _infer_big_map_group_from_type_combo(type_combo: str) -> str | None:
+    parts = [item for item in str(type_combo or "").split("+") if item]
+    if len(parts) == 1:
+        if parts[0] == "K":
+            return "Knowledge"
+        if parts[0] == "S":
+            return "Skills"
+        if parts[0] == "A":
+            return "Abilities"
+    return None
+
+
+def _normalize_single_type(value: Any) -> str | None:
+    raw = str(value or "").strip()
+    if not raw:
+        return None
+    upper = raw.upper()
+    if upper in {"K", "S", "A"}:
+        return upper
+    letters_only = re.sub(r"[^A-Z]", "", upper)
+    if letters_only in {"K", "S", "A"}:
+        return letters_only
+    lowered = raw.casefold()
+    if "knowledge" in lowered:
+        return "K"
+    if "skill" in lowered:
+        return "S"
+    if "abilit" in lowered:
+        return "A"
+    return None
+
+
+def _normalize_type_combo(value: Any) -> str:
+    raw = str(value or "").strip()
+    if not raw:
+        raise ValueError("Invalid type_combo in topic classification")
+    upper = raw.upper()
+    if upper in {"K", "S", "A", "K+S", "K+A", "S+A", "K+S+A"}:
+        return upper
+
+    lowered = raw.casefold()
+    inferred: list[str] = []
+    if "knowledge" in lowered:
+        inferred.append("K")
+    if "skill" in lowered:
+        inferred.append("S")
+    if "abilit" in lowered:
+        inferred.append("A")
+
+    if not inferred:
+        letter_hits = [hit for hit in re.findall(r"[KSA]", upper) if hit in {"K", "S", "A"}]
+        ordered: list[str] = []
+        for key in ("K", "S", "A"):
+            if key in letter_hits and key not in ordered:
+                ordered.append(key)
+        inferred = ordered
+
+    if not inferred:
+        raise ValueError("Invalid type_combo in topic classification")
+    normalized = "+".join(inferred)
+    if normalized not in {"K", "S", "A", "K+S", "K+A", "S+A", "K+S+A"}:
+        raise ValueError("Invalid type_combo in topic classification")
+    return normalized
+
+
+def _rank_big_map_topics(*, profile_json: dict[str, Any]) -> dict[str, Any]:
+    topic_nodes = dict(dict(profile_json.get("drill_state") or {}).get("topic_nodes") or {})
+    ranked: list[dict[str, Any]] = []
+    for topic in TOPIC_REGISTRY:
+        key = str(topic["key"])
+        group = str(topic["group"])
+        node_level = topic_nodes.get(key, {}).get("level")
+        if node_level is not None:
+            try:
+                score = float(node_level)
+            except Exception:
+                score = _read_profile_topic_level(profile_json=profile_json, topic_key=key)
+        else:
+            score = _read_profile_topic_level(profile_json=profile_json, topic_key=key)
+        ranked.append(
+            {
+                "topic_key": key,
+                "big_map_group": TOPIC_GROUP_TO_BIG_MAP.get(group, "Skills"),
+                "big_map_subdomain": str(topic["name"]),
+                "score": round(_clamp_level(score), 3),
+            }
+        )
+    strengths = sorted(ranked, key=lambda item: float(item["score"]), reverse=True)
+    weaknesses = sorted(ranked, key=lambda item: float(item["score"]))
+    strongest_key = str(strengths[0]["topic_key"]) if strengths else ""
+    strong_not_strongest = [item for item in strengths if str(item["topic_key"]) != strongest_key]
+    return {
+        "strengths": strengths,
+        "weaknesses": weaknesses,
+        "strong_not_strongest": strong_not_strongest,
+    }
+
+
+def _validate_dynamic_topic_node(payload: Any, *, label: str) -> dict[str, Any]:
+    if not isinstance(payload, dict):
+        raise ValueError(f"Missing {label} in dynamic topic selection")
+    big_map_group = str(payload.get("big_map_group") or "").strip()
+    big_map_subdomain = str(payload.get("big_map_subdomain") or "").strip()
+    detailed_topic = str(payload.get("detailed_topic") or "").strip()
+    rationale = str(payload.get("rationale") or "").strip()
+    if big_map_group not in {"Knowledge", "Skills", "Abilities"}:
+        raise ValueError(f"Invalid {label}.big_map_group")
+    if not big_map_subdomain:
+        raise ValueError(f"Missing {label}.big_map_subdomain")
+    if big_map_subdomain.casefold() not in TOPIC_NAME_TO_KEY:
+        raise ValueError(f"Unknown {label}.big_map_subdomain")
+    if not detailed_topic:
+        raise ValueError(f"Missing {label}.detailed_topic")
+    return {
+        "big_map_group": big_map_group,
+        "big_map_subdomain": big_map_subdomain,
+        "detailed_topic": detailed_topic,
+        "rationale": rationale,
+    }
+
+
+def _enforce_dynamic_round_constraints(
+    *,
+    stretch: dict[str, Any],
+    growth: dict[str, Any],
+    rankings: dict[str, Any],
+    classification: dict[str, Any],
+) -> tuple[dict[str, Any], dict[str, Any]]:
+    strengths = [dict(item) for item in list(rankings.get("strengths") or [])]
+    weaknesses = [dict(item) for item in list(rankings.get("weaknesses") or [])]
+    strong_not_strongest = [dict(item) for item in list(rankings.get("strong_not_strongest") or [])]
+    strongest_subdomain = str((strengths[0] if strengths else {}).get("big_map_subdomain") or "")
+    strongest_group = str((strengths[0] if strengths else {}).get("big_map_group") or "")
+
+    stretch_subdomain = str(stretch.get("big_map_subdomain") or "")
+    stretch_group = str(stretch.get("big_map_group") or "")
+    if not strong_not_strongest or (
+        stretch_subdomain == strongest_subdomain and stretch_group == strongest_group
+    ):
+        fallback = strong_not_strongest[0] if strong_not_strongest else (strengths[1] if len(strengths) > 1 else (strengths[0] if strengths else None))
+        if fallback is not None:
+            fallback_subdomain = str(fallback.get("big_map_subdomain") or stretch.get("big_map_subdomain") or "")
+            stretch = {
+                "big_map_group": str(fallback.get("big_map_group") or stretch.get("big_map_group")),
+                "big_map_subdomain": fallback_subdomain,
+                "detailed_topic": fallback_subdomain,
+                "rationale": str(stretch.get("rationale") or "Selected from strong-but-not-strongest profile area."),
+            }
+
+    growth_subdomain = str(growth.get("big_map_subdomain") or "")
+    growth_group = str(growth.get("big_map_group") or "")
+    weak_set = {(str(item.get("big_map_group") or ""), str(item.get("big_map_subdomain") or "")) for item in weaknesses[:8]}
+    if weak_set and (growth_group, growth_subdomain) not in weak_set:
+        fallback = next((item for item in weaknesses if (str(item.get("big_map_group") or ""), str(item.get("big_map_subdomain") or "")) != (stretch_group, stretch_subdomain)), weaknesses[0])
+        fallback_subdomain = str(fallback.get("big_map_subdomain") or growth.get("big_map_subdomain") or "")
+        growth = {
+            "big_map_group": str(fallback.get("big_map_group") or growth.get("big_map_group")),
+            "big_map_subdomain": fallback_subdomain,
+            "detailed_topic": fallback_subdomain,
+            "rationale": str(growth.get("rationale") or "Selected from weaker profile area."),
+        }
+
+    # Keep growth from simply duplicating the core classified domain unless the weak profile ranking also points there.
+    core_pair = (str(classification.get("big_map_group") or ""), str(classification.get("big_map_subdomain") or ""))
+    growth_pair = (str(growth.get("big_map_group") or ""), str(growth.get("big_map_subdomain") or ""))
+    if growth_pair == core_pair and len(weaknesses) > 1:
+        fallback = next((item for item in weaknesses if (str(item.get("big_map_group") or ""), str(item.get("big_map_subdomain") or "")) != core_pair), weaknesses[0])
+        growth["big_map_group"] = str(fallback.get("big_map_group") or growth["big_map_group"])
+        growth["big_map_subdomain"] = str(fallback.get("big_map_subdomain") or growth["big_map_subdomain"])
+        if not str(growth.get("detailed_topic") or "").strip():
+            growth["detailed_topic"] = str(fallback.get("big_map_subdomain") or "")
+    return stretch, growth
+
+
+def _group_to_type_combo(big_map_group: str) -> str:
+    if big_map_group == "Knowledge":
+        return "K"
+    if big_map_group == "Abilities":
+        return "A"
+    return "S"
+
+
+def _validate_archetype_payload(payload: dict[str, Any]) -> list[dict[str, Any]]:
+    questions = list(payload.get("questions") or [])
+    if len(questions) != 4:
+        raise ValueError("Archetype generation must return exactly 4 questions")
+    validated: list[dict[str, Any]] = []
+    seen: set[str] = set()
+    for item in questions:
+        if not isinstance(item, dict):
+            raise ValueError("Invalid archetype question payload")
+        q_type = str(item.get("type") or "").strip().upper()
+        if q_type not in REQUIRED_ARCHETYPE_TYPES:
+            raise ValueError(f"Unsupported archetype type: {q_type}")
+        seen.add(q_type)
+        question = str(item.get("question") or "").strip()
+        correct = str(item.get("correct_answer") or "").strip()
+        distractors = [str(x).strip() for x in list(item.get("distractors") or []) if str(x).strip()]
+        options = [str(x).strip() for x in list(item.get("options") or []) if str(x).strip()]
+        if len(distractors) < 2 and options:
+            candidate_distractors = [option for option in options if option != correct]
+            for candidate in candidate_distractors:
+                if candidate and candidate not in distractors:
+                    distractors.append(candidate)
+                if len(distractors) >= 2:
+                    break
+        if len(distractors) > 2:
+            distractors = distractors[:2]
+        if not question or not correct or len(distractors) < 2:
+            raise ValueError("Each archetype question requires question, correct_answer, and 2 distractors")
+        validated.append(
+            {
+                "type": q_type,
+                "question": question,
+                "correct_answer": correct,
+                "distractors": distractors,
+            }
+        )
+    if seen != REQUIRED_ARCHETYPE_TYPES:
+        raise ValueError("Archetype generation missing required question types")
+    ordered: list[dict[str, Any]] = []
+    for archetype_type in ("REVERSE_DEFINITION", "SPOT_THE_FLAW", "POWER_SPRINT", "ANALOGY_MATCH"):
+        ordered.append(next(item for item in validated if str(item["type"]) == archetype_type))
+    return ordered
+
+
+def _topic_key_from_round(*, round_node: dict[str, Any]) -> str:
+    subdomain = str(round_node.get("big_map_subdomain") or "").casefold()
+    key = TOPIC_NAME_TO_KEY.get(subdomain)
+    if key:
+        return key
+    group = BIG_MAP_TO_TOPIC_GROUP.get(str(round_node.get("big_map_group") or ""), "skills")
+    fallback = next((item for item in TOPIC_REGISTRY if str(item.get("group")) == group), TOPIC_REGISTRY[0])
+    return str(fallback["key"])
+
+
+def _compose_multiple_choice_prompt(*, question: str, choices: list[str]) -> str:
+    if len(choices) < 3:
+        return question
+    return f"{question}\nA) {choices[0]}\nB) {choices[1]}\nC) {choices[2]}"

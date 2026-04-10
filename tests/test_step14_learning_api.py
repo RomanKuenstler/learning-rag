@@ -46,6 +46,17 @@ class LearningApiStubService:
             "status": "in_progress",
             "version": "ksa-drill-v1",
             "selected_topic_keys": ["digital_craft"],
+            "source_topic_input": "design systems",
+            "topic_classification": {
+                "primary_type": "S",
+                "secondary_type": None,
+                "type_combo": "S",
+                "big_map_group": "Skills",
+                "big_map_subdomain": "Digital Craft",
+                "detailed_topic": "UI/UX Prototyping",
+                "user_explanation": "Applied execution focus.",
+            },
+            "rounds": [],
             "question_set": [
                 {
                     "id": "digital_craft-b1-q1",
@@ -263,14 +274,32 @@ class LearningApiStubService:
         }
 
     def start_ksa_drill_attempt(self, _user: UserAccount, payload):
-        self._ksa_drill_attempt["selected_topic_keys"] = list(payload.topic_keys)
+        self._ksa_drill_attempt["source_topic_input"] = payload.source_topic_input
+        self._ksa_drill_attempt["topic_classification"] = payload.topic_classification.model_dump(exclude_none=True)
         return {
             "attempt_id": "ksa-drill-attempt-1",
             "status": "in_progress",
             "version": "ksa-drill-v1",
-            "selected_topic_keys": list(payload.topic_keys),
+            "selected_topic_keys": ["digital_craft"],
             "question_set": list(self._ksa_drill_attempt["question_set"]),
+            "source_topic_input": payload.source_topic_input,
+            "topic_classification": payload.topic_classification.model_dump(exclude_none=True),
+            "rounds": [],
             "started_at": "2026-04-04T00:00:00Z",
+        }
+
+    def classify_ksa_drill_topic(self, _user: UserAccount, payload):
+        return {
+            "source_topic_input": payload.source_topic_input,
+            "classification": {
+                "primary_type": "S",
+                "secondary_type": "K",
+                "type_combo": "K+S",
+                "big_map_group": "Skills",
+                "big_map_subdomain": "Digital Craft",
+                "detailed_topic": "UI prototyping under constraints",
+                "user_explanation": "Applied performance with conceptual framing.",
+            },
         }
 
     def get_ksa_drill_attempt(self, _user: UserAccount, _attempt_id: str):
@@ -463,7 +492,17 @@ def test_ksa_drill_routes_available() -> None:
     assert topics_response.status_code == 200
     assert topics_response.json()["topics"][0]["key"] == "digital_craft"
 
-    start_response = client.post("/api/ksa/drills/attempts", json={"topic_keys": ["digital_craft"]})
+    classify_response = client.post(
+        "/api/ksa/drills/classify-topic",
+        json={"source_topic_input": "I want to improve product prototyping"},
+    )
+    assert classify_response.status_code == 200
+    classification = classify_response.json()["classification"]
+
+    start_response = client.post(
+        "/api/ksa/drills/attempts",
+        json={"source_topic_input": "I want to improve product prototyping", "topic_classification": classification},
+    )
     assert start_response.status_code == 200
     attempt_id = start_response.json()["attempt_id"]
 

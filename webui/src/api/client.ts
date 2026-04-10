@@ -36,6 +36,7 @@ import type {
   LearningProfileBundle,
   KsaDrillAttempt,
   KsaDrillAttemptsResponse,
+  KsaDrillTopicClassification,
   KsaDrillTopic,
   KsaAssessmentAttempt,
   KsaAssessmentDefinition,
@@ -258,12 +259,21 @@ export const apiClient = {
   getKsaDrillTopics() {
     return request<{ topics: KsaDrillTopic[] }>("/api/ksa/drills/topics");
   },
-  startKsaDrillAttempt(topicKeys: string[]) {
-    return request<{ attempt_id: string; status: "in_progress" | "completed"; version: string; selected_topic_keys: string[]; question_set: KsaDrillAttempt["question_set"]; started_at: string }>(
+  classifyKsaDrillTopic(sourceTopicInput: string) {
+    return request<{ source_topic_input: string; classification: KsaDrillTopicClassification }>(
+      "/api/ksa/drills/classify-topic",
+      {
+        method: "POST",
+        body: JSON.stringify({ source_topic_input: sourceTopicInput }),
+      },
+    );
+  },
+  startKsaDrillAttempt(payload: { source_topic_input: string; topic_classification: KsaDrillTopicClassification }) {
+    return request<{ attempt_id: string; status: "in_progress" | "completed"; version: string; selected_topic_keys: string[]; question_set: KsaDrillAttempt["question_set"]; source_topic_input?: string | null; topic_classification?: KsaDrillTopicClassification | null; rounds?: KsaDrillAttempt["rounds"]; started_at: string }>(
       "/api/ksa/drills/attempts",
       {
         method: "POST",
-        body: JSON.stringify({ topic_keys: topicKeys }),
+        body: JSON.stringify(payload),
       },
     );
   },

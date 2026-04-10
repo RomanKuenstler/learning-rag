@@ -1,8 +1,18 @@
 from __future__ import annotations
 
+import json
 import pytest
 
-from services.retriever.services.ksa_drills import build_drill_topic_plan, evaluate_drill_attempt, generate_drill_question_set, list_drill_topics
+from services.retriever.services.ksa_drills import (
+    build_drill_topic_plan,
+    classify_drill_topic_input,
+    evaluate_drill_attempt,
+    generate_drill_question_set,
+    generate_round_archetypes,
+    list_drill_topics,
+    plan_dynamic_drill_rounds,
+    render_ksa_prompt_template,
+)
 
 
 def test_drill_topics_and_question_generation_use_archetypes_source() -> None:
@@ -125,3 +135,96 @@ def test_drill_keyword_matching_accepts_case_and_punctuation_variants() -> None:
     )
     node = outcome["updated_profile_json"]["drill_state"]["topic_nodes"]["digital_craft"]
     assert node["level"] > 2.0
+
+
+def test_dynamic_topic_classification_validation_and_parsing() -> None:
+    def fake_llm(_messages):
+        return json.dumps(
+            {
+                "primary_type": "S",
+                "secondary_type": "K",
+                "type_combo": "K+S",
+                "big_map_group": "Skills",
+                "big_map_subdomain": "Digital Craft",
+                "detailed_topic": "Incident triage runbook design",
+                "user_explanation": "Applied workflow with conceptual framing.",
+            }
+        )
+
+    classification = classify_drill_topic_input(source_topic_input="incident handling", llm_invoke=fake_llm)
+    assert classification["type_combo"] == "K+S"
+    assert classification["big_map_subdomain"] == "Digital Craft"
+
+
+def test_dynamic_round_planning_and_archetype_generation_shape() -> None:
+    classification_payload = {
+        "primary_type": "S",
+        "secondary_type": "K",
+        "type_combo": "K+S",
+        "big_map_group": "Skills",
+        "big_map_subdomain": "Digital Craft",
+        "detailed_topic": "Incident triage runbook design",
+        "user_explanation": "Applied workflow with conceptual framing.",
+    }
+
+    def fake_llm(messages):
+        prompt = "\n".join(content for _, content in messages)
+        if "round_2_detailed_topic" in prompt:
+            return json.dumps(
+                {
+                    "round_2_detailed_topic": "Incident communication handoff strategy",
+                    "rationale": "Same area, different angle.",
+                }
+            )
+        if "\"stretch_topic\"" in prompt and "\"growth_topic\"" in prompt:
+            return json.dumps(
+                {
+                    "stretch_topic": {
+                        "big_map_group": "Skills",
+                        "big_map_subdomain": "Research & Inquiry",
+                        "detailed_topic": "Rapid evidence framing for incident hypotheses",
+                        "rationale": "Strong but not strongest fit.",
+                    },
+                    "growth_topic": {
+                        "big_map_group": "Abilities",
+                        "big_map_subdomain": "Executive Function",
+                        "detailed_topic": "Priority switching under competing incident alerts",
+                        "rationale": "Developmental challenge.",
+                    },
+                }
+            )
+        return json.dumps(
+            {
+                "subtopic": "x",
+                "questions": [
+                    {"type": "REVERSE_DEFINITION", "question": "Q1", "correct_answer": "A1", "distractors": ["B1", "C1"]},
+                    {"type": "SPOT_THE_FLAW", "question": "Q2", "correct_answer": "A2", "distractors": ["B2", "C2"]},
+                    {"type": "POWER_SPRINT", "question": "Q3", "correct_answer": "A3", "distractors": ["B3", "C3"]},
+                    {"type": "ANALOGY_MATCH", "question": "Q4", "correct_answer": "A4", "distractors": ["B4", "C4"]},
+                ],
+            }
+        )
+
+    profile_json = {
+        "knowledge": {"information_technology": 3},
+        "skills": {"digital_craft": 4, "research_inquiry": 3, "strategic_execution": 2},
+        "abilities": {"executive_function": 2, "quantitative_reasoning": 4},
+        "drill_state": {"topic_nodes": {"digital_craft": {"level": 4.2}}},
+    }
+    plan = plan_dynamic_drill_rounds(
+        source_topic_input="incident handling in cloud systems",
+        topic_classification=classification_payload,
+        profile_json=profile_json,
+        llm_invoke=fake_llm,
+    )
+    assert len(plan["rounds"]) == 4
+    assert [item["origin"] for item in plan["rounds"]] == ["user_core", "user_variant", "llm_stretch", "llm_growth"]
+
+    generated = generate_round_archetypes(rounds=plan["rounds"], llm_invoke=fake_llm)
+    assert len(generated["question_set"]) == 16
+    assert generated["rounds"][0]["questions"][0]["archetype"] == "reverse_definition"
+
+
+def test_prompt_template_render_fails_on_missing_variable() -> None:
+    with pytest.raises(ValueError):
+        render_ksa_prompt_template("ksa-topic-classification.md", {})

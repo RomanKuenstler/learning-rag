@@ -96,6 +96,8 @@ from services.retriever.schemas.ksa_assessment import (
 )
 from services.retriever.schemas.ksa_drills import (
     KSADrillAnswersUpsertRequest,
+    KSADrillTopicClassifyRequest,
+    KSADrillTopicClassifyResponse,
     KSADrillAttemptsRead,
     KSADrillAttemptRead,
     KSADrillAttemptStartRequest,
@@ -830,13 +832,27 @@ def create_app() -> FastAPI:
     ) -> KSADrillAttemptsRead:
         return service.list_ksa_drill_attempts(auth.user, limit=limit)
 
+    @app.post("/api/ksa/drills/classify-topic", response_model=KSADrillTopicClassifyResponse, responses={422: {"model": ErrorResponse}})
+    def classify_ksa_drill_topic(
+        payload: KSADrillTopicClassifyRequest,
+        auth: AuthContext = Depends(get_app_auth_context),
+        service: RetrieverAppService = Depends(get_retriever_service),
+    ) -> KSADrillTopicClassifyResponse:
+        try:
+            return service.classify_ksa_drill_topic(auth.user, payload)
+        except ValueError as error:
+            raise HTTPException(status_code=422, detail=str(error)) from error
+
     @app.post("/api/ksa/drills/attempts", response_model=KSADrillAttemptStartResponse)
     def start_ksa_drill_attempt(
         payload: KSADrillAttemptStartRequest,
         auth: AuthContext = Depends(get_app_auth_context),
         service: RetrieverAppService = Depends(get_retriever_service),
     ) -> KSADrillAttemptStartResponse:
-        return service.start_ksa_drill_attempt(auth.user, payload)
+        try:
+            return service.start_ksa_drill_attempt(auth.user, payload)
+        except ValueError as error:
+            raise HTTPException(status_code=422, detail=str(error)) from error
 
     @app.get("/api/ksa/drills/attempts/latest", response_model=KSADrillAttemptRead, responses={404: {"model": ErrorResponse}})
     def get_latest_ksa_drill_attempt(

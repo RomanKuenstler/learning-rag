@@ -207,12 +207,18 @@ class ChatRepository:
         assessment_version: str,
         selected_topic_keys: list[str],
         question_set_json: list[dict[str, object]],
+        source_topic_input: str = "",
+        topic_classification_json: dict[str, object] | None = None,
+        rounds_json: list[dict[str, object]] | None = None,
     ) -> UserKSADrillAttempt:
         return self.postgres_client.create_user_ksa_drill_attempt(
             user_id=user_id,
             assessment_version=assessment_version,
             selected_topic_keys=selected_topic_keys,
             question_set_json=question_set_json,
+            source_topic_input=source_topic_input,
+            topic_classification_json=topic_classification_json,
+            rounds_json=rounds_json,
         )
 
     def get_user_ksa_drill_attempt(self, *, user_id: int, attempt_id: str) -> UserKSADrillAttempt | None:

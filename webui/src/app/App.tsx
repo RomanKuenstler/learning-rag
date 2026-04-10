@@ -359,7 +359,6 @@ function AppRoutes() {
                   ksaError={app.ksaError}
                   ksaAssessmentDefinition={app.ksaAssessmentDefinition}
                   ksaAssessmentAttempt={app.ksaAssessmentAttempt}
-                  ksaDrillTopics={app.ksaDrillTopics}
                   ksaDrillAttempt={app.ksaDrillAttempt}
                   ksaDrillAttempts={app.ksaDrillAttempts}
                   ksaAssessmentSaving={app.ksaAssessmentSaving}
@@ -371,10 +370,10 @@ function AppRoutes() {
                   onStartKsaAssessment={() => app.startKsaAssessment()}
                   onSaveKsaAssessmentAnswers={(attemptId, answers) => app.saveKsaAssessmentAnswers(attemptId, answers)}
                   onCompleteKsaAssessment={(attemptId) => app.completeKsaAssessment(attemptId)}
-                  onLoadKsaDrillTopics={() => app.loadKsaDrillTopics()}
+                  onClassifyKsaDrillTopic={(sourceTopicInput) => app.classifyKsaDrillTopic(sourceTopicInput)}
                   onLoadLatestKsaDrillAttempt={() => app.loadLatestKsaDrillAttempt()}
                   onLoadKsaDrillAttempts={() => app.loadKsaDrillAttempts()}
-                  onStartKsaDrillAttempt={(topicKeys) => app.startKsaDrillAttempt(topicKeys)}
+                  onStartKsaDrillAttempt={(payload) => app.startKsaDrillAttempt(payload)}
                   onSaveKsaDrillAnswers={(attemptId, answers) => app.saveKsaDrillAnswers(attemptId, answers)}
                   onCompleteKsaDrillAttempt={(attemptId) => app.completeKsaDrillAttempt(attemptId)}
                   onSaveLearningPreferences={(payload) => app.saveLearningPreferences(payload).then(() => undefined)}
