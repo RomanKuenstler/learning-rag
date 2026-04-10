@@ -184,11 +184,31 @@ Mode-aware validation is enforced:
 
 ## Diagnostics (Step B.1)
 
-Diagnostic definitions are parsed from:
+Diagnostic definitions are markdown-driven and loaded dynamically from:
 
-- `data/diagnostics/source/MythriQ-LAA-Lernartanalyse-20250703a.docx`
-- `data/diagnostics/source/MythriQ-MOA-Motivationsanalyse-20250703a.docx`
-- `data/diagnostics/source/MythriQ-LTA-Lerntypanalyse-20250703a.docx`
+- `data/sources/alpd/LAAv2.md`
+- `data/sources/alpd/MOAv2.md`
+- `data/sources/alpd/LTAv2.md`
+
+Behavior updates:
+
+- startup sync imports only `.md` diagnostics from `data/sources/alpd` (v2 source-of-truth)
+- parser extracts sections/questions/options, metadata frontmatter (if present), and MOA result text blocks
+- old `.docx/.txt/.pages/.pdf` diagnostic source fallbacks are removed from the runtime loading path
+- LAA `Other:` options render an inline textarea directly inside the selected option card and persist as one combined value (`selected` + `other_text`)
+- LAA scoring is section-based (profile logic), not one global test score:
+  - single-choice options map to internal dimensions
+  - section dimensions are normalized to `0..100`
+  - emotional slider items are persisted as item-level values and compact subprofile indices
+  - multi-select areas are persisted and rendered as profile tags
+- MOA scoring now selects and persists a dynamic personalized text block based on the top motivation pair (`selected_result_block_id`, `selected_result_block_title`, `result_text`)
+- MOA UI keeps the existing chart and shows a personalized output section below it
+- LTA now uses distribution-first channel scoring and presentation:
+  - one counter per channel (`auditiv`, `visuell`, `kinaesthetisch`, `lesen_schreiben`)
+  - persisted raw counts plus percentages (`channel_counts`, `channel_percentages_0_100`)
+  - deterministic classification (`dominant`, `mixed`, `balanced`)
+  - generated summary text rendered from actual result (`summary_text`)
+  - full 4-channel distribution shown in result UI instead of dominant-only output
 
 At startup, definitions are versioned and persisted. Runtime data remains in:
 

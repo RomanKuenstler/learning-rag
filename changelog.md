@@ -1,5 +1,89 @@
 # Changelog
 
+## 2026-04-10 13:45 UTC
+
+- Reworked LTA scoring into a channel-distribution model:
+  - one deterministic counter per channel (`auditiv`, `visuell`, `kinaesthetisch`, `lesen_schreiben`)
+  - persisted `channel_counts`, `channel_percentages_0_100`, `top_ranked_channels`, and `total_answers`
+  - added deterministic classification and profile metadata (`classification`, `profile_label`, `summary_text`)
+  - classification rules:
+    - `dominant`: top channel leads second by `>= 2`
+    - `mixed`: top two channels when no clear dominant
+    - `balanced`: all channels close (`max-min <= 1`)
+- Updated LTA result UI from dominant-only donut output to a distribution-first profile card:
+  - 4-channel bar distribution with percentages and raw counts
+  - generated profile type label (`dominant`/`mixed`/`balanced`)
+  - generated user-facing summary text from the computed result
+  - removed legacy dominant-only line beneath the LTA chart
+- Added LTA scoring tests for:
+  - per-answer channel counting
+  - percentage conversion
+  - dominant, mixed, and balanced detection
+  - summary text generation expectations
+- Updated docs:
+  - `docs/diagnostics.md`
+  - `docs/learning.md`
+  - `docs/architecture.md`
+
+## 2026-04-10 12:25 UTC
+
+- Reworked LAA scoring from aggregate score behavior into section-based profile logic:
+  - per-section structured result payloads (`section_profiles`)
+  - per-question/option dimension mapping table for single-choice items
+  - deterministic per-dimension normalization to `0..100` based on mapped max envelopes
+  - profile-oriented insight generation (no pass/fail or grade-like framing)
+- Added/expanded internal LAA dimensions:
+  - `zielklarheit`, `zeitdruck`, `strukturbedarf`, `feedbackbedarf`, `selbststeuerung`, `soziale_lernorientierung`, `emotionale_sicherheit`, `frustrationsanfaelligkeit`, `technikaffinitaet`, `praxisorientierung`, `sichtbarkeitsmotivation`
+- Implemented LAA emotional subprofile handling:
+  - persisted item-level slider values (`1..5`) and normalized values (`0..100`)
+  - documented summary indices: `lernsicherheit`, `selbstvertrauen`, `aeusserer_aktivierungsbedarf`
+- Implemented LAA multi-select/tag profile model:
+  - interests/competencies/everyday-abilities and custom free text are persisted as `profile_tags`
+  - removed fake score behavior for multi-select profile areas
+- Updated LAA result presentation in diagnostics UI:
+  - keeps high-level section bars
+  - adds section cards with profile insights, normalized dimension bars, summary indices, tags, and emotional item values
+- Added deterministic per-attempt randomization in diagnostic flow:
+  - MOA question order randomized per attempt (stable on resume)
+  - LTA question order randomized per attempt (stable on resume)
+  - LTA option order randomized per question per attempt (stable on resume)
+- Expanded scoring tests:
+  - section-based LAA profile validation
+  - mapping + normalization determinism checks
+  - emotional subprofile/indices checks
+  - multi-select tag persistence checks
+- Updated docs:
+  - `docs/diagnostics.md`
+  - `docs/learning.md`
+  - `docs/architecture.md`
+
+## 2026-04-10 11:05 UTC
+
+- Migrated Learning Preference Diagnostic sources to markdown v2 only:
+  - `data/sources/alpd/LAAv2.md`
+  - `data/sources/alpd/MOAv2.md`
+  - `data/sources/alpd/LTAv2.md`
+- Removed legacy diagnostic source artifacts from runtime source directory (`.docx`, `.txt`, and duplicates).
+- Reworked diagnostic definition loading to parse markdown dynamically (sections/questions/options/metadata) and removed legacy document fallback parsing logic.
+- Added MOA result-block parsing and dynamic pairing logic:
+  - MOA now stores parsed result blocks and block index from `MOAv2.md`
+  - scoring selects personalized result text based on the computed top motivation pair
+  - persisted MOA result now includes `computed_profile`, `selected_result_block_id`, `selected_result_block_title`, and `result_text`
+- Updated diagnostics UI:
+  - kept existing MOA chart/diagram
+  - added `Personalized Output` section below MOA chart with dynamic backend-driven text
+  - upgraded LAA `Other:` UX to inline option-embedded textarea with required input behavior when selected
+- Updated diagnostic answer handling so `Other:` data is stored inline with selection (`selected` + `other_text`) instead of detached companion fields.
+- Updated tests for v2 source loading and scoring behavior:
+  - parser/scoring tests now use `data/sources/alpd`
+  - added MOA dynamic result mapping assertions
+  - added LAA inline `Other:` answer-shape scoring assertion
+  - updated API test payloads to persist structured LAA answers
+- Updated documentation:
+  - `docs/learning.md`
+  - `docs/architecture.md`
+  - new `docs/diagnostics.md`
+
 ## 2026-04-09 18:20 UTC
 
 - Implemented Phase 3 dynamic progression layer for skilltree courses:

@@ -213,8 +213,7 @@ EXAMPLE_LEARNING_PATH_TITLE = "Example: Docker Fundamentals"
 EXAMPLE_LEARNING_PATH_TITLE_SECOND = "Example: Python Learning Sprint"
 EXAMPLE_LEARNING_PATH_ID = "course-example-docker-fundamentals"
 EXAMPLE_LEARNING_PATH_ID_SECOND = "course-example-python-learning-sprint"
-DIAGNOSTIC_DOC_SOURCE_SUBDIR = "diagnostics/source"
-DIAGNOSTIC_PAGES_FALLBACK_SUBDIR = "prds"
+DIAGNOSTIC_DOC_SOURCE_SUBDIR = "sources/alpd"
 COURSE_SORT_OPTIONS = {
     "name_asc",
     "name_desc",
@@ -2820,16 +2819,11 @@ class RetrieverAppService:
 
     def _ensure_diagnostic_definitions(self) -> None:
         try:
-            source_dirs = [
-                Path(__file__).resolve().parents[3] / DIAGNOSTIC_PAGES_FALLBACK_SUBDIR,
-                Path(self.settings.data_dir) / DIAGNOSTIC_DOC_SOURCE_SUBDIR,
-            ]
-            parsed_sources = []
-            for source_dir in source_dirs:
-                candidate_sources = load_parsed_sources(source_dir)
-                if self._has_minimum_diagnostic_coverage(candidate_sources):
-                    parsed_sources = candidate_sources
-                    break
+            source_dir = Path(self.settings.data_dir) / DIAGNOSTIC_DOC_SOURCE_SUBDIR
+            parsed_sources = load_parsed_sources(source_dir)
+            if not self._has_minimum_diagnostic_coverage(parsed_sources):
+                logger.warning("Diagnostic source coverage is incomplete in %s", source_dir)
+                return
             for source in parsed_sources:
                 definition = self.chat_repository.upsert_diagnostic_definition(
                     diagnostic_type=source.diagnostic_type,

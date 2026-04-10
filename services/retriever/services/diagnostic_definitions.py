@@ -2,22 +2,16 @@ from __future__ import annotations
 
 import hashlib
 import re
-import subprocess
 import unicodedata
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Iterable
-from zipfile import ZipFile
-import xml.etree.ElementTree as ET
 
 
-SOURCE_FILES = {
-    "LAA": ["LAA.pdf", "LAA.txt", "LAA.pages", "MythriQ-LAA-Lernartanalyse-20250703a.docx"],
-    "MOA": ["MOA.pdf", "MOA.txt", "MOA.pages", "MythriQ-MOA-Motivationsanalyse-20250703a.docx"],
-    "LTA": ["LTA.pdf", "LTA.txt", "LTA.pages", "MythriQ-LTA-Lerntypanalyse-20250703a.docx"],
+DIAGNOSTIC_PARSERS = {
+    "LAA": "_parse_laa_markdown",
+    "MOA": "_parse_moa_markdown",
+    "LTA": "_parse_lta_markdown",
 }
-
-NS = {"w": "http://schemas.openxmlformats.org/wordprocessingml/2006/main"}
 
 
 @dataclass(slots=True)
@@ -30,201 +24,418 @@ class ParsedSource:
 
 
 def load_parsed_sources(source_dir: Path) -> list[ParsedSource]:
+    if not source_dir.exists():
+        return []
+
     result: list[ParsedSource] = []
-    for diagnostic_type, candidates in SOURCE_FILES.items():
-        resolved_source: ParsedSource | None = None
-        for candidate in candidates:
-            candidate_path = source_dir / candidate
-            if not candidate_path.exists():
-                continue
-            raw = candidate_path.read_bytes()
-            file_hash = hashlib.sha256(raw).hexdigest()
-            suffix = candidate_path.suffix.lower()
-            if suffix == ".docx":
-                paragraphs = _read_docx_paragraphs(candidate_path)
-            elif suffix == ".pdf":
-                paragraphs = _read_pdf_paragraphs(candidate_path)
-            elif suffix == ".txt":
-                paragraphs = _read_txt_paragraphs(candidate_path)
-            else:
-                paragraphs = _read_pages_paragraphs(candidate_path)
+    for path in sorted(source_dir.glob("*.md")):
+        diagnostic_type = _extract_diagnostic_type(path.stem)
+        if diagnostic_type is None:
+            continue
 
-            version = _extract_version(diagnostic_type, candidate)
-            if diagnostic_type == "LAA":
-                definition = _parse_laa(paragraphs, version)
-            elif diagnostic_type == "MOA":
-                definition = _parse_moa(paragraphs, version)
-            else:
-                definition = _parse_lta(paragraphs, version)
-            definition = _translate_definition_to_english(definition)
+        parser_name = DIAGNOSTIC_PARSERS.get(diagnostic_type)
+        if not parser_name:
+            continue
 
-            question_count = sum(len(section.get("questions") or []) for section in list(definition.get("sections") or []))
-            if question_count == 0:
-                continue
+        raw = path.read_bytes()
+        file_hash = hashlib.sha256(raw).hexdigest()
+        text = raw.decode("utf-8", errors="replace")
+        metadata, body = _extract_markdown_metadata(text)
+        version = _extract_version(path.stem, metadata)
 
-            resolved_source = ParsedSource(
+        parser = globals()[parser_name]
+        definition = parser(body, version, metadata)
+
+        question_count = sum(len(section.get("questions") or []) for section in list(definition.get("sections") or []))
+        if question_count == 0:
+            continue
+
+        result.append(
+            ParsedSource(
                 diagnostic_type=diagnostic_type,
-                file_name=candidate,
+                file_name=path.name,
                 file_hash=file_hash,
                 version=version,
                 definition=definition,
             )
-            break
-        if resolved_source is not None:
-            result.append(resolved_source)
+        )
     return result
 
 
-def _read_docx_paragraphs(path: Path) -> list[str]:
-    xml = ZipFile(path).read("word/document.xml")
-    root = ET.fromstring(xml)
-    body = root.find("w:body", NS)
-    lines: list[str] = []
-    assert body is not None
-    for child in body:
-        tag = child.tag.split("}")[-1]
-        if tag != "p":
+def _extract_diagnostic_type(stem: str) -> str | None:
+    match = re.match(r"^([a-zA-Z]{3})v\d+$", stem.strip())
+    if not match:
+        return None
+    value = match.group(1).upper()
+    if value in DIAGNOSTIC_PARSERS:
+        return value
+    return None
+
+
+def _extract_markdown_metadata(text: str) -> tuple[dict[str, object], str]:
+    if not text.startswith("---\n"):
+        return {}, text
+
+    lines = text.splitlines()
+    closing_index = -1
+    for index in range(1, len(lines)):
+        if lines[index].strip() == "---":
+            closing_index = index
+            break
+    if closing_index < 0:
+        return {}, text
+
+    metadata: dict[str, object] = {}
+    for raw in lines[1:closing_index]:
+        if ":" not in raw:
             continue
-        text = "".join(node.text or "" for node in child.findall(".//w:t", NS)).replace("\xa0", " ").strip()
-        if text:
-            lines.append(text)
-    return lines
+        key, value = raw.split(":", 1)
+        key = key.strip()
+        value = value.strip()
+        if not key:
+            continue
+        metadata[key] = value
+
+    body = "\n".join(lines[closing_index + 1 :])
+    return metadata, body
 
 
-def _extract_version(diagnostic_type: str, file_name: str) -> str:
-    semantic_versions = {"LAA": "1.1", "MOA": "1.0", "LTA": "1.0"}
-    if diagnostic_type in semantic_versions:
-        return semantic_versions[diagnostic_type]
-    match = re.search(r"-(\d{8}[a-z]?)\.docx$", file_name)
+def _extract_version(stem: str, metadata: dict[str, object]) -> str:
+    metadata_version = str(metadata.get("version") or "").strip()
+    if metadata_version:
+        return metadata_version
+    match = re.search(r"v(\d+)$", stem, flags=re.IGNORECASE)
     if match:
-        return match.group(1)
-    if file_name.lower().endswith(".pages"):
-        return "1.0"
-    return "v1"
+        return f"{int(match.group(1))}.0"
+    return "1.0"
 
 
-def _read_pages_paragraphs(path: Path) -> list[str]:
-    try:
-        output = subprocess.check_output(["strings", str(path)], text=True)
-    except Exception:
-        return []
-    lines = [line.strip().replace("\xa0", " ") for line in output.splitlines()]
-    return [line for line in lines if len(line) >= 3]
-
-
-def _read_txt_paragraphs(path: Path) -> list[str]:
-    lines = [line.strip().replace("\xa0", " ") for line in path.read_text().splitlines()]
-    return [line for line in lines if line]
-
-
-def _read_pdf_paragraphs(path: Path) -> list[str]:
-    # Preferred path for `prds/*.pdf`: use pypdf when installed.
-    # If unavailable, we fail gracefully so the loader can continue with extracted text fallback files.
-    try:
-        from pypdf import PdfReader  # type: ignore
-    except Exception:
-        return []
-
-    try:
-        reader = PdfReader(str(path))
-    except Exception:
-        return []
-
+def _clean_markdown_lines(text: str) -> list[str]:
     lines: list[str] = []
-    for page in reader.pages:
-        text = page.extract_text() or ""
-        for line in text.splitlines():
-            cleaned = line.strip().replace("\xa0", " ")
-            if cleaned:
-                lines.append(cleaned)
+    for line in text.splitlines():
+        cleaned = line.replace("\xa0", " ").strip()
+        if not cleaned:
+            continue
+        lines.append(cleaned)
     return lines
 
 
-def _canonical_block(lines: list[str]) -> list[str]:
-    canonical: list[str] = []
-    for line in lines:
-        if line.startswith("=== PAGE"):
-            continue
-        if line.lower().startswith("machine translated by google"):
-            continue
-        if line.startswith("🔥 MythriQ"):
-            continue
-        if "Lernblockaden & Unterstützungsbedarfe1." in line:
-            canonical.append("Lernblockaden & Unterstützungsbedarfe")
-            canonical.append("1. Ich verliere schnell die Motivation, wenn …")
-            continue
-        cleaned = _normalize_ocr_line(line)
-        if cleaned:
-            canonical.append(cleaned)
-    return canonical
+def _is_separator(line: str) -> bool:
+    compact = line.strip()
+    if compact in {"⸻", "---", "___"}:
+        return True
+    if re.fullmatch(r"[-_]{3,}", compact):
+        return True
+    return False
 
 
-def _normalize_ocr_line(line: str) -> str:
-    text = re.sub(r"\s+", " ", line).strip()
-    if not text:
-        return ""
-    # stitch split words from OCR such as "f urther", "n eeds", while keeping pronoun "I"
-    parts = text.split(" ")
-    merged: list[str] = []
-    index = 0
-    while index < len(parts):
-        current = parts[index]
-        if (
-            len(current) == 1
-            and current.lower() != "i"
-            and index + 1 < len(parts)
-            and re.match(r"^[a-z].*", parts[index + 1])
-        ):
-            merged.append(current + parts[index + 1])
-            index += 2
-            continue
-        merged.append(current)
-        index += 1
-    text = " ".join(merged)
-    return text
+def _normalize_text(value: str) -> str:
+    ascii_only = unicodedata.normalize("NFD", value.lower()).encode("ascii", "ignore").decode("ascii")
+    ascii_only = ascii_only.replace("&", " and ")
+    return re.sub(r"\s+", " ", re.sub(r"[^a-z0-9]+", " ", ascii_only)).strip()
 
 
 def _slug(value: str) -> str:
-    text = value.lower().strip()
-    text = text.replace("ä", "ae").replace("ö", "oe").replace("ü", "ue").replace("ß", "ss")
-    text = re.sub(r"[^a-z0-9]+", "_", text)
-    return re.sub(r"_+", "_", text).strip("_")
+    text = _normalize_text(value)
+    return re.sub(r"\s+", "_", text).strip("_")
 
 
-def _parse_moa(lines: list[str], version: str) -> dict[str, object]:
-    canonical = _canonical_block(lines)
-    start = next((index for index, line in enumerate(canonical) if "what motivates you to learn" in line.lower()), -1)
-    question_zone = canonical[start + 1 :] if start >= 0 else canonical
-    blocks = _collect_numbered_blocks(question_zone)
+def _extract_checkbox_option(line: str) -> str | None:
+    match = re.match(r"^[•\-*]\s*\(\s*\)\s*(.+)$", line)
+    if not match:
+        return None
+    return match.group(1).strip()
+
+
+def _extract_bullet_text(line: str) -> str | None:
+    match = re.match(r"^[•\-*]\s*(.+)$", line)
+    if not match:
+        return None
+    return match.group(1).strip()
+
+
+def _normalize_option_label(label: str) -> tuple[str, bool]:
+    cleaned = re.sub(r"\s*_+\s*$", "", label).strip()
+    if re.match(r"^other\s*:", cleaned, flags=re.IGNORECASE):
+        return "Other:", True
+    return cleaned, False
+
+
+def _likert_1_to_5() -> list[dict[str, object]]:
+    return [
+        {"key": str(value), "label": str(value), "value": str(value), "allows_text": False}
+        for value in range(1, 6)
+    ]
+
+
+def _parse_laa_markdown(text: str, version: str, metadata: dict[str, object]) -> dict[str, object]:
+    ordered_sections = [
+        ("user_needs", "User needs"),
+        ("learning_experience", "Learning experience"),
+        ("conditions", "Conditions"),
+        ("objectives", "Objectives"),
+        ("skills_interests", "Skills and Interests"),
+        ("attitude", "Attitude"),
+        ("support_needs", "Support needs"),
+        ("miscellaneous", "Miscellaneous"),
+    ]
+    section_lookup = {key: {"id": key, "title": title, "questions": []} for key, title in ordered_sections}
+
+    section_aliases = {
+        "user needs": "user_needs",
+        "learning experience and self perception": "learning_experience",
+        "time and learning conditions": "conditions",
+        "learning goals and motivation": "objectives",
+        "skills and interests": "skills_interests",
+        "interests": "skills_interests",
+        "competencies skills self assessment": "skills_interests",
+        "soft skills self assessment via scale": "skills_interests",
+        "emotional attitude toward learning": "attitude",
+        "learning barriers and support needs": "support_needs",
+        "additional personalization": "miscellaneous",
+    }
+
+    lines = _clean_markdown_lines(text)
+    current_section = "user_needs"
+    current_question: dict[str, object] | None = None
+    question_counter = 0
+    pending_multi_choice = False
+    in_soft_skills = False
+    in_emotional_attitude = False
+
+    def start_question(question_text: str, question_type: str) -> dict[str, object]:
+        nonlocal question_counter, current_question
+        question_counter += 1
+        current_question = {
+            "id": f"laa_q{question_counter:03d}",
+            "text": question_text.strip(),
+            "type": question_type,
+            "options": [],
+            "scoring": {"method": "derived_section_weight"},
+        }
+        section_lookup[current_section]["questions"].append(current_question)
+        return current_question
+
+    for line in lines:
+        if _is_separator(line):
+            continue
+        if line.lower().startswith("learning style analysis"):
+            continue
+
+        normalized_line = _normalize_text(line)
+        if normalized_line in section_aliases:
+            current_section = section_aliases[normalized_line]
+            current_question = None
+            pending_multi_choice = False
+            in_soft_skills = normalized_line == "soft skills self assessment via scale"
+            in_emotional_attitude = normalized_line == "emotional attitude toward learning"
+            continue
+
+        if normalized_line.startswith("please rate yourself on a scale"):
+            in_soft_skills = True
+            in_emotional_attitude = False
+            continue
+
+        if normalized_line.startswith("please rate the following statements"):
+            in_soft_skills = False
+            in_emotional_attitude = True
+            continue
+
+        if "multiple answers possible" in normalized_line:
+            pending_multi_choice = True
+            continue
+
+        checkbox_option = _extract_checkbox_option(line)
+        if checkbox_option is not None:
+            if current_question is None:
+                current_question = start_question("Selection", "multi_choice" if pending_multi_choice else "single_choice")
+            label, allows_text = _normalize_option_label(checkbox_option)
+            current_question["options"].append(
+                {
+                    "key": f"o{len(current_question['options']) + 1}",
+                    "label": label,
+                    "value": f"o{len(current_question['options']) + 1}",
+                    "allows_text": allows_text,
+                }
+            )
+            continue
+
+        bullet_text = _extract_bullet_text(line)
+        if in_soft_skills and bullet_text is not None and "( )" not in line:
+            question = start_question(bullet_text, "likert")
+            question["min_value"] = 1
+            question["max_value"] = 5
+            question["options"] = _likert_1_to_5()
+            continue
+
+        numbered_match = re.match(r"^(\d+)\.\s*(.+)$", line)
+        if in_emotional_attitude and numbered_match:
+            question = start_question(numbered_match.group(2).strip(), "likert")
+            question["min_value"] = 1
+            question["max_value"] = 5
+            question["options"] = _likert_1_to_5()
+            continue
+
+        if numbered_match:
+            question_text = numbered_match.group(2).strip()
+            question_text = re.sub(r"\(Multiple answers possible\)", "", question_text, flags=re.IGNORECASE).strip()
+            qtype = "multi_choice" if pending_multi_choice else "single_choice"
+            start_question(question_text, qtype)
+            pending_multi_choice = False
+            continue
+
+        if line.endswith("?") and "( )" not in line:
+            qtype = "multi_choice" if pending_multi_choice else "single_choice"
+            start_question(line, qtype)
+            pending_multi_choice = False
+            continue
+
+        if current_question and current_question.get("options"):
+            options = list(current_question["options"])
+            last_option = dict(options[-1])
+            last_option["label"] = f"{last_option.get('label', '')} {line}".strip()
+            options[-1] = last_option
+            current_question["options"] = options
+
+    sections = [section_lookup[key] for key, _title in ordered_sections if section_lookup[key]["questions"]]
+    scoring_rules = {
+        "method": "section_aggregation",
+        "normalization": "section_score/max_section_score",
+        "dominant_count": 3,
+    }
+
+    return {
+        "id": "diagnostic-laa",
+        "type": "LAA",
+        "title": "Learning Style Analysis (LAA)",
+        "version": version,
+        "sections": sections,
+        "metadata": metadata,
+        "scoring_rules": scoring_rules,
+        "assumptions": [
+            "Likert items (1-5) use numeric values directly.",
+            "For choice questions, each selected option contributes +1 to the section score.",
+        ],
+    }
+
+
+def _canonical_moa_dimension(raw: str) -> str:
+    normalized = _normalize_text(raw)
+    aliases = {
+        "knowledge insight": "Knowledge",
+        "creativity expression": "Creativity",
+        "influence impact": "Influence",
+        "purpose contribution": "Purpose",
+        "relationships connection": "Connection",
+        "structure security": "Security",
+        "achievement skill development": "Achievement",
+        "autonomy self direction": "Autonomy",
+        "status recognition": "Status",
+        "experimentation freedom of action": "Experimentation",
+    }
+    if normalized in aliases:
+        return aliases[normalized]
+    for key, value in aliases.items():
+        if normalized.startswith(key):
+            return value
+    return raw.strip()
+
+
+def _result_pair_key(left: str, right: str) -> str:
+    pair = sorted([left.strip().lower(), right.strip().lower()])
+    return "__".join(pair)
+
+
+def _parse_moa_markdown(text: str, version: str, metadata: dict[str, object]) -> dict[str, object]:
+    lines = _clean_markdown_lines(text)
+
+    statements: list[dict[str, str]] = []
+    in_question_block = False
+    pending_statement = ""
+    for line in lines:
+        if _is_separator(line):
+            continue
+        normalized = _normalize_text(line)
+        if "what motivates you when learning" in normalized:
+            in_question_block = True
+            continue
+        if in_question_block and normalized.startswith("evaluation and impact"):
+            in_question_block = False
+            continue
+        if not in_question_block:
+            continue
+
+        bullet_text = _extract_bullet_text(line)
+        if bullet_text and not bullet_text.startswith("(Motivation:"):
+            pending_statement = bullet_text
+            continue
+
+        motivation_match = re.match(r"^\(Motivation\s*:\s*(.+)\)$", line, flags=re.IGNORECASE)
+        if motivation_match and pending_statement:
+            statements.append({
+                "text": pending_statement,
+                "dimension": _canonical_moa_dimension(motivation_match.group(1).strip()),
+            })
+            pending_statement = ""
 
     questions: list[dict[str, object]] = []
     dimensions: list[str] = []
-    for index, block in enumerate(blocks, start=1):
-        joined = " ".join(block).strip()
-        dimension_match = re.search(r"\((?:Motive|Motivation)\s*:\s*([^)]+)\)", joined, flags=re.IGNORECASE)
-        if not dimension_match:
-            continue
-        dimension = re.sub(r"\s+", " ", dimension_match.group(1).strip())
-        text = re.sub(r"\((?:Motive|Motivation)\s*:[^)]+\)", "", joined, flags=re.IGNORECASE).strip()
-        text = re.sub(r"^\d+\.\s*", "", text)
-        if not text:
-            continue
+    for index, item in enumerate(statements, start=1):
+        dimension = item["dimension"]
         dimensions.append(dimension)
         questions.append(
             {
                 "id": f"moa_q{index:02d}",
-                "text": text,
+                "text": item["text"],
                 "type": "slider",
-                "min_value": 1,
+                "min_value": 0,
                 "max_value": 10,
                 "options": [],
                 "scoring": {"dimension": dimension, "method": "direct_slider"},
             }
         )
 
-    section = {"id": "motivation", "title": "Was motiviert dich beim Lernen?", "questions": questions}
+    result_blocks: list[dict[str, object]] = []
+    result_index: dict[str, str] = {}
+    current_block: dict[str, object] | None = None
+
+    for line in lines:
+        if _is_separator(line):
+            continue
+        heading_match = re.match(r"^(\d+)\.\s*(.+?)\s*&\s*(.+)$", line)
+        if heading_match:
+            if current_block:
+                current_block["text"] = "\n\n".join(current_block.pop("body_lines", []))
+                result_blocks.append(current_block)
+                pair_key = str(current_block.get("pair_key") or "")
+                if pair_key and pair_key not in result_index:
+                    result_index[pair_key] = str(current_block.get("id") or "")
+
+            left = _canonical_moa_dimension(heading_match.group(2).strip())
+            right = _canonical_moa_dimension(heading_match.group(3).strip())
+            current_block = {
+                "id": f"moa_result_{int(heading_match.group(1)):02d}_{_slug(left)}_{_slug(right)}",
+                "title": f"{left} & {right}",
+                "left": left,
+                "right": right,
+                "pair_key": _result_pair_key(left, right),
+                "body_lines": [],
+            }
+            continue
+
+        if current_block is not None:
+            current_block.setdefault("body_lines", [])
+            current_block["body_lines"].append(line)
+
+    if current_block:
+        current_block["text"] = "\n\n".join(current_block.pop("body_lines", []))
+        result_blocks.append(current_block)
+        pair_key = str(current_block.get("pair_key") or "")
+        if pair_key and pair_key not in result_index:
+            result_index[pair_key] = str(current_block.get("id") or "")
+
     scoring_rules = {
-        "dimensions": sorted(set(dimensions)),
+        "dimensions": list(dict.fromkeys(dimensions)),
         "dominant_count": 2,
         "normalization": "value/10",
         "combination_interpretation": "top_2_pair",
@@ -233,46 +444,62 @@ def _parse_moa(lines: list[str], version: str) -> dict[str, object]:
     return {
         "id": "diagnostic-moa",
         "type": "MOA",
-        "title": "Motivation (MOA)",
+        "title": "Motivation Analysis (MOA)",
         "version": version,
-        "sections": [section],
+        "sections": [{"id": "motivation", "title": "Motivation", "questions": questions}],
+        "metadata": metadata,
         "scoring_rules": scoring_rules,
+        "result_blocks": result_blocks,
+        "result_block_index": result_index,
         "assumptions": [],
     }
 
 
-def _parse_lta(lines: list[str], version: str) -> dict[str, object]:
-    canonical = _canonical_block(lines)
-    start = next((index for index, line in enumerate(canonical) if "questions:" in line.lower()), -1)
-    source = canonical[start + 1 :] if start >= 0 else canonical
+def _parse_lta_markdown(text: str, version: str, metadata: dict[str, object]) -> dict[str, object]:
+    lines = _clean_markdown_lines(text)
+    option_to_dimension = {
+        "A": "auditiv",
+        "V": "visuell",
+        "K": "kinaesthetisch",
+        "L": "lesen_schreiben",
+    }
 
     questions: list[dict[str, object]] = []
-    option_to_dimension = {"A": "auditiv", "V": "visuell", "K": "kinaesthetisch", "L": "lesen_schreiben"}
     current_question: dict[str, object] | None = None
     question_counter = 0
 
-    for raw_line in source:
-        line = re.sub(r"^Additional questions.*?:\s*\d+\s*", "", raw_line, flags=re.IGNORECASE).strip()
-        if not line:
+    in_result_block = False
+    for line in lines:
+        if _is_separator(line):
             continue
-        option_line = line
-        option_line = re.sub(r"^OK\s*:", "o K:", option_line, flags=re.IGNORECASE)
-        option_line = re.sub(r"^O\s*K\s*:", "o K:", option_line, flags=re.IGNORECASE)
-
-        question_match = re.match(r"^\d+\.\s*(.+)$", line)
-        if question_match:
-            question_counter += 1
-            current_question = {
-                "id": f"lta_q{question_counter:02d}",
-                "text": question_match.group(1).strip(),
-                "type": "single_choice",
-                "options": [],
-                "scoring": {"method": "option_weight"},
-            }
-            questions.append(current_question)
+        if line.lower().startswith("learning type analysis"):
+            continue
+        if line.lower().startswith("resulting text samples"):
+            in_result_block = True
+            current_question = None
+            continue
+        if in_result_block:
+            continue
+        if line.lower().startswith("additional questions for profile refinement"):
+            current_question = None
             continue
 
-        if current_question and current_question.get("options") and len(current_question["options"]) >= 4 and line.endswith("?"):
+        option_match = re.match(r"^[•\-*]\s*([AVKL])(?:\s*\([^)]+\))?\s*:\s*(.+)$", line, flags=re.IGNORECASE)
+        if option_match and current_question is not None:
+            key = option_match.group(1).upper()
+            label = option_match.group(2).strip()
+            current_question["options"].append(
+                {
+                    "key": key,
+                    "label": label,
+                    "value": key,
+                    "allows_text": False,
+                    "scoring": {option_to_dimension[key]: 1},
+                }
+            )
+            continue
+
+        if line.endswith("?"):
             question_counter += 1
             current_question = {
                 "id": f"lta_q{question_counter:02d}",
@@ -284,29 +511,14 @@ def _parse_lta(lines: list[str], version: str) -> dict[str, object]:
             questions.append(current_question)
             continue
 
-        option_match = re.match(r"^(?:o\s*)?([AVKL])\s*:\s*(.+)$", option_line, flags=re.IGNORECASE)
-        if option_match and current_question is not None:
-            key = option_match.group(1).upper()
-            label = option_match.group(2).strip()
-            dimension = option_to_dimension[key]
-            current_question["options"].append(
-                {
-                    "key": key,
-                    "label": label,
-                    "value": key,
-                    "allows_text": False,
-                    "scoring": {dimension: 1},
-                }
-            )
-            continue
-
-        if current_question and not current_question.get("options"):
-            current_question["text"] = f"{current_question['text']} {line}".strip()
-            continue
-
         if current_question and current_question.get("options"):
-            options = current_question["options"]
-            options[-1]["label"] = f"{options[-1]['label']} {line}".strip()
+            options = list(current_question["options"])
+            tail = dict(options[-1])
+            tail["label"] = f"{tail.get('label', '')} {line}".strip()
+            options[-1] = tail
+            current_question["options"] = options
+
+    result_blocks, result_index = _parse_lta_result_blocks(lines)
 
     scoring_rules = {
         "dimensions": ["auditiv", "visuell", "kinaesthetisch", "lesen_schreiben"],
@@ -318,356 +530,142 @@ def _parse_lta(lines: list[str], version: str) -> dict[str, object]:
     return {
         "id": "diagnostic-lta",
         "type": "LTA",
-        "title": "Learning Type (LTA)",
+        "title": "Learning Type Analysis (LTA)",
         "version": version,
         "sections": [{"id": "learning_type", "title": "Learning Type", "questions": questions}],
+        "metadata": metadata,
         "scoring_rules": scoring_rules,
+        "result_blocks": result_blocks,
+        "result_block_index": result_index,
         "assumptions": [],
     }
 
 
-def _parse_laa(lines: list[str], version: str) -> dict[str, object]:
-    canonical = _canonical_block(lines)
+def _parse_lta_result_blocks(lines: list[str]) -> tuple[list[dict[str, object]], dict[str, str]]:
+    result_blocks: list[dict[str, object]] = []
+    result_index: dict[str, str] = {}
+    in_result_block = False
+    current_block: dict[str, object] | None = None
 
-    section_titles = [
-        "User needs",
-        "Learning experience",
-        "Conditions",
-        "Objectives",
-        "Skills and Interests",
-        "Attitude",
-        "Support needs",
-        "Miscellaneous",
-    ]
-    sections_by_title = {title: {"id": _slug(title), "title": title, "questions": []} for title in section_titles}
+    def flush_current() -> None:
+        nonlocal current_block
+        if not current_block:
+            return
+        text = "\n\n".join(current_block.pop("body_lines", []))
+        current_block["text"] = text.strip()
+        result_blocks.append(current_block)
+        lookup_key = str(current_block.get("lookup_key") or "")
+        if lookup_key and lookup_key not in result_index:
+            result_index[lookup_key] = str(current_block.get("id") or "")
+        current_block = None
 
-    current_section_title = "User needs"
-    current_question: dict[str, object] | None = None
-    question_counter = 0
-    force_multi_choice = False
-    pending_option_text_as_new = False
-    assumptions: list[str] = []
-
-    def start_question(text: str, question_type: str) -> dict[str, object]:
-        nonlocal question_counter, current_question
-        question_counter += 1
-        current_question = {
-            "id": f"laa_q{question_counter:03d}",
-            "text": text.strip(),
-            "type": question_type,
-            "options": [],
-            "scoring": {"method": "derived_section_weight"},
-        }
-        sections_by_title[current_section_title]["questions"].append(current_question)
-        return current_question
-
-    for line in canonical:
-        mapped_title = _map_laa_section_title(line)
-        if mapped_title:
-            current_section_title = mapped_title
-            current_question = None
-            force_multi_choice = False
-            pending_option_text_as_new = False
-            continue
-
-        lower_line = line.lower()
-        if lower_line.startswith("mythriq") or lower_line.startswith("goal:") or lower_line.startswith("format:"):
-            continue
-        if lower_line.startswith("please rate") or lower_line.startswith("apply at all"):
-            continue
-        if "multiple selections possible" in lower_line:
-            force_multi_choice = True
-            continue
-
-        question_match = re.match(r"^\d+\.\s*(.+)$", line)
-        if question_match:
-            question_text = question_match.group(1).strip()
-            qtype = "multi_choice" if force_multi_choice else "single_choice"
-            if current_section_title == "Attitude":
-                qtype = "likert"
-            if "[ 1 ]" in line:
-                qtype = "likert"
-                question_text = re.sub(r"\[\s*[1-5]\s*\].*$", "", question_text).strip()
-            start_question(question_text, qtype)
-            pending_option_text_as_new = False
-            if qtype == "likert":
-                _set_likert_1_to_5(current_question)
-            continue
-
-        if (
-            current_section_title == "Skills and Interests"
-            and line.endswith("?")
-            and not line.startswith("( )")
-            and "please rate" not in lower_line
-        ):
-            start_question(line, "multi_choice")
-            pending_option_text_as_new = False
-            continue
-
-        if (
-            current_section_title in {"Skills and Interests", "Attitude"}
-            and "[ 1 ]" in line
-            and not line.startswith("( )")
-            and " = " not in line
-            and re.match(r"^(?:\d+\.\s*)?I\b", line.strip()) is not None
-        ):
-            text = re.sub(r"\[\s*1\s*\].*$", "", line).strip()
-            if not text and current_question:
-                _set_likert_1_to_5(current_question)
-                continue
-            start_question(text, "likert")
-            pending_option_text_as_new = False
-            _set_likert_1_to_5(current_question)
-            continue
-
-        if current_question and current_question["type"] == "likert":
-            continuation = re.sub(r"\[\s*[1-5]\s*\]", "", line).strip()
-            if continuation:
-                current_question["text"] = f"{current_question['text']} {continuation}".strip()
-            continue
-
-        if "( )" in line:
-            if current_question is None:
-                start_question("Selection", "multi_choice" if force_multi_choice else "single_choice")
-            prefix, option_labels = _extract_checkbox_options(line)
-            if prefix:
-                if pending_option_text_as_new:
-                    option_key = f"o{len(current_question['options']) + 1}"
-                    current_question["options"].append(
-                        {
-                            "key": option_key,
-                            "label": prefix,
-                            "value": option_key,
-                            "allows_text": "miscellaneous" in prefix.lower() or "other" in prefix.lower(),
-                        }
-                    )
-                elif current_question["options"]:
-                    current_question["options"][-1]["label"] = f"{current_question['options'][-1]['label']} {prefix}".strip()
-            for option_label in option_labels:
-                for resolved_label in _split_laa_merged_option(option_label):
-                    option_key = f"o{len(current_question['options']) + 1}"
-                    current_question["options"].append(
-                        {
-                            "key": option_key,
-                            "label": resolved_label,
-                            "value": option_key,
-                            "allows_text": "miscellaneous" in resolved_label.lower() or "other" in resolved_label.lower(),
-                        }
-                    )
-            pending_option_text_as_new = bool(re.search(r"\(\s*\)\s*$", line))
-            continue
-
-        # Wrapped option/statement continuation.
-        if current_question and current_question["type"] != "likert":
-            if pending_option_text_as_new and line and not line.startswith("["):
-                option_key = f"o{len(current_question['options']) + 1}"
-                current_question["options"].append(
-                    {
-                        "key": option_key,
-                        "label": line.strip(),
-                        "value": option_key,
-                        "allows_text": "miscellaneous" in line.lower() or "other" in line.lower(),
-                    }
-                )
-                pending_option_text_as_new = False
-                continue
-            if current_question["options"]:
-                current_question["options"][-1]["label"] = f"{current_question['options'][-1]['label']} {line}".strip()
-            elif line and not line.startswith("["):
-                current_question["text"] = f"{current_question['text']} {line}".strip()
-            pending_option_text_as_new = False
-
-    sections = [sections_by_title[title] for title in section_titles if sections_by_title[title]["questions"]]
-
-    # Derived LAA scoring assumptions are documented explicitly because the source has no explicit algorithm.
-    assumptions.append(
-        "The LAA source does not define an explicit mathematical formula; scores are therefore aggregated per section."
-    )
-    assumptions.append(
-        "Likert items (1-5) use numeric values directly; each selected multi-choice option contributes +1 to the section."
-    )
-
-    scoring_rules = {
-        "method": "section_aggregation",
-        "normalization": "section_score/max_section_score",
-        "dominant_count": 3,
-    }
-
-    return {
-        "id": "diagnostic-laa",
-        "type": "LAA",
-        "title": "Learning Approach (LAA)",
-        "version": version,
-        "sections": sections,
-        "scoring_rules": scoring_rules,
-        "assumptions": assumptions,
-    }
-
-
-def _collect_numbered_blocks(lines: Iterable[str]) -> list[list[str]]:
-    blocks: list[list[str]] = []
-    current: list[str] = []
     for line in lines:
-        if re.match(r"^\d+\.\s*", line):
-            if current:
-                blocks.append(current)
-            current = [line]
+        if line.lower().startswith("resulting text samples"):
+            in_result_block = True
             continue
-        if current:
-            current.append(line)
-    if current:
-        blocks.append(current)
-    return blocks
+        if not in_result_block:
+            continue
+        if _is_separator(line):
+            continue
+
+        normalized = _normalize_text(line)
+        if normalized in {
+            "1 dominant types",
+            "2 mixed types pairs",
+            "3 balanced profile",
+            "dominant types",
+            "mixed types pairs",
+            "balanced profile",
+        }:
+            continue
+
+        dominant_channel = _lta_channel_from_heading(line)
+        if dominant_channel:
+            flush_current()
+            label = _format_lta_channel_label(dominant_channel)
+            current_block = {
+                "id": f"lta_result_dominant_{dominant_channel}",
+                "title": label,
+                "classification": "dominant",
+                "lookup_key": f"dominant:{dominant_channel}",
+                "body_lines": [],
+            }
+            continue
+
+        pair = _lta_pair_from_heading(line)
+        if pair:
+            flush_current()
+            left, right = pair
+            left_label = _format_lta_channel_label(left)
+            right_label = _format_lta_channel_label(right)
+            current_block = {
+                "id": f"lta_result_mixed_{left}_{right}",
+                "title": f"{left_label}–{right_label}",
+                "classification": "mixed",
+                "lookup_key": f"mixed:{_result_pair_key(left, right)}",
+                "left": left,
+                "right": right,
+                "body_lines": [],
+            }
+            continue
+
+        if normalized == "balanced":
+            flush_current()
+            current_block = {
+                "id": "lta_result_balanced",
+                "title": "Balanced",
+                "classification": "balanced",
+                "lookup_key": "balanced",
+                "body_lines": [],
+            }
+            continue
+
+        if current_block is not None:
+            current_block.setdefault("body_lines", [])
+            current_block["body_lines"].append(line)
+
+    flush_current()
+    return result_blocks, result_index
 
 
-def _map_laa_section_title(line: str) -> str | None:
-    normalized = normalize_text(line)
+def _lta_channel_from_heading(raw: str) -> str:
+    compact = raw.strip()
+    if not compact:
+        return ""
+    compact = re.sub(r"\s*\([A-Z]\)\s*$", "", compact, flags=re.IGNORECASE).strip()
+    normalized = _normalize_text(compact)
     mapping = {
-        "user needs": "User needs",
-        "nutzerbedurfnisse": "User needs",
-        "learning experience and self image": "Learning experience",
-        "lernerfahrung und selbstbild": "Learning experience",
-        "time framework": "Conditions",
-        "zeit und rahmenbedingungen": "Conditions",
-        "zeit rahmenbedingungen": "Conditions",
-        "learning objectives motivation": "Objectives",
-        "lernziele motivation": "Objectives",
-        "skills interests": "Skills and Interests",
-        "interests": "Skills and Interests",
-        "competencies skills self assessment": "Skills and Interests",
-        "soft skills self assessment via slider": "Skills and Interests",
-        "emotional attitude towards learning": "Attitude",
-        "emotionale haltung zum lernen": "Attitude",
-        "learning blocks support needs": "Support needs",
-        "lernblockaden unterstutzungsbedarfe": "Support needs",
-        "other personalization options": "Miscellaneous",
-        "sonstiges zur personalisierung": "Miscellaneous",
+        "auditory": "auditiv",
+        "visual": "visuell",
+        "kinesthetic": "kinaesthetisch",
+        "reading writing": "lesen_schreiben",
+        "reading and writing": "lesen_schreiben",
     }
-    return mapping.get(normalized)
+    return mapping.get(normalized, "")
 
 
-def _set_likert_1_to_5(question: dict[str, object] | None) -> None:
-    if question is None:
-        return
-    question["type"] = "likert"
-    question["min_value"] = 1
-    question["max_value"] = 5
-    question["options"] = [
-        {"key": str(value), "label": str(value), "value": str(value), "allows_text": False}
-        for value in range(1, 6)
-    ]
+def _lta_pair_from_heading(raw: str) -> tuple[str, str] | None:
+    compact = raw.strip()
+    if "–" in compact:
+        parts = [item.strip() for item in compact.split("–", 1)]
+    elif "-" in compact:
+        parts = [item.strip() for item in compact.split("-", 1)]
+    else:
+        return None
+    if len(parts) != 2:
+        return None
+    left = _lta_channel_from_heading(parts[0])
+    right = _lta_channel_from_heading(parts[1])
+    if not left or not right or left == right:
+        return None
+    return left, right
 
 
-def _extract_checkbox_options(line: str) -> tuple[str, list[str]]:
-    # Split lines that can contain multiple "( ) option" chunks.
-    # Returns optional prefix text (continuation for previous option) and extracted option labels.
-    parts = re.split(r"\(\s*\)", line)
-    if not parts:
-        return "", []
-    prefix = parts[0].strip()
-    labels = [re.sub(r"\s+", " ", part).strip() for part in parts[1:] if part.strip()]
-    return prefix, labels
-
-
-def _split_laa_merged_option(label: str) -> list[str]:
-    cleaned = re.sub(r"\s+", " ", label).strip()
-    split_match = re.match(
-        r"^(I don't know what I'm learning something for)\s+(it becomes too difficult.*)$",
-        cleaned,
-        flags=re.IGNORECASE,
-    )
-    if split_match:
-        return [split_match.group(1), split_match.group(2)]
-    return [cleaned]
-
-
-def normalize_text(value: str) -> str:
-    base = (
-        value.lower()
-        .replace("&", " ")
-        .replace("/", " ")
-        .replace("–", " ")
-        .replace("-", " ")
-        .replace("'", "")
-    )
-    ascii_only = unicodedata.normalize("NFD", base).encode("ascii", "ignore").decode("ascii")
-    return re.sub(r"\s+", " ", ascii_only).strip()
-
-
-def _translate_definition_to_english(definition: dict[str, object]) -> dict[str, object]:
-    translated = dict(definition)
-    translated["title"] = _translate_text(str(translated.get("title") or ""))
-
-    next_sections: list[dict[str, object]] = []
-    for section in list(translated.get("sections") or []):
-        section_dict = dict(section)
-        section_dict["title"] = _translate_section_title(str(section_dict.get("title") or ""))
-        section_dict["id"] = _slug(section_dict["title"])
-        next_questions: list[dict[str, object]] = []
-        for question in list(section_dict.get("questions") or []):
-            question_dict = dict(question)
-            question_dict["text"] = _translate_text(str(question_dict.get("text") or ""))
-            next_options: list[dict[str, object]] = []
-            for option in list(question_dict.get("options") or []):
-                option_dict = dict(option)
-                option_dict["label"] = _translate_text(str(option_dict.get("label") or ""))
-                next_options.append(option_dict)
-            question_dict["options"] = next_options
-            scoring = dict(question_dict.get("scoring") or {})
-            if "dimension" in scoring:
-                scoring["dimension"] = _translate_text(str(scoring.get("dimension") or ""))
-            question_dict["scoring"] = scoring
-            next_questions.append(question_dict)
-        section_dict["questions"] = next_questions
-        next_sections.append(section_dict)
-
-    translated["sections"] = next_sections
-    return translated
-
-
-def _translate_section_title(value: str) -> str:
-    normalized = value.strip()
-    mapping = {
-        "Nutzerbedürfnisse": "User needs",
-        "Lernerfahrung und Selbstbild": "Learning experience",
-        "Zeit & Rahmenbedingungen": "Conditions",
-        "Zeit und Rahmenbedingungen": "Conditions",
-        "Lernziele & Motivation": "Objectives",
-        "Skills & Interessen": "Skills and Interests",
-        "INTERESSEN": "Skills and Interests",
-        "KOMPETENZEN / SKILLS (Selbsteinschätzung)": "Skills and Interests",
-        "SOFT SKILLS (Selbsteinschätzung via Regler)": "Skills and Interests",
-        "Emotionale Haltung zum Lernen": "Attitude",
-        "Lernblockaden & Unterstützungsbedarfe": "Support needs",
-        "Sonstiges zur Personalisierung": "Miscellaneous",
-        "Was motiviert dich beim Lernen?": "Motivation",
+def _format_lta_channel_label(channel_key: str) -> str:
+    labels = {
+        "auditiv": "Auditory",
+        "visuell": "Visual",
+        "kinaesthetisch": "Kinesthetic",
+        "lesen_schreiben": "Reading/Writing",
     }
-    return mapping.get(normalized, _translate_text(normalized))
-
-
-def _translate_text(value: str) -> str:
-    text = value.strip()
-    if not text:
-        return text
-    replacements = {
-        "MythriQ": "",
-        "Lernartanalyse (LAA)": "Learning Approach (LAA)",
-        "Motivationsanalyse (MOA)": "Motivation (MOA)",
-        "Lerntypanalyse (LTA)": "Learning Type (LTA)",
-        "Nutzerbedürfnisse": "User needs",
-        "Lernerfahrung und Selbstbild": "Learning experience",
-        "Zeit & Rahmenbedingungen": "Conditions",
-        "Zeit und Rahmenbedingungen": "Conditions",
-        "Lernziele & Motivation": "Objectives",
-        "Skills & Interessen": "Skills and Interests",
-        "Emotionale Haltung zum Lernen": "Attitude",
-        "Lernblockaden & Unterstützungsbedarfe": "Support needs",
-        "Sonstiges zur Personalisierung": "Miscellaneous",
-        "Sonstiges": "Miscellaneous",
-        "Fragen:": "Questions:",
-        "Mehrfachauswahl möglich": "Multiple selection possible",
-    }
-    for source, target in replacements.items():
-        text = text.replace(source, target)
-    text = re.sub(r"\s+", " ", text).strip()
-    return text
+    return labels.get(channel_key, channel_key)

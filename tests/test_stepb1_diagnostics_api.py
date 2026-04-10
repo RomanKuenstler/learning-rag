@@ -14,7 +14,7 @@ class DiagnosticsApiStubService:
             "attempt": {
                 "attempt_id": "attempt-1",
                 "status": "in_progress",
-                "definition_versions": {"LAA": "1.1", "MOA": "1.0", "LTA": "1.0"},
+                "definition_versions": {"LAA": "2.0", "MOA": "2.0", "LTA": "2.0"},
                 "started_at": "2026-04-04T00:00:00Z",
                 "completed_at": None,
                 "is_latest": True,
@@ -26,9 +26,9 @@ class DiagnosticsApiStubService:
     def list_diagnostic_definitions(self):
         return {
             "definitions": [
-                {"id": "diagnostic-laa", "type": "LAA", "title": "LAA", "version": "1.1", "sections": []},
-                {"id": "diagnostic-moa", "type": "MOA", "title": "MOA", "version": "1.0", "sections": []},
-                {"id": "diagnostic-lta", "type": "LTA", "title": "LTA", "version": "1.0", "sections": []},
+                {"id": "diagnostic-laa", "type": "LAA", "title": "LAA", "version": "2.0", "sections": []},
+                {"id": "diagnostic-moa", "type": "MOA", "title": "MOA", "version": "2.0", "sections": []},
+                {"id": "diagnostic-lta", "type": "LTA", "title": "LTA", "version": "2.0", "sections": []},
             ]
         }
 
@@ -42,7 +42,7 @@ class DiagnosticsApiStubService:
         return {
             "attempt_id": "attempt-1",
             "status": "in_progress",
-            "definition_versions": {"LAA": "1.1", "MOA": "1.0", "LTA": "1.0"},
+            "definition_versions": {"LAA": "2.0", "MOA": "2.0", "LTA": "2.0"},
             "started_at": "2026-04-04T00:00:00Z",
         }
 
@@ -132,10 +132,13 @@ def test_diagnostics_attempt_flow_routes() -> None:
 
     save = client.put(
         "/api/diagnostics/attempts/attempt-1/answers",
-        json={"diagnostic_type": "LAA", "answers": [{"question_id": "laa_q001", "value": "o1"}]},
+        json={
+            "diagnostic_type": "LAA",
+            "answers": [{"question_id": "laa_q001", "value": {"selected": "o6", "other_text": "Own reason"}}],
+        },
     )
     assert save.status_code == 200
-    assert save.json()["answers"]["LAA"]["laa_q001"] == "o1"
+    assert save.json()["answers"]["LAA"]["laa_q001"]["selected"] == "o6"
 
     complete = client.post("/api/diagnostics/attempts/attempt-1/complete")
     assert complete.status_code == 200

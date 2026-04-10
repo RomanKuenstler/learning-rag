@@ -114,10 +114,11 @@ This layer stores only learner-provided inputs and is designed for future compos
 
 ## Step B.1 Diagnostic Model
 
-Step B.1 adds source-of-truth diagnostics loaded from `.docx`:
+Step B.1 diagnostics are now markdown-first and loaded from:
 
-- source files: `data/diagnostics/source/MythriQ-*.docx`
-- parser pipeline: docx XML extraction -> structured diagnostic JSON (`LAA`, `MOA`, `LTA`)
+- source files: `data/sources/alpd/*v2.md` (`LAA`, `MOA`, `LTA`)
+- parser pipeline: markdown parsing -> structured diagnostic JSON (`sections`, `questions`, `options`, optional `metadata`)
+- MOA parser additionally extracts dynamic result blocks and pair mapping metadata
 - immutable/versioned diagnostic storage per definition version
 - deterministic scoring from persisted answers (no LLM scoring)
 
@@ -138,6 +139,29 @@ Design intent:
 
 - Step B declared preferences remain separate from Step B.1 diagnosed profiles
 - final composition target is `LearningContext = declared_preferences + diagnostic_profile + state_signals + feedback_signals`
+- LAA `Other:` responses are stored with the selected option as one answer object (`selected`, `other_text`)
+- MOA result persistence includes both computed profile values and selected personalized output text
+
+LAA scoring architecture now follows a section-based profile model:
+
+- per-question option-to-dimension mapping for single-choice items
+- section-local dimension aggregation
+- deterministic normalization (`0..100`) using per-dimension max contribution envelopes
+- emotional slider block handled as direct item-level subprofile values with documented compact indices
+- multi-select sections handled as structured tag/profile lists instead of synthetic numeric grading
+
+This keeps LAA outputs interpretable, composable for later personalization, and avoids collapsing heterogeneous sections into a single opaque score.
+
+LTA scoring architecture now follows a channel-distribution model:
+
+- answer options map to exactly one channel (`auditiv`, `visuell`, `kinaesthetisch`, `lesen_schreiben`)
+- every selected answer increments one channel counter
+- results persist both raw channel counts and normalized percentages
+- deterministic profile interpretation classifies each attempt as:
+  - `dominant` (top channel leads by at least 2)
+  - `mixed` (top two channels close without a clear dominant)
+  - `balanced` (all channels close; `max-min <= 1`)
+- UI uses distribution-first rendering with generated summary text based on the computed classification and channel ranking
 
 ## KSA Assessment And Profile Model
 

@@ -3842,7 +3842,7 @@ button.send:hover:not(:disabled) {
 .diagnostic-laa-wrap,
 .diagnostic-lta-wrap {
   display: grid;
-  justify-items: center;
+  justify-items: stretch;
   gap: 0.65rem;
 }
 
@@ -3951,6 +3951,36 @@ button.send:hover:not(:disabled) {
 .diagnostic-lta-donut {
   max-width: 180px;
   height: auto;
+}
+
+.diagnostic-lta-distribution {
+  display: grid;
+  gap: 0.45rem;
+  width: 100%;
+}
+
+.diagnostic-lta-row {
+  display: grid;
+  grid-template-columns: minmax(110px, 0.8fr) minmax(0, 1fr) auto auto;
+  align-items: center;
+  gap: 0.45rem;
+  font-size: 0.82rem;
+}
+
+.diagnostic-lta-row span {
+  color: #334155;
+}
+
+.diagnostic-lta-row small {
+  color: #64748b;
+  font-size: 0.72rem;
+}
+
+.diagnostic-lta-summary {
+  margin: 0;
+  color: #334155;
+  font-size: 0.82rem;
+  line-height: 1.4;
 }
 
 .diagnostic-dialog {
@@ -4136,6 +4166,19 @@ button.send:hover:not(:disabled) {
   margin-top: 0.2rem;
 }
 
+.diagnostic-option-extra {
+  grid-column: 2;
+  overflow: hidden;
+  max-height: 0;
+  opacity: 0;
+  transition: max-height 0.2s ease, opacity 0.2s ease;
+}
+
+.diagnostic-option-extra.expanded {
+  max-height: 220px;
+  opacity: 1;
+}
+
 .diagnostic-range-wrap {
   display: grid;
   gap: 0.35rem;
@@ -4249,12 +4292,156 @@ button.send:hover:not(:disabled) {
 
 .diagnostic-misc-textarea {
   min-height: 5.5rem;
+  margin-top: 0.5rem;
 }
 
 .diagnostic-scale-hint {
   margin: 0.2rem 0 0;
   color: #6b7280;
   font-size: 0.82rem;
+}
+
+.diagnostic-personalized-output {
+  margin-top: 0.8rem;
+  padding-top: 0.75rem;
+  border-top: 1px solid #e5e7eb;
+  display: grid;
+  gap: 0.35rem;
+}
+
+.diagnostic-personalized-output > h6 {
+  margin: 0;
+  font-size: 0.78rem;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: #475569;
+}
+
+.diagnostic-personalized-output-title {
+  margin: 0;
+  font-weight: 700;
+  color: #0f172a;
+}
+
+.diagnostic-personalized-output > p {
+  margin: 0;
+  color: #334155;
+  line-height: 1.5;
+  white-space: pre-line;
+}
+
+.diagnostic-laa-sections {
+  margin-top: 0.8rem;
+  display: grid;
+  gap: 0.7rem;
+}
+
+.diagnostic-laa-section-card {
+  border-radius: 12px;
+  padding: 0.2rem 0.4rem 0.4rem;
+  display: grid;
+  gap: 0.35rem;
+}
+
+.diagnostic-laa-accordion-toggle {
+  width: 100%;
+  border: none;
+  background: transparent;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.6rem;
+  padding: 0.55rem 0.45rem;
+  cursor: pointer;
+  text-align: left;
+}
+
+.diagnostic-laa-accordion-toggle strong {
+  font-size: 0.88rem;
+}
+
+.diagnostic-laa-accordion-toggle span {
+  font-size: 1.1rem;
+  line-height: 1;
+  color: #334155;
+}
+
+.diagnostic-laa-accordion-toggle.open {
+  border-bottom: 1px solid #e5e7eb;
+}
+
+.diagnostic-laa-accordion-panel {
+  display: grid;
+  gap: 0.5rem;
+  padding: 0.55rem 0.45rem 0.35rem;
+  color: #334155;
+  font-size: 0.8rem;
+}
+
+.diagnostic-laa-accordion-panel p {
+  margin-top: 0.2rem;
+  margin-bottom: 0;
+}
+
+.diagnostic-laa-insights {
+  margin: 0;
+  padding-left: 1rem;
+  display: grid;
+  gap: 0.25rem;
+}
+
+.diagnostic-laa-insights li {
+  color: #334155;
+  font-size: 0.8rem;
+}
+
+.diagnostic-laa-dimensions {
+  display: grid;
+  gap: 0.35rem;
+}
+
+.diagnostic-laa-dimension-row {
+  display: grid;
+  grid-template-columns: 150px minmax(0, 1fr) 42px;
+  gap: 0.4rem;
+  align-items: center;
+  font-size: 0.76rem;
+}
+
+.diagnostic-laa-indices {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem;
+}
+
+.diagnostic-laa-chip {
+  display: inline-flex;
+  align-items: center;
+  background: #e2e8f0;
+  color: #0f172a;
+  border-radius: 999px;
+  padding: 0.16rem 0.52rem;
+  font-size: 0.72rem;
+  font-weight: 600;
+}
+
+.diagnostic-laa-tags {
+  display: grid;
+  gap: 0.28rem;
+  font-size: 0.76rem;
+  color: #334155;
+}
+
+.diagnostic-laa-emotional {
+  display: grid;
+  gap: 0.3rem;
+}
+
+.diagnostic-laa-emotional-row {
+  display: flex;
+  justify-content: space-between;
+  gap: 0.5rem;
+  font-size: 0.76rem;
 }
 
 .learning-goal-topic {
