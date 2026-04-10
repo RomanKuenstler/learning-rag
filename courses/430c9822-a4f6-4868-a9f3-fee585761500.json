@@ -1,0 +1,107 @@
+{
+  "schema_version": 2,
+  "source_schema_version": 2,
+  "id": "430c9822-a4f6-4868-a9f3-fee585761500",
+  "title": "test",
+  "description": "",
+  "scope": "user",
+  "owner_user_id": 3,
+  "subject": "",
+  "difficulty_level": "",
+  "estimated_duration_minutes": null,
+  "status": "published",
+  "allowed_file_ids": [
+    5,
+    7
+  ],
+  "allowed_tags": [],
+  "chapters": [
+    {
+      "id": "b30d9b6e-2897-407f-882e-8704f04944c1",
+      "title": "test",
+      "description": "",
+      "order_index": 0,
+      "metadata": {
+        "learning_objectives": [],
+        "migrated_from": "module"
+      }
+    }
+  ],
+  "branches": [],
+  "nodes": [
+    {
+      "id": "node-1-1",
+      "title": "test Overview",
+      "description": "",
+      "type": "learning_unit",
+      "chapter_id": "b30d9b6e-2897-407f-882e-8704f04944c1",
+      "branch_id": null,
+      "required": true,
+      "prerequisites": {
+        "requires_all": [],
+        "requires_any": [],
+        "recommended": []
+      },
+      "completion_mode": "lesson_complete",
+      "estimated_duration_minutes": null,
+      "layout": {
+        "x": 120.0,
+        "y": 120.0
+      },
+      "metadata": {
+        "objectives": [],
+        "teaching_notes": "",
+        "migrated_from": "lesson"
+      },
+      "display": {},
+      "ksa": [],
+      "unlocks": {
+        "node_ids": [],
+        "branch_ids": [],
+        "recommended_next_node_ids": []
+      },
+      "rewards": {
+        "estimated_ksa_gain": {},
+        "effort_score": null,
+        "reward_tags": []
+      },
+      "retrospective_hooks": {
+        "retrospective_after": false,
+        "review_recommended": false,
+        "recap_checkpoint_available": false
+      },
+      "ksa_hooks": {
+        "mini_assessment_available": false,
+        "recommended_reassessment_topics": [],
+        "unlocks_deeper_refinement": false
+      },
+      "remediation": {
+        "is_remediation_node": false,
+        "recommended_if_failed_node_ids": [],
+        "supports_review_for_node_ids": []
+      },
+      "adaptive_unlock": {
+        "ksa_thresholds": [],
+        "requires_branch_completion_ids": [],
+        "requires_checkpoint_node_ids": [],
+        "requires_review_recommended": false,
+        "recommended_only": false
+      }
+    }
+  ],
+  "edges": [],
+  "entry_node_ids": [
+    "node-1-1"
+  ],
+  "completion_rules": {
+    "required_completion": "all_required_nodes",
+    "migrated_from_schema": 1
+  },
+  "visual_layout": {
+    "layout_engine": "manual",
+    "migrated_from_schema": 1
+  },
+  "metadata": {
+    "migrated_from_schema": 1
+  }
+}

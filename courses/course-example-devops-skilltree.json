@@ -1,0 +1,883 @@
+{
+  "schema_version": 2,
+  "source_schema_version": 2,
+  "id": "course-example-devops-skilltree",
+  "title": "Example: DevOps Skilltree",
+  "description": "Branching DevOps progression with quiz, gates, milestone, capstone, and optional reinforcement hooks.",
+  "scope": "global",
+  "owner_user_id": null,
+  "subject": "DevOps",
+  "difficulty_level": "intermediate",
+  "estimated_duration_minutes": 300,
+  "status": "published",
+  "allowed_file_ids": [],
+  "allowed_tags": [
+    "ci-cd",
+    "docker",
+    "kubernetes"
+  ],
+  "chapters": [
+    {
+      "id": "chapter-foundations",
+      "title": "Foundations",
+      "description": "Core container and workflow skills.",
+      "order_index": 0,
+      "metadata": {}
+    },
+    {
+      "id": "chapter-delivery",
+      "title": "Delivery",
+      "description": "Pipeline and release controls.",
+      "order_index": 1,
+      "metadata": {}
+    },
+    {
+      "id": "chapter-operations",
+      "title": "Operations",
+      "description": "Observability and operational outcomes.",
+      "order_index": 2,
+      "metadata": {}
+    }
+  ],
+  "branches": [
+    {
+      "id": "branch-core",
+      "title": "Core Route",
+      "description": "Required baseline branch.",
+      "required": true,
+      "metadata": {}
+    },
+    {
+      "id": "branch-operations",
+      "title": "Operations Route",
+      "description": "Required operational branch.",
+      "required": true,
+      "metadata": {}
+    },
+    {
+      "id": "branch-reinforcement",
+      "title": "Reinforcement Route",
+      "description": "Optional enrichment branch.",
+      "required": false,
+      "metadata": {}
+    }
+  ],
+  "nodes": [
+    {
+      "id": "node-container-basics",
+      "title": "Container Basics",
+      "description": "Images, containers, and runtime lifecycle.",
+      "type": "learning_unit",
+      "chapter_id": "chapter-foundations",
+      "branch_id": "branch-core",
+      "required": true,
+      "prerequisites": {
+        "requires_all": [],
+        "requires_any": [],
+        "recommended": []
+      },
+      "completion_mode": "lesson_complete",
+      "estimated_duration_minutes": 20,
+      "layout": {
+        "x": 90.0,
+        "y": 120.0
+      },
+      "metadata": {},
+      "display": {},
+      "ksa": [
+        {
+          "dimension": "K",
+          "topic": "information_technology",
+          "subtopic": null,
+          "start_level": 1,
+          "target_level": 3,
+          "contribution_weight": 0.5,
+          "unlocks_assessment_check": false,
+          "recommends_assessment_check": true
+        }
+      ],
+      "unlocks": {
+        "node_ids": [
+          "node-compose-lab"
+        ],
+        "branch_ids": [],
+        "recommended_next_node_ids": []
+      },
+      "rewards": {
+        "estimated_ksa_gain": {
+          "K.information_technology": 0.2
+        },
+        "effort_score": 20.0,
+        "reward_tags": [
+          "foundation"
+        ]
+      },
+      "retrospective_hooks": {
+        "retrospective_after": false,
+        "review_recommended": false,
+        "recap_checkpoint_available": false
+      },
+      "ksa_hooks": {
+        "mini_assessment_available": false,
+        "recommended_reassessment_topics": [],
+        "unlocks_deeper_refinement": false
+      },
+      "remediation": {
+        "is_remediation_node": false,
+        "recommended_if_failed_node_ids": [],
+        "supports_review_for_node_ids": []
+      },
+      "adaptive_unlock": {
+        "ksa_thresholds": [],
+        "requires_branch_completion_ids": [],
+        "requires_checkpoint_node_ids": [],
+        "requires_review_recommended": false,
+        "recommended_only": false
+      }
+    },
+    {
+      "id": "node-compose-lab",
+      "title": "Compose Lab",
+      "description": "Run a multi-service local stack.",
+      "type": "practice",
+      "chapter_id": "chapter-foundations",
+      "branch_id": "branch-core",
+      "required": true,
+      "prerequisites": {
+        "requires_all": [
+          "node-container-basics"
+        ],
+        "requires_any": [],
+        "recommended": []
+      },
+      "completion_mode": "practice_complete",
+      "estimated_duration_minutes": 30,
+      "layout": {
+        "x": 290.0,
+        "y": 120.0
+      },
+      "metadata": {},
+      "display": {},
+      "ksa": [
+        {
+          "dimension": "S",
+          "topic": "digital_craft",
+          "subtopic": "Full-Stack Development",
+          "start_level": 1,
+          "target_level": 3,
+          "contribution_weight": 0.6,
+          "unlocks_assessment_check": false,
+          "recommends_assessment_check": false
+        }
+      ],
+      "unlocks": {
+        "node_ids": [
+          "node-gitops-primer",
+          "node-cicd-quiz"
+        ],
+        "branch_ids": [],
+        "recommended_next_node_ids": [
+          "node-incident-review"
+        ]
+      },
+      "rewards": {
+        "estimated_ksa_gain": {
+          "S.digital_craft": 0.28
+        },
+        "effort_score": 30.0,
+        "reward_tags": [
+          "hands_on"
+        ]
+      },
+      "retrospective_hooks": {
+        "retrospective_after": false,
+        "review_recommended": false,
+        "recap_checkpoint_available": false
+      },
+      "ksa_hooks": {
+        "mini_assessment_available": false,
+        "recommended_reassessment_topics": [],
+        "unlocks_deeper_refinement": false
+      },
+      "remediation": {
+        "is_remediation_node": false,
+        "recommended_if_failed_node_ids": [],
+        "supports_review_for_node_ids": []
+      },
+      "adaptive_unlock": {
+        "ksa_thresholds": [],
+        "requires_branch_completion_ids": [],
+        "requires_checkpoint_node_ids": [],
+        "requires_review_recommended": false,
+        "recommended_only": false
+      }
+    },
+    {
+      "id": "node-gitops-primer",
+      "title": "GitOps Primer",
+      "description": "Declarative delivery workflow fundamentals.",
+      "type": "learning_unit",
+      "chapter_id": "chapter-delivery",
+      "branch_id": "branch-core",
+      "required": true,
+      "prerequisites": {
+        "requires_all": [
+          "node-compose-lab"
+        ],
+        "requires_any": [],
+        "recommended": []
+      },
+      "completion_mode": "lesson_complete",
+      "estimated_duration_minutes": 30,
+      "layout": {
+        "x": 500.0,
+        "y": 80.0
+      },
+      "metadata": {},
+      "display": {},
+      "ksa": [],
+      "unlocks": {
+        "node_ids": [
+          "node-delivery-milestone"
+        ],
+        "branch_ids": [],
+        "recommended_next_node_ids": []
+      },
+      "rewards": {
+        "estimated_ksa_gain": {
+          "K.information_technology": 0.15
+        },
+        "effort_score": 22.0,
+        "reward_tags": [
+          "delivery"
+        ]
+      },
+      "retrospective_hooks": {
+        "retrospective_after": false,
+        "review_recommended": false,
+        "recap_checkpoint_available": false
+      },
+      "ksa_hooks": {
+        "mini_assessment_available": false,
+        "recommended_reassessment_topics": [],
+        "unlocks_deeper_refinement": false
+      },
+      "remediation": {
+        "is_remediation_node": false,
+        "recommended_if_failed_node_ids": [],
+        "supports_review_for_node_ids": []
+      },
+      "adaptive_unlock": {
+        "ksa_thresholds": [],
+        "requires_branch_completion_ids": [],
+        "requires_checkpoint_node_ids": [],
+        "requires_review_recommended": false,
+        "recommended_only": false
+      }
+    },
+    {
+      "id": "node-cicd-quiz",
+      "title": "CI/CD Quiz",
+      "description": "Validate pipeline concepts with a scored quiz.",
+      "type": "quiz",
+      "chapter_id": "chapter-delivery",
+      "branch_id": "branch-core",
+      "required": true,
+      "prerequisites": {
+        "requires_all": [
+          "node-compose-lab"
+        ],
+        "requires_any": [],
+        "recommended": []
+      },
+      "completion_mode": "quiz_pass",
+      "estimated_duration_minutes": 20,
+      "layout": {
+        "x": 500.0,
+        "y": 180.0
+      },
+      "metadata": {
+        "pass_threshold": 0.75
+      },
+      "display": {},
+      "ksa": [],
+      "unlocks": {
+        "node_ids": [
+          "node-delivery-milestone"
+        ],
+        "branch_ids": [],
+        "recommended_next_node_ids": []
+      },
+      "rewards": {
+        "estimated_ksa_gain": {
+          "S.strategic_execution": 0.12
+        },
+        "effort_score": 18.0,
+        "reward_tags": [
+          "quiz"
+        ]
+      },
+      "retrospective_hooks": {
+        "retrospective_after": true,
+        "review_recommended": true,
+        "recap_checkpoint_available": true
+      },
+      "ksa_hooks": {
+        "mini_assessment_available": true,
+        "recommended_reassessment_topics": [
+          "S.strategic_execution"
+        ],
+        "unlocks_deeper_refinement": true
+      },
+      "remediation": {
+        "is_remediation_node": false,
+        "recommended_if_failed_node_ids": [],
+        "supports_review_for_node_ids": []
+      },
+      "adaptive_unlock": {
+        "ksa_thresholds": [],
+        "requires_branch_completion_ids": [],
+        "requires_checkpoint_node_ids": [],
+        "requires_review_recommended": false,
+        "recommended_only": false
+      }
+    },
+    {
+      "id": "node-delivery-milestone",
+      "title": "Delivery Milestone",
+      "description": "Merge point proving delivery readiness.",
+      "type": "milestone",
+      "chapter_id": "chapter-delivery",
+      "branch_id": "branch-core",
+      "required": true,
+      "prerequisites": {
+        "requires_all": [],
+        "requires_any": [
+          "node-gitops-primer",
+          "node-cicd-quiz"
+        ],
+        "recommended": []
+      },
+      "completion_mode": "manual",
+      "estimated_duration_minutes": 10,
+      "layout": {
+        "x": 700.0,
+        "y": 130.0
+      },
+      "metadata": {},
+      "display": {},
+      "ksa": [],
+      "unlocks": {
+        "node_ids": [
+          "node-release-gate"
+        ],
+        "branch_ids": [],
+        "recommended_next_node_ids": []
+      },
+      "rewards": {
+        "estimated_ksa_gain": {
+          "S.strategic_execution": 0.08
+        },
+        "effort_score": 8.0,
+        "reward_tags": [
+          "milestone"
+        ]
+      },
+      "retrospective_hooks": {
+        "retrospective_after": true,
+        "review_recommended": true,
+        "recap_checkpoint_available": true
+      },
+      "ksa_hooks": {
+        "mini_assessment_available": false,
+        "recommended_reassessment_topics": [],
+        "unlocks_deeper_refinement": false
+      },
+      "remediation": {
+        "is_remediation_node": false,
+        "recommended_if_failed_node_ids": [],
+        "supports_review_for_node_ids": []
+      },
+      "adaptive_unlock": {
+        "ksa_thresholds": [],
+        "requires_branch_completion_ids": [],
+        "requires_checkpoint_node_ids": [],
+        "requires_review_recommended": false,
+        "recommended_only": false
+      }
+    },
+    {
+      "id": "node-release-gate",
+      "title": "Release Gate",
+      "description": "Gate node requiring explicit release unlock evidence.",
+      "type": "unlock_gate",
+      "chapter_id": "chapter-delivery",
+      "branch_id": "branch-core",
+      "required": true,
+      "prerequisites": {
+        "requires_all": [
+          "node-delivery-milestone"
+        ],
+        "requires_any": [],
+        "recommended": []
+      },
+      "completion_mode": "gate_unlock",
+      "estimated_duration_minutes": 10,
+      "layout": {
+        "x": 880.0,
+        "y": 130.0
+      },
+      "metadata": {
+        "gate_key": "release-approved"
+      },
+      "display": {},
+      "ksa": [],
+      "unlocks": {
+        "node_ids": [
+          "node-observability-checkpoint"
+        ],
+        "branch_ids": [
+          "branch-operations"
+        ],
+        "recommended_next_node_ids": [
+          "node-incident-review"
+        ]
+      },
+      "rewards": {
+        "estimated_ksa_gain": {},
+        "effort_score": 6.0,
+        "reward_tags": [
+          "gate"
+        ]
+      },
+      "retrospective_hooks": {
+        "retrospective_after": false,
+        "review_recommended": false,
+        "recap_checkpoint_available": false
+      },
+      "ksa_hooks": {
+        "mini_assessment_available": false,
+        "recommended_reassessment_topics": [],
+        "unlocks_deeper_refinement": false
+      },
+      "remediation": {
+        "is_remediation_node": false,
+        "recommended_if_failed_node_ids": [],
+        "supports_review_for_node_ids": []
+      },
+      "adaptive_unlock": {
+        "ksa_thresholds": [],
+        "requires_branch_completion_ids": [],
+        "requires_checkpoint_node_ids": [],
+        "requires_review_recommended": false,
+        "recommended_only": false
+      }
+    },
+    {
+      "id": "node-observability-checkpoint",
+      "title": "Observability Checkpoint",
+      "description": "Checkpoint on logs, metrics, and traces.",
+      "type": "checkpoint",
+      "chapter_id": "chapter-operations",
+      "branch_id": "branch-operations",
+      "required": true,
+      "prerequisites": {
+        "requires_all": [
+          "node-release-gate"
+        ],
+        "requires_any": [],
+        "recommended": []
+      },
+      "completion_mode": "checkpoint_pass",
+      "estimated_duration_minutes": 25,
+      "layout": {
+        "x": 1080.0,
+        "y": 130.0
+      },
+      "metadata": {
+        "pass_threshold": 0.7
+      },
+      "display": {},
+      "ksa": [
+        {
+          "dimension": "A",
+          "topic": "executive_function",
+          "subtopic": null,
+          "start_level": 2,
+          "target_level": 3,
+          "contribution_weight": 0.4,
+          "unlocks_assessment_check": true,
+          "recommends_assessment_check": true
+        }
+      ],
+      "unlocks": {
+        "node_ids": [
+          "node-release-capstone",
+          "node-ops-assessment-hook"
+        ],
+        "branch_ids": [],
+        "recommended_next_node_ids": [
+          "node-incident-review"
+        ]
+      },
+      "rewards": {
+        "estimated_ksa_gain": {
+          "A.executive_function": 0.2
+        },
+        "effort_score": 20.0,
+        "reward_tags": [
+          "checkpoint"
+        ]
+      },
+      "retrospective_hooks": {
+        "retrospective_after": true,
+        "review_recommended": true,
+        "recap_checkpoint_available": true
+      },
+      "ksa_hooks": {
+        "mini_assessment_available": true,
+        "recommended_reassessment_topics": [
+          "A.executive_function"
+        ],
+        "unlocks_deeper_refinement": true
+      },
+      "remediation": {
+        "is_remediation_node": false,
+        "recommended_if_failed_node_ids": [],
+        "supports_review_for_node_ids": []
+      },
+      "adaptive_unlock": {
+        "ksa_thresholds": [
+          {
+            "dimension": "A",
+            "topic": "executive_function",
+            "min_level": 3
+          }
+        ],
+        "requires_branch_completion_ids": [
+          "branch-core"
+        ],
+        "requires_checkpoint_node_ids": [
+          "node-release-gate"
+        ],
+        "requires_review_recommended": false,
+        "recommended_only": false
+      }
+    },
+    {
+      "id": "node-incident-review",
+      "title": "Incident Review Lab",
+      "description": "Optional retrospective incident review.",
+      "type": "review",
+      "chapter_id": "chapter-operations",
+      "branch_id": "branch-reinforcement",
+      "required": false,
+      "prerequisites": {
+        "requires_all": [
+          "node-observability-checkpoint"
+        ],
+        "requires_any": [],
+        "recommended": []
+      },
+      "completion_mode": "review_complete",
+      "estimated_duration_minutes": 20,
+      "layout": {
+        "x": 1080.0,
+        "y": 240.0
+      },
+      "metadata": {},
+      "display": {},
+      "ksa": [],
+      "unlocks": {
+        "node_ids": [],
+        "branch_ids": [],
+        "recommended_next_node_ids": []
+      },
+      "rewards": {
+        "estimated_ksa_gain": {
+          "A.social_emotional_capacity": 0.1
+        },
+        "effort_score": 12.0,
+        "reward_tags": [
+          "optional"
+        ]
+      },
+      "retrospective_hooks": {
+        "retrospective_after": false,
+        "review_recommended": true,
+        "recap_checkpoint_available": false
+      },
+      "ksa_hooks": {
+        "mini_assessment_available": false,
+        "recommended_reassessment_topics": [],
+        "unlocks_deeper_refinement": false
+      },
+      "remediation": {
+        "is_remediation_node": true,
+        "recommended_if_failed_node_ids": [
+          "node-cicd-quiz",
+          "node-observability-checkpoint"
+        ],
+        "supports_review_for_node_ids": [
+          "node-release-capstone"
+        ]
+      },
+      "adaptive_unlock": {
+        "ksa_thresholds": [],
+        "requires_branch_completion_ids": [],
+        "requires_checkpoint_node_ids": [
+          "node-observability-checkpoint"
+        ],
+        "requires_review_recommended": true,
+        "recommended_only": true
+      }
+    },
+    {
+      "id": "node-ops-assessment-hook",
+      "title": "Ops Assessment Hook",
+      "description": "Links to future KSA mini-assessment for operations readiness.",
+      "type": "assessment_hook",
+      "chapter_id": "chapter-operations",
+      "branch_id": "branch-reinforcement",
+      "required": false,
+      "prerequisites": {
+        "requires_all": [
+          "node-observability-checkpoint"
+        ],
+        "requires_any": [],
+        "recommended": []
+      },
+      "completion_mode": "assessment_threshold",
+      "estimated_duration_minutes": 15,
+      "layout": {
+        "x": 1250.0,
+        "y": 240.0
+      },
+      "metadata": {
+        "assessment_threshold": 0.8,
+        "hook_type": "ksa-mini-check"
+      },
+      "display": {},
+      "ksa": [],
+      "unlocks": {
+        "node_ids": [],
+        "branch_ids": [],
+        "recommended_next_node_ids": [
+          "node-release-capstone"
+        ]
+      },
+      "rewards": {
+        "estimated_ksa_gain": {},
+        "effort_score": 10.0,
+        "reward_tags": [
+          "assessment_hook"
+        ]
+      },
+      "retrospective_hooks": {
+        "retrospective_after": false,
+        "review_recommended": false,
+        "recap_checkpoint_available": false
+      },
+      "ksa_hooks": {
+        "mini_assessment_available": true,
+        "recommended_reassessment_topics": [
+          "A.executive_function",
+          "S.strategic_execution"
+        ],
+        "unlocks_deeper_refinement": true
+      },
+      "remediation": {
+        "is_remediation_node": false,
+        "recommended_if_failed_node_ids": [],
+        "supports_review_for_node_ids": []
+      },
+      "adaptive_unlock": {
+        "ksa_thresholds": [
+          {
+            "dimension": "S",
+            "topic": "strategic_execution",
+            "min_level": 3
+          }
+        ],
+        "requires_branch_completion_ids": [
+          "branch-operations"
+        ],
+        "requires_checkpoint_node_ids": [
+          "node-observability-checkpoint"
+        ],
+        "requires_review_recommended": false,
+        "recommended_only": true
+      }
+    },
+    {
+      "id": "node-release-capstone",
+      "title": "Release Capstone",
+      "description": "Final capstone validating release + operations orchestration.",
+      "type": "capstone",
+      "chapter_id": "chapter-operations",
+      "branch_id": "branch-core",
+      "required": true,
+      "prerequisites": {
+        "requires_all": [
+          "node-observability-checkpoint"
+        ],
+        "requires_any": [
+          "node-gitops-primer",
+          "node-cicd-quiz"
+        ],
+        "recommended": [
+          "node-incident-review",
+          "node-ops-assessment-hook"
+        ]
+      },
+      "completion_mode": "checkpoint_pass",
+      "estimated_duration_minutes": 35,
+      "layout": {
+        "x": 1250.0,
+        "y": 130.0
+      },
+      "metadata": {
+        "pass_threshold": 0.8
+      },
+      "display": {},
+      "ksa": [],
+      "unlocks": {
+        "node_ids": [],
+        "branch_ids": [],
+        "recommended_next_node_ids": []
+      },
+      "rewards": {
+        "estimated_ksa_gain": {
+          "S.strategic_execution": 0.22
+        },
+        "effort_score": 30.0,
+        "reward_tags": [
+          "capstone"
+        ]
+      },
+      "retrospective_hooks": {
+        "retrospective_after": true,
+        "review_recommended": true,
+        "recap_checkpoint_available": true
+      },
+      "ksa_hooks": {
+        "mini_assessment_available": false,
+        "recommended_reassessment_topics": [
+          "S.strategic_execution"
+        ],
+        "unlocks_deeper_refinement": false
+      },
+      "remediation": {
+        "is_remediation_node": false,
+        "recommended_if_failed_node_ids": [],
+        "supports_review_for_node_ids": []
+      },
+      "adaptive_unlock": {
+        "ksa_thresholds": [],
+        "requires_branch_completion_ids": [
+          "branch-core",
+          "branch-operations"
+        ],
+        "requires_checkpoint_node_ids": [
+          "node-observability-checkpoint"
+        ],
+        "requires_review_recommended": false,
+        "recommended_only": false
+      }
+    }
+  ],
+  "edges": [
+    {
+      "from_node_id": "node-ops-assessment-hook",
+      "to_node_id": "node-release-capstone",
+      "relationship": "optional"
+    },
+    {
+      "from_node_id": "node-incident-review",
+      "to_node_id": "node-release-capstone",
+      "relationship": "recommended"
+    },
+    {
+      "from_node_id": "node-ops-assessment-hook",
+      "to_node_id": "node-release-capstone",
+      "relationship": "recommended"
+    },
+    {
+      "from_node_id": "node-compose-lab",
+      "to_node_id": "node-cicd-quiz",
+      "relationship": "requires_all"
+    },
+    {
+      "from_node_id": "node-compose-lab",
+      "to_node_id": "node-gitops-primer",
+      "relationship": "requires_all"
+    },
+    {
+      "from_node_id": "node-container-basics",
+      "to_node_id": "node-compose-lab",
+      "relationship": "requires_all"
+    },
+    {
+      "from_node_id": "node-delivery-milestone",
+      "to_node_id": "node-release-gate",
+      "relationship": "requires_all"
+    },
+    {
+      "from_node_id": "node-observability-checkpoint",
+      "to_node_id": "node-incident-review",
+      "relationship": "requires_all"
+    },
+    {
+      "from_node_id": "node-observability-checkpoint",
+      "to_node_id": "node-ops-assessment-hook",
+      "relationship": "requires_all"
+    },
+    {
+      "from_node_id": "node-observability-checkpoint",
+      "to_node_id": "node-release-capstone",
+      "relationship": "requires_all"
+    },
+    {
+      "from_node_id": "node-release-gate",
+      "to_node_id": "node-observability-checkpoint",
+      "relationship": "requires_all"
+    },
+    {
+      "from_node_id": "node-cicd-quiz",
+      "to_node_id": "node-delivery-milestone",
+      "relationship": "requires_any"
+    },
+    {
+      "from_node_id": "node-cicd-quiz",
+      "to_node_id": "node-release-capstone",
+      "relationship": "requires_any"
+    },
+    {
+      "from_node_id": "node-gitops-primer",
+      "to_node_id": "node-delivery-milestone",
+      "relationship": "requires_any"
+    },
+    {
+      "from_node_id": "node-gitops-primer",
+      "to_node_id": "node-release-capstone",
+      "relationship": "requires_any"
+    }
+  ],
+  "entry_node_ids": [
+    "node-container-basics"
+  ],
+  "completion_rules": {
+    "required_completion": "all_required_nodes",
+    "optional_branch_completion": "enrichment_only",
+    "course_complete_when": "required_branches_and_global_capstones",
+    "recommendation_mode": "deterministic_rule_based"
+  },
+  "visual_layout": {
+    "layout_engine": "auto-grid"
+  },
+  "metadata": {
+    "domain": "devops",
+    "example": true,
+    "phase": 3
+  }
+}

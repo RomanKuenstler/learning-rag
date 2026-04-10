@@ -94,6 +94,7 @@ class Settings:
     jwt_max_lifetime_minutes: int = _get_int("JWT_MAX_LIFETIME_MINUTES", 720)
     password_salt: str = os.getenv("PASSWORD_SALT", "%vSp3$")
     users_file: str = os.getenv("USERS_FILE", "/app/users.json")
+    courses_dir: str = os.getenv("COURSES_DIR", "courses")
 
     @property
     def database_url(self) -> str:

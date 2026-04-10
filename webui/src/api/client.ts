@@ -3,8 +3,19 @@ import type {
   AssistantMode,
   AuthSession,
   Chat,
+  DiagnosticAttemptDetails,
+  DiagnosticAttemptStart,
+  DiagnosticAttemptSummary,
+  DiagnosticCatalog,
+  DiagnosticDefinition,
+  DiagnosticResult,
+  ExplanationFeedback,
   ChatDownload,
   ChatUpdate,
+  CourseImportResponse,
+  CourseListResponse,
+  CourseSort,
+  CourseTemplateResponse,
   CurrentUser,
   FilterFile,
   FilterFileResponse,
@@ -18,12 +29,30 @@ import type {
   LibraryFile,
   LibraryResponse,
   LibraryUploadResponse,
+  LearningModule,
+  LearningLesson,
+  LearningGoal,
+  LearningGoalPriority,
+  LearningProfileBundle,
+  KsaDrillAttempt,
+  KsaDrillAttemptsResponse,
+  KsaDrillTopicClassification,
+  KsaDrillTopic,
+  KsaAssessmentAttempt,
+  KsaAssessmentDefinition,
+  KSAProfile,
+  LearningProfileContext,
+  LearningPreferences,
+  LearningPath,
+  LearningPathResponse,
+  LearningStateCheck,
   Message,
   MessageResponse,
   Personalization,
   PersonalizationUpdate,
   Settings,
   SettingsUpdate,
+  SystemStatus,
 } from "../types/chat";
 
 const API_BASE_URL = (import.meta.env.VITE_API_BASE_URL as string | undefined)?.replace(/\/$/, "") ?? "http://localhost:8000";
@@ -126,6 +155,9 @@ export const apiClient = {
   getMe() {
     return request<{ user: CurrentUser; expires_at: string; max_expires_at: string }>("/api/auth/me");
   },
+  getSystemStatus() {
+    return request<SystemStatus>("/api/system/status");
+  },
   changePassword(currentPassword: string | null, newPassword: string, confirmPassword: string) {
     return request<AuthSession>("/api/auth/change-password", {
       method: "POST",
@@ -139,7 +171,7 @@ export const apiClient = {
   listAdminUsers() {
     return request<AdminUser[]>("/api/admin/users");
   },
-  createAdminUser(payload: { username: string; displayname: string; role: "user" | "admin" }) {
+  createAdminUser(payload: { username: string; displayname: string; role: "user" | "admin" | "student" }) {
     return request<AdminUser>("/api/admin/users", {
       method: "POST",
       body: JSON.stringify(payload),
@@ -149,6 +181,332 @@ export const apiClient = {
     return request<AdminUser>(`/api/admin/users/${userId}`, {
       method: "PATCH",
       body: JSON.stringify(payload),
+    });
+  },
+  listLearningPaths() {
+    return request<LearningPathResponse>("/api/learning-paths");
+  },
+  listCourses(params?: {
+    search?: string;
+    scope?: "global" | "user" | "all";
+    status?: "draft" | "published" | "archived" | "all";
+    owner_user_id?: number;
+    sort?: CourseSort;
+  }) {
+    const query = new URLSearchParams();
+    if (params?.search?.trim()) {
+      query.set("search", params.search.trim());
+    }
+    if (params?.scope && params.scope !== "all") {
+      query.set("scope", params.scope);
+    }
+    if (params?.status && params.status !== "all") {
+      query.set("status", params.status);
+    }
+    if (params?.owner_user_id) {
+      query.set("owner_user_id", String(params.owner_user_id));
+    }
+    if (params?.sort) {
+      query.set("sort", params.sort);
+    }
+    const queryString = query.toString();
+    return request<CourseListResponse>(`/api/courses${queryString ? `?${queryString}` : ""}`);
+  },
+  getCourseTemplate() {
+    return request<CourseTemplateResponse>("/api/courses/template");
+  },
+  importCourseFiles(files: File[], scopesByFile: Record<string, "global" | "user">) {
+    const formData = new FormData();
+    for (const file of files) {
+      formData.append("files", file);
+    }
+    formData.append("scopes_by_file", JSON.stringify(scopesByFile));
+    return request<CourseImportResponse>("/api/courses/import", {
+      method: "POST",
+      body: formData,
+    });
+  },
+  getLearningProfile() {
+    return request<LearningProfileBundle>("/api/learning-profile");
+  },
+  getKsaProfile() {
+    return request<KSAProfile>("/api/learning-profile/ksa");
+  },
+  getKsaAssessmentDefinition() {
+    return request<KsaAssessmentDefinition>("/api/ksa/assessment/definition");
+  },
+  startKsaAssessment() {
+    return request<{ attempt_id: string; status: "in_progress" | "completed"; version: string; started_at: string }>(
+      "/api/ksa/assessment/attempts",
+      { method: "POST" },
+    );
+  },
+  getLatestKsaAssessmentAttempt() {
+    return request<KsaAssessmentAttempt>("/api/ksa/assessment/attempts/latest");
+  },
+  getKsaAssessmentAttempt(attemptId: string) {
+    return request<KsaAssessmentAttempt>(`/api/ksa/assessment/attempts/${attemptId}`);
+  },
+  upsertKsaAssessmentAnswers(attemptId: string, answers: Record<string, unknown>) {
+    return request<KsaAssessmentAttempt>(`/api/ksa/assessment/attempts/${attemptId}/answers`, {
+      method: "PUT",
+      body: JSON.stringify({ answers }),
+    });
+  },
+  completeKsaAssessment(attemptId: string) {
+    return request<KSAProfile>(`/api/ksa/assessment/attempts/${attemptId}/complete`, { method: "POST" });
+  },
+  getKsaDrillTopics() {
+    return request<{ topics: KsaDrillTopic[] }>("/api/ksa/drills/topics");
+  },
+  classifyKsaDrillTopic(sourceTopicInput: string) {
+    return request<{ source_topic_input: string; classification: KsaDrillTopicClassification }>(
+      "/api/ksa/drills/classify-topic",
+      {
+        method: "POST",
+        body: JSON.stringify({ source_topic_input: sourceTopicInput }),
+      },
+    );
+  },
+  startKsaDrillAttempt(payload: { source_topic_input: string; topic_classification: KsaDrillTopicClassification }) {
+    return request<{ attempt_id: string; status: "in_progress" | "completed"; version: string; selected_topic_keys: string[]; question_set: KsaDrillAttempt["question_set"]; source_topic_input?: string | null; topic_classification?: KsaDrillTopicClassification | null; rounds?: KsaDrillAttempt["rounds"]; started_at: string }>(
+      "/api/ksa/drills/attempts",
+      {
+        method: "POST",
+        body: JSON.stringify(payload),
+      },
+    );
+  },
+  getLatestKsaDrillAttempt() {
+    return request<KsaDrillAttempt>("/api/ksa/drills/attempts/latest");
+  },
+  getKsaDrillAttempts(limit = 25) {
+    return request<KsaDrillAttemptsResponse>(`/api/ksa/drills/attempts?limit=${Math.max(1, Math.min(100, limit))}`);
+  },
+  getKsaDrillAttempt(attemptId: string) {
+    return request<KsaDrillAttempt>(`/api/ksa/drills/attempts/${attemptId}`);
+  },
+  upsertKsaDrillAnswers(attemptId: string, answers: Record<string, unknown>) {
+    return request<KsaDrillAttempt>(`/api/ksa/drills/attempts/${attemptId}/answers`, {
+      method: "PUT",
+      body: JSON.stringify({ answers }),
+    });
+  },
+  completeKsaDrillAttempt(attemptId: string) {
+    return request<KSAProfile>(`/api/ksa/drills/attempts/${attemptId}/complete`, { method: "POST" });
+  },
+  updateLearningPreferences(payload: Partial<Omit<LearningPreferences, "updated_at">>) {
+    return request<LearningPreferences>("/api/learning-profile/preferences", {
+      method: "PATCH",
+      body: JSON.stringify(payload),
+    });
+  },
+  updateLearningContext(payload: Partial<Omit<LearningProfileContext, "updated_at">>) {
+    return request<LearningProfileContext>("/api/learning-profile/context", {
+      method: "PATCH",
+      body: JSON.stringify(payload),
+    });
+  },
+  createLearningGoal(payload: {
+    target_topic: string;
+    reason_for_learning: string;
+    target_level: string;
+    deadline: string | null;
+    priority: LearningGoalPriority | null;
+    notes: string;
+    is_active: boolean;
+  }) {
+    return request<LearningGoal>("/api/learning-profile/goals", {
+      method: "POST",
+      body: JSON.stringify(payload),
+    });
+  },
+  updateLearningGoal(
+    goalId: string,
+    payload: Partial<{
+      target_topic: string;
+      reason_for_learning: string;
+      target_level: string;
+      deadline: string | null;
+      priority: LearningGoalPriority | null;
+      notes: string;
+      is_active: boolean;
+    }>,
+  ) {
+    return request<LearningGoal>(`/api/learning-profile/goals/${goalId}`, {
+      method: "PATCH",
+      body: JSON.stringify(payload),
+    });
+  },
+  deleteLearningGoal(goalId: string) {
+    return request<LearningGoal>(`/api/learning-profile/goals/${goalId}`, {
+      method: "DELETE",
+    });
+  },
+  listDiagnosticDefinitions() {
+    return request<DiagnosticCatalog>("/api/diagnostics/definitions");
+  },
+  getDiagnosticDefinition(diagnosticType: "LAA" | "MOA" | "LTA") {
+    return request<DiagnosticDefinition>(`/api/diagnostics/definitions/${diagnosticType}`);
+  },
+  startDiagnosticAttempt() {
+    return request<DiagnosticAttemptStart>("/api/diagnostics/attempts", { method: "POST" });
+  },
+  listDiagnosticAttempts() {
+    return request<DiagnosticAttemptSummary[]>("/api/diagnostics/attempts");
+  },
+  deleteDiagnosticAttempt(attemptId: string) {
+    return request<DiagnosticAttemptSummary>(`/api/diagnostics/attempts/${attemptId}`, { method: "DELETE" });
+  },
+  getLatestDiagnosticAttempt() {
+    return request<DiagnosticAttemptDetails>("/api/diagnostics/attempts/latest");
+  },
+  getDiagnosticAttempt(attemptId: string) {
+    return request<DiagnosticAttemptDetails>(`/api/diagnostics/attempts/${attemptId}`);
+  },
+  upsertDiagnosticAnswers(attemptId: string, payload: { diagnostic_type: "LAA" | "MOA" | "LTA"; answers: Array<{ question_id: string; value: unknown }> }) {
+    return request<DiagnosticAttemptDetails>(`/api/diagnostics/attempts/${attemptId}/answers`, {
+      method: "PUT",
+      body: JSON.stringify(payload),
+    });
+  },
+  completeDiagnosticAttempt(attemptId: string) {
+    return request<DiagnosticResult>(`/api/diagnostics/attempts/${attemptId}/complete`, { method: "POST" });
+  },
+  createLearningStateCheck(payload: {
+    chat_id?: string | null;
+    mood: string;
+    perceived_difficulty: string;
+    needs_pause_or_input: string;
+    preferred_format: string;
+    notes: string;
+  }) {
+    return request<LearningStateCheck>("/api/learning-state-checks", {
+      method: "POST",
+      body: JSON.stringify(payload),
+    });
+  },
+  listLearningStateChecks(limit = 20) {
+    return request<LearningStateCheck[]>(`/api/learning-state-checks?limit=${limit}`);
+  },
+  createExplanationFeedback(payload: {
+    message_id?: number | null;
+    rating: number;
+    feedback_text: string;
+    re_explain_requested: boolean;
+  }) {
+    return request<ExplanationFeedback>("/api/explanation-feedback", {
+      method: "POST",
+      body: JSON.stringify(payload),
+    });
+  },
+  createLearningPath(payload: {
+    scope: "global" | "user";
+    title: string;
+    description: string;
+    subject: string;
+    difficulty_level: string;
+    estimated_duration_minutes: number | null;
+    status: "draft" | "published" | "archived";
+    allowed_file_ids: number[];
+    allowed_tags: string[];
+  }) {
+    return request<LearningPath>("/api/learning-paths", {
+      method: "POST",
+      body: JSON.stringify(payload),
+    });
+  },
+  getLearningPath(pathId: string) {
+    return request<LearningPath>(`/api/learning-paths/${pathId}`);
+  },
+  updateLearningPath(
+    pathId: string,
+    payload: Partial<{
+      title: string;
+      description: string;
+      subject: string;
+      difficulty_level: string;
+      estimated_duration_minutes: number | null;
+      status: "draft" | "published" | "archived";
+      allowed_file_ids: number[];
+      allowed_tags: string[];
+    }>,
+  ) {
+    return request<LearningPath>(`/api/learning-paths/${pathId}`, {
+      method: "PATCH",
+      body: JSON.stringify(payload),
+    });
+  },
+  updateLearningNodeProgress(
+    pathId: string,
+    nodeId: string,
+    payload: {
+      status: "in_progress" | "completed" | "mastered" | "optional_skipped" | "failed_needs_retry" | "reset";
+      evidence?: Record<string, unknown>;
+    },
+  ) {
+    return request<LearningPath>(`/api/learning-paths/${pathId}/nodes/${nodeId}/progress`, {
+      method: "PUT",
+      body: JSON.stringify(payload),
+    });
+  },
+  deleteLearningPath(pathId: string) {
+    return request<LearningPath>(`/api/learning-paths/${pathId}`, { method: "DELETE" });
+  },
+  createLearningModule(
+    pathId: string,
+    payload: { title: string; description: string; learning_objectives: string[] },
+  ) {
+    return request<LearningModule>(`/api/learning-paths/${pathId}/modules`, {
+      method: "POST",
+      body: JSON.stringify(payload),
+    });
+  },
+  reorderLearningModules(pathId: string, modules: Array<{ id: string; order_index: number }>) {
+    return request<LearningModule[]>(`/api/learning-paths/${pathId}/modules/reorder`, {
+      method: "PATCH",
+      body: JSON.stringify({ modules }),
+    });
+  },
+  updateLearningModule(
+    moduleId: string,
+    payload: Partial<{ title: string; description: string; learning_objectives: string[] }>,
+  ) {
+    return request<LearningModule>(`/api/learning-modules/${moduleId}`, {
+      method: "PATCH",
+      body: JSON.stringify(payload),
+    });
+  },
+  deleteLearningModule(moduleId: string) {
+    return request<LearningModule>(`/api/learning-modules/${moduleId}`, { method: "DELETE" });
+  },
+  createLearningLesson(
+    moduleId: string,
+    payload: { title: string; description: string; objectives: string[]; teaching_notes: string },
+  ) {
+    return request<LearningLesson>(`/api/learning-modules/${moduleId}/lessons`, {
+      method: "POST",
+      body: JSON.stringify(payload),
+    });
+  },
+  reorderLearningLessons(moduleId: string, lessons: Array<{ id: string; order_index: number }>) {
+    return request<LearningLesson[]>(`/api/learning-modules/${moduleId}/lessons/reorder`, {
+      method: "PATCH",
+      body: JSON.stringify({ lessons }),
+    });
+  },
+  updateLearningLesson(
+    lessonId: string,
+    payload: Partial<{ title: string; description: string; objectives: string[]; teaching_notes: string }>,
+  ) {
+    return request<LearningLesson>(`/api/learning-lessons/${lessonId}`, {
+      method: "PATCH",
+      body: JSON.stringify(payload),
+    });
+  },
+  deleteLearningLesson(lessonId: string) {
+    return request<LearningLesson>(`/api/learning-lessons/${lessonId}`, {
+      method: "DELETE",
     });
   },
   deleteAdminUser(userId: number) {
@@ -271,8 +629,9 @@ export const apiClient = {
       body: JSON.stringify(payload),
     });
   },
-  listLibraryFiles() {
-    return request<LibraryResponse>("/api/library/files");
+  listLibraryFiles(options?: { includeOtherUsers?: boolean }) {
+    const includeOtherUsers = options?.includeOtherUsers ?? false;
+    return request<LibraryResponse>(`/api/library/files?include_other_users=${includeOtherUsers ? "true" : "false"}`);
   },
   updateLibraryFile(fileId: number, payload: { is_enabled: boolean }) {
     return request<LibraryFile>(`/api/library/files/${fileId}`, {

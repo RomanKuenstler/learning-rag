@@ -40,12 +40,28 @@ class FileProcessor:
         relative_path = str(file_path.relative_to(self.data_dir))
         resolved_tags = self.resolve_tags(relative_path, file_path.name)
         path_parts = Path(relative_path).parts
+        existing_record = self.postgres_client.get_file(relative_path)
         uploaded_by_user_id = None
         is_system = len(path_parts) == 1
+        is_global = is_system
+        source_origin = "system_data" if is_system else "unknown"
         if len(path_parts) >= 3 and path_parts[0] == "uploads":
             owner = self.postgres_client.get_user_by_username(path_parts[1])
             uploaded_by_user_id = owner.id if owner is not None else None
             is_system = False
+            if existing_record is not None and existing_record.source_origin in {"admin_upload", "user_upload"}:
+                is_global = bool(existing_record.is_global)
+                source_origin = existing_record.source_origin
+            elif owner is not None and owner.role == "admin":
+                is_global = True
+                source_origin = "admin_upload"
+            else:
+                is_global = False
+                source_origin = "user_upload"
+        elif existing_record is not None and existing_record.source_origin:
+            if existing_record.source_origin in {"system_data", "admin_upload", "user_upload"}:
+                source_origin = existing_record.source_origin
+                is_global = bool(existing_record.is_global)
         processor = self.registry.for_path(file_path)
         extraction = processor.process(file_path=file_path, relative_path=relative_path, tags=resolved_tags)
         chunk_payloads = self.chunker.split(extraction, relative_path) if extraction.text.strip() else []
@@ -105,6 +121,8 @@ class FileProcessor:
                 "tags": resolved_tags,
                 "uploaded_by_user_id": uploaded_by_user_id,
                 "is_system": is_system,
+                "is_global": is_global,
+                "source_origin": source_origin,
             },
             chunks=tagged_chunks,
         )

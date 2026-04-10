@@ -13,5 +13,15 @@
     "username": "anna",
     "displayname": "Anna Smith",
     "role": "user"
+  },
+  {
+    "username": "test",
+    "displayname": "test test",
+    "role": "user"
+  },
+  {
+    "username": "student",
+    "displayname": "Student User",
+    "role": "student"
   }
 ]

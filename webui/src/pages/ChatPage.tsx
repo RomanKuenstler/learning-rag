@@ -41,8 +41,13 @@ export function ChatPage() {
           activeChatId={activeChatId}
           activeView="chat"
           currentUser={currentUser}
+          canUseStandardChat
+          canUseGpts
+          canUseLibrary
           onCreateGpt={() => undefined}
           onCreateChat={() => void createChat()}
+          onOpenLearning={() => undefined}
+          onOpenCourses={() => undefined}
           onOpenLibrary={() => undefined}
           onOpenAdmin={() => undefined}
           onOpenArchive={() => undefined}

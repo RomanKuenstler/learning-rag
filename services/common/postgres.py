@@ -17,14 +17,36 @@ from services.common.models import (
     ChatSession,
     ChatTagSetting,
     ChunkRecord,
+    DiagnosticDefinition,
+    DiagnosticOption,
+    DiagnosticQuestion,
+    DiagnosticScoringRule,
+    DiagnosticVersion,
+    ExplanationFeedback,
     FileRecord,
     GPTChatSession,
     GPTRecord,
+    LearningLesson,
+    LearningModule,
+    LearningStateCheck,
+    LearningPath,
+    LearningPathAllowedFile,
+    LearningPathAllowedTag,
     MessageAttachment,
     RetrievalLog,
     SettingRecord,
+    UserLearningGoal,
+    UserLearningNodeProgress,
+    UserKSAAssessmentAttempt,
+    UserKSADrillAttempt,
+    UserKSAProfile,
+    UserLearningPreference,
+    UserLearningProfile,
     UserAccount,
     UserFileSetting,
+    UserDiagnosticAnswer,
+    UserDiagnosticAttempt,
+    UserDiagnosticResult,
     UserTagSetting,
     UserSessionRecord,
 )
@@ -88,13 +110,21 @@ class PostgresClient:
                     record.chunk_count = resolved_chunk_count
                 if resolved_chunk_count and not record.is_embedded:
                     record.is_embedded = True
+                self._materialize_file_record(record)
+                session.expunge(record)
             return records
 
-    def list_files_for_user(self, *, user_id: int, is_admin: bool) -> list[FileRecord]:
+    def list_files_for_user(self, *, user_id: int, is_admin: bool, include_other_users: bool = False) -> list[FileRecord]:
         with self.session() as session:
             records = list(
                 session.scalars(select(FileRecord).order_by(FileRecord.updated_at.desc(), FileRecord.file_name.asc()))
             )
+            if not include_other_users:
+                records = [
+                    record
+                    for record in records
+                    if record.is_global or record.uploaded_by_user_id == user_id
+                ]
             file_ids = [record.id for record in records]
             chunk_counts = self.chunk_counts_by_file_ids(file_ids)
             settings = self._user_file_settings_map(session, user_id=user_id, file_ids=file_ids)
@@ -106,10 +136,14 @@ class PostgresClient:
                     record.chunk_count = resolved_chunk_count
                 if resolved_chunk_count and not record.is_embedded:
                     record.is_embedded = True
-                if record.is_system and not is_admin:
-                    record.is_enabled = True
-                else:
-                    record.is_enabled = settings.get(record.id, True)
+                record.is_enabled = self._resolve_user_file_enabled(
+                    record,
+                    user_id=user_id,
+                    is_admin=is_admin,
+                    explicit_setting=settings.get(record.id),
+                )
+                self._materialize_file_record(record)
+                session.expunge(record)
             return records
 
     def get_file(self, file_path: str) -> FileRecord | None:
@@ -176,6 +210,8 @@ class PostgresClient:
             record = session.get(FileRecord, file_id)
             if record is None:
                 return None
+            if not is_admin and record.is_global and not is_enabled:
+                raise PermissionError("Global files cannot be disabled by non-admin users")
             setting = session.scalar(
                 select(UserFileSetting).where(UserFileSetting.user_id == user_id, UserFileSetting.file_id == file_id)
             )
@@ -185,9 +221,15 @@ class PostgresClient:
             else:
                 setting.is_enabled = is_enabled
                 setting.updated_at = datetime.now(timezone.utc)
-            record.is_enabled = is_enabled
+            effective_enabled = self._resolve_user_file_enabled(
+                record,
+                user_id=user_id,
+                is_admin=is_admin,
+                explicit_setting=is_enabled,
+            )
             session.flush()
             session.refresh(record)
+            record.is_enabled = effective_enabled
             return record
 
     def filter_retrieval_candidates(
@@ -206,6 +248,7 @@ class PostgresClient:
             records = list(session.scalars(select(FileRecord).where(FileRecord.file_path.in_(file_paths))))
             file_ids = [record.id for record in records]
             tags_in_system = self._all_tags_from_records(records)
+            user_file_settings = self._user_file_settings_map(session, user_id=user_id, file_ids=file_ids)
             if gpt_overrides:
                 file_settings = {
                     int(file_id): bool(is_enabled)
@@ -218,7 +261,6 @@ class PostgresClient:
                 files_enabled = bool(gpt_overrides.get("files_enabled", True))
                 tags_enabled = bool(gpt_overrides.get("tags_enabled", True))
             else:
-                user_file_settings = self._user_file_settings_map(session, user_id=user_id, file_ids=file_ids)
                 chat_file_settings = self._chat_file_settings_map(session, chat_id=chat_id, file_ids=file_ids)
                 self._delete_stale_tag_settings(session, user_id=user_id, chat_id=chat_id, valid_tags=tags_in_system)
                 user_tag_settings = self._user_tag_settings_map(session, user_id=user_id, tags=tags_in_system)
@@ -230,13 +272,18 @@ class PostgresClient:
                 record = file_map.get(file_path)
                 if record is None:
                     continue
+                global_file_enabled = self._resolve_user_file_enabled(
+                    record,
+                    user_id=user_id,
+                    is_admin=is_admin,
+                    explicit_setting=user_file_settings.get(record.id),
+                )
                 if gpt_overrides:
-                    if not record.is_enabled:
+                    if not global_file_enabled:
                         continue
                     if files_enabled and not file_settings.get(record.id, True):
                         continue
                 else:
-                    global_file_enabled = user_file_settings.get(record.id, True)
                     chat_file_enabled = chat_file_settings.get(record.id, True)
                     if not global_file_enabled or not chat_file_enabled:
                         continue
@@ -262,45 +309,61 @@ class PostgresClient:
                     filtered.append(candidate)
             return filtered
 
-    def list_user_file_filters(self, *, user_id: int) -> list[FileFilterState]:
+    def list_user_file_filters(self, *, user_id: int, is_admin: bool) -> list[FileFilterState]:
         with self.session() as session:
             records = list(session.scalars(select(FileRecord).order_by(FileRecord.file_name.asc())))
             user_file_settings = self._user_file_settings_map(session, user_id=user_id, file_ids=[record.id for record in records])
-            return [
-                FileFilterState(
-                    file_id=record.id,
-                    file_name=record.file_name,
-                    file_path=record.file_path,
-                    tags=list(record.tags or []),
-                    global_is_enabled=user_file_settings.get(record.id, True),
-                    scoped_is_enabled=user_file_settings.get(record.id, True),
-                    is_enabled=user_file_settings.get(record.id, True),
-                    is_locked=False,
-                    updated_at=record.updated_at,
+            result: list[FileFilterState] = []
+            for record in records:
+                effective_enabled = self._resolve_user_file_enabled(
+                    record,
+                    user_id=user_id,
+                    is_admin=is_admin,
+                    explicit_setting=user_file_settings.get(record.id),
                 )
-                for record in records
-            ]
+                result.append(
+                    FileFilterState(
+                        file_id=record.id,
+                        file_name=record.file_name,
+                        file_path=record.file_path,
+                        tags=list(record.tags or []),
+                        global_is_enabled=effective_enabled,
+                        scoped_is_enabled=effective_enabled,
+                        is_enabled=effective_enabled,
+                        is_locked=record.is_global and not is_admin,
+                        updated_at=record.updated_at,
+                    )
+                )
+            return result
 
-    def set_user_file_filter(self, *, user_id: int, file_id: int, is_enabled: bool) -> FileFilterState | None:
+    def set_user_file_filter(self, *, user_id: int, file_id: int, is_enabled: bool, is_admin: bool) -> FileFilterState | None:
         with self.session() as session:
             record = session.get(FileRecord, file_id)
             if record is None:
                 return None
+            if not is_admin and record.is_global and not is_enabled:
+                raise PermissionError("Global files cannot be disabled by non-admin users")
             self._upsert_user_file_setting(session, user_id=user_id, file_id=file_id, is_enabled=is_enabled)
             session.flush()
+            effective_enabled = self._resolve_user_file_enabled(
+                record,
+                user_id=user_id,
+                is_admin=is_admin,
+                explicit_setting=is_enabled,
+            )
             return FileFilterState(
                 file_id=record.id,
                 file_name=record.file_name,
                 file_path=record.file_path,
                 tags=list(record.tags or []),
-                global_is_enabled=is_enabled,
-                scoped_is_enabled=is_enabled,
-                is_enabled=is_enabled,
-                is_locked=False,
+                global_is_enabled=effective_enabled,
+                scoped_is_enabled=effective_enabled,
+                is_enabled=effective_enabled,
+                is_locked=record.is_global and not is_admin,
                 updated_at=record.updated_at,
             )
 
-    def list_chat_file_filters(self, *, user_id: int, chat_id: str) -> list[FileFilterState] | None:
+    def list_chat_file_filters(self, *, user_id: int, chat_id: str, is_admin: bool) -> list[FileFilterState] | None:
         with self.session() as session:
             if session.scalar(select(ChatSession.id).where(ChatSession.id == chat_id, ChatSession.user_id == user_id)) is None:
                 return None
@@ -310,7 +373,12 @@ class PostgresClient:
             chat_file_settings = self._chat_file_settings_map(session, chat_id=chat_id, file_ids=file_ids)
             result: list[FileFilterState] = []
             for record in records:
-                global_enabled = user_file_settings.get(record.id, True)
+                global_enabled = self._resolve_user_file_enabled(
+                    record,
+                    user_id=user_id,
+                    is_admin=is_admin,
+                    explicit_setting=user_file_settings.get(record.id),
+                )
                 scoped_enabled = chat_file_settings.get(record.id, True)
                 result.append(
                     FileFilterState(
@@ -321,19 +389,26 @@ class PostgresClient:
                         global_is_enabled=global_enabled,
                         scoped_is_enabled=scoped_enabled,
                         is_enabled=global_enabled and scoped_enabled,
-                        is_locked=not global_enabled,
+                        is_locked=(not global_enabled) or (record.is_global and not is_admin),
                         updated_at=record.updated_at,
                     )
                 )
             return result
 
-    def set_chat_file_filter(self, *, user_id: int, chat_id: str, file_id: int, is_enabled: bool) -> FileFilterState | None:
+    def set_chat_file_filter(self, *, user_id: int, chat_id: str, file_id: int, is_enabled: bool, is_admin: bool) -> FileFilterState | None:
         with self.session() as session:
             chat = session.scalar(select(ChatSession).where(ChatSession.id == chat_id, ChatSession.user_id == user_id))
             record = session.get(FileRecord, file_id)
             if chat is None or record is None:
                 return None
-            global_enabled = self._user_file_settings_map(session, user_id=user_id, file_ids=[file_id]).get(file_id, True)
+            global_enabled = self._resolve_user_file_enabled(
+                record,
+                user_id=user_id,
+                is_admin=is_admin,
+                explicit_setting=self._user_file_settings_map(session, user_id=user_id, file_ids=[file_id]).get(file_id),
+            )
+            if not is_admin and record.is_global and not is_enabled:
+                raise PermissionError("Global files cannot be disabled by non-admin users")
             if not global_enabled:
                 is_enabled = False
             self._upsert_chat_file_setting(session, chat_id=chat_id, file_id=file_id, is_enabled=is_enabled)
@@ -346,7 +421,7 @@ class PostgresClient:
                 global_is_enabled=global_enabled,
                 scoped_is_enabled=is_enabled,
                 is_enabled=global_enabled and is_enabled,
-                is_locked=not global_enabled,
+                is_locked=(not global_enabled) or (record.is_global and not is_admin),
                 updated_at=record.updated_at,
             )
 
@@ -814,6 +889,453 @@ class PostgresClient:
             session.refresh(record)
             return record
 
+    def get_user_learning_preference(self, *, user_id: int) -> UserLearningPreference | None:
+        try:
+            with self.session() as session:
+                return session.scalar(select(UserLearningPreference).where(UserLearningPreference.user_id == user_id))
+        except Exception as error:
+            if "does not exist" not in str(error).lower():
+                raise
+            run_migrations(self.database_url, force=True)
+            with self.session() as session:
+                return session.scalar(select(UserLearningPreference).where(UserLearningPreference.user_id == user_id))
+
+    def upsert_user_learning_preference(self, *, user_id: int, fields: dict[str, object]) -> UserLearningPreference:
+        try:
+            with self.session() as session:
+                record = session.scalar(select(UserLearningPreference).where(UserLearningPreference.user_id == user_id))
+                if record is None:
+                    record = UserLearningPreference(user_id=user_id, **fields)
+                    session.add(record)
+                else:
+                    for key, value in fields.items():
+                        setattr(record, key, value)
+                    record.updated_at = datetime.now(timezone.utc)
+                session.flush()
+                session.refresh(record)
+                return record
+        except Exception as error:
+            if "does not exist" not in str(error).lower():
+                raise
+            run_migrations(self.database_url, force=True)
+            with self.session() as session:
+                record = session.scalar(select(UserLearningPreference).where(UserLearningPreference.user_id == user_id))
+                if record is None:
+                    record = UserLearningPreference(user_id=user_id, **fields)
+                    session.add(record)
+                else:
+                    for key, value in fields.items():
+                        setattr(record, key, value)
+                    record.updated_at = datetime.now(timezone.utc)
+                session.flush()
+                session.refresh(record)
+                return record
+
+    def get_user_learning_profile(self, *, user_id: int) -> UserLearningProfile | None:
+        try:
+            with self.session() as session:
+                return session.scalar(select(UserLearningProfile).where(UserLearningProfile.user_id == user_id))
+        except Exception as error:
+            if "does not exist" not in str(error).lower():
+                raise
+            run_migrations(self.database_url, force=True)
+            with self.session() as session:
+                return session.scalar(select(UserLearningProfile).where(UserLearningProfile.user_id == user_id))
+
+    def upsert_user_learning_profile(self, *, user_id: int, fields: dict[str, object]) -> UserLearningProfile:
+        try:
+            with self.session() as session:
+                record = session.scalar(select(UserLearningProfile).where(UserLearningProfile.user_id == user_id))
+                if record is None:
+                    record = UserLearningProfile(user_id=user_id, **fields)
+                    session.add(record)
+                else:
+                    for key, value in fields.items():
+                        setattr(record, key, value)
+                    record.updated_at = datetime.now(timezone.utc)
+                session.flush()
+                session.refresh(record)
+                return record
+        except Exception as error:
+            if "does not exist" not in str(error).lower():
+                raise
+            run_migrations(self.database_url, force=True)
+            with self.session() as session:
+                record = session.scalar(select(UserLearningProfile).where(UserLearningProfile.user_id == user_id))
+                if record is None:
+                    record = UserLearningProfile(user_id=user_id, **fields)
+                    session.add(record)
+                else:
+                    for key, value in fields.items():
+                        setattr(record, key, value)
+                    record.updated_at = datetime.now(timezone.utc)
+                session.flush()
+                session.refresh(record)
+                return record
+
+    def list_user_learning_goals(self, *, user_id: int) -> list[UserLearningGoal]:
+        try:
+            with self.session() as session:
+                rows = session.scalars(
+                    select(UserLearningGoal)
+                    .where(UserLearningGoal.user_id == user_id)
+                    .order_by(UserLearningGoal.is_active.desc(), UserLearningGoal.updated_at.desc(), UserLearningGoal.created_at.desc())
+                )
+                return list(rows)
+        except Exception as error:
+            if "does not exist" not in str(error).lower():
+                raise
+            run_migrations(self.database_url, force=True)
+            with self.session() as session:
+                rows = session.scalars(
+                    select(UserLearningGoal)
+                    .where(UserLearningGoal.user_id == user_id)
+                    .order_by(UserLearningGoal.is_active.desc(), UserLearningGoal.updated_at.desc(), UserLearningGoal.created_at.desc())
+                )
+                return list(rows)
+
+    def create_user_learning_goal(self, *, payload: dict[str, object]) -> UserLearningGoal:
+        try:
+            with self.session() as session:
+                record = UserLearningGoal(**payload)
+                session.add(record)
+                session.flush()
+                session.refresh(record)
+                return record
+        except Exception as error:
+            if "does not exist" not in str(error).lower():
+                raise
+            run_migrations(self.database_url, force=True)
+            with self.session() as session:
+                record = UserLearningGoal(**payload)
+                session.add(record)
+                session.flush()
+                session.refresh(record)
+                return record
+
+    def update_user_learning_goal(self, *, user_id: int, goal_id: str, fields: dict[str, object]) -> UserLearningGoal | None:
+        try:
+            with self.session() as session:
+                record = session.scalar(
+                    select(UserLearningGoal).where(UserLearningGoal.id == goal_id, UserLearningGoal.user_id == user_id)
+                )
+                if record is None:
+                    return None
+                for key, value in fields.items():
+                    setattr(record, key, value)
+                record.updated_at = datetime.now(timezone.utc)
+                session.flush()
+                session.refresh(record)
+                return record
+        except Exception as error:
+            if "does not exist" not in str(error).lower():
+                raise
+            run_migrations(self.database_url, force=True)
+            with self.session() as session:
+                record = session.scalar(
+                    select(UserLearningGoal).where(UserLearningGoal.id == goal_id, UserLearningGoal.user_id == user_id)
+                )
+                if record is None:
+                    return None
+                for key, value in fields.items():
+                    setattr(record, key, value)
+                record.updated_at = datetime.now(timezone.utc)
+                session.flush()
+                session.refresh(record)
+                return record
+
+    def delete_user_learning_goal(self, *, user_id: int, goal_id: str) -> UserLearningGoal | None:
+        try:
+            with self.session() as session:
+                record = session.scalar(
+                    select(UserLearningGoal).where(UserLearningGoal.id == goal_id, UserLearningGoal.user_id == user_id)
+                )
+                if record is None:
+                    return None
+                session.delete(record)
+                return record
+        except Exception as error:
+            if "does not exist" not in str(error).lower():
+                raise
+            run_migrations(self.database_url, force=True)
+            with self.session() as session:
+                record = session.scalar(
+                    select(UserLearningGoal).where(UserLearningGoal.id == goal_id, UserLearningGoal.user_id == user_id)
+                )
+                if record is None:
+                    return None
+                session.delete(record)
+                return record
+
+    def get_user_ksa_profile(self, *, user_id: int) -> UserKSAProfile | None:
+        try:
+            with self.session() as session:
+                return session.scalar(select(UserKSAProfile).where(UserKSAProfile.user_id == user_id))
+        except Exception as error:
+            if "does not exist" not in str(error).lower():
+                raise
+            run_migrations(self.database_url, force=True)
+            with self.session() as session:
+                return session.scalar(select(UserKSAProfile).where(UserKSAProfile.user_id == user_id))
+
+    def upsert_user_ksa_profile(
+        self,
+        *,
+        user_id: int,
+        has_assessment: bool,
+        assessment_version: str,
+        profile_json: dict[str, object],
+    ) -> UserKSAProfile:
+        try:
+            with self.session() as session:
+                record = session.scalar(select(UserKSAProfile).where(UserKSAProfile.user_id == user_id))
+                if record is None:
+                    record = UserKSAProfile(
+                        user_id=user_id,
+                        has_assessment=has_assessment,
+                        assessment_version=assessment_version,
+                        profile_json=profile_json,
+                    )
+                    session.add(record)
+                else:
+                    record.has_assessment = has_assessment
+                    record.assessment_version = assessment_version
+                    record.profile_json = profile_json
+                    record.updated_at = datetime.now(timezone.utc)
+                session.flush()
+                session.refresh(record)
+                return record
+        except Exception as error:
+            if "does not exist" not in str(error).lower():
+                raise
+            run_migrations(self.database_url, force=True)
+            with self.session() as session:
+                record = session.scalar(select(UserKSAProfile).where(UserKSAProfile.user_id == user_id))
+                if record is None:
+                    record = UserKSAProfile(
+                        user_id=user_id,
+                        has_assessment=has_assessment,
+                        assessment_version=assessment_version,
+                        profile_json=profile_json,
+                    )
+                    session.add(record)
+                else:
+                    record.has_assessment = has_assessment
+                    record.assessment_version = assessment_version
+                    record.profile_json = profile_json
+                    record.updated_at = datetime.now(timezone.utc)
+                session.flush()
+                session.refresh(record)
+                return record
+
+    def create_user_ksa_assessment_attempt(
+        self,
+        *,
+        user_id: int,
+        assessment_version: str,
+    ) -> UserKSAAssessmentAttempt:
+        try:
+            with self.session() as session:
+                record = UserKSAAssessmentAttempt(
+                    user_id=user_id,
+                    assessment_version=assessment_version,
+                    status="in_progress",
+                    answers_json={},
+                    result_json=None,
+                    started_at=datetime.now(timezone.utc),
+                )
+                session.add(record)
+                session.flush()
+                session.refresh(record)
+                return record
+        except Exception as error:
+            if "does not exist" not in str(error).lower():
+                raise
+            run_migrations(self.database_url, force=True)
+            with self.session() as session:
+                record = UserKSAAssessmentAttempt(
+                    user_id=user_id,
+                    assessment_version=assessment_version,
+                    status="in_progress",
+                    answers_json={},
+                    result_json=None,
+                    started_at=datetime.now(timezone.utc),
+                )
+                session.add(record)
+                session.flush()
+                session.refresh(record)
+                return record
+
+    def get_user_ksa_assessment_attempt(self, *, user_id: int, attempt_id: str) -> UserKSAAssessmentAttempt | None:
+        with self.session() as session:
+            return session.scalar(
+                select(UserKSAAssessmentAttempt).where(
+                    UserKSAAssessmentAttempt.id == attempt_id,
+                    UserKSAAssessmentAttempt.user_id == user_id,
+                )
+            )
+
+    def get_latest_user_ksa_assessment_attempt(self, *, user_id: int) -> UserKSAAssessmentAttempt | None:
+        with self.session() as session:
+            return session.scalar(
+                select(UserKSAAssessmentAttempt)
+                .where(UserKSAAssessmentAttempt.user_id == user_id)
+                .order_by(UserKSAAssessmentAttempt.started_at.desc())
+                .limit(1)
+            )
+
+    def upsert_user_ksa_assessment_answers(
+        self,
+        *,
+        user_id: int,
+        attempt_id: str,
+        answers_json: dict[str, object],
+    ) -> UserKSAAssessmentAttempt | None:
+        with self.session() as session:
+            record = session.scalar(
+                select(UserKSAAssessmentAttempt).where(
+                    UserKSAAssessmentAttempt.id == attempt_id,
+                    UserKSAAssessmentAttempt.user_id == user_id,
+                )
+            )
+            if record is None:
+                return None
+            record.answers_json = answers_json
+            record.updated_at = datetime.now(timezone.utc)
+            session.flush()
+            session.refresh(record)
+            return record
+
+    def complete_user_ksa_assessment_attempt(
+        self,
+        *,
+        user_id: int,
+        attempt_id: str,
+        result_json: dict[str, object],
+    ) -> UserKSAAssessmentAttempt | None:
+        with self.session() as session:
+            record = session.scalar(
+                select(UserKSAAssessmentAttempt).where(
+                    UserKSAAssessmentAttempt.id == attempt_id,
+                    UserKSAAssessmentAttempt.user_id == user_id,
+                )
+            )
+            if record is None:
+                return None
+            now = datetime.now(timezone.utc)
+            record.result_json = result_json
+            record.status = "completed"
+            record.completed_at = now
+            record.updated_at = now
+            session.flush()
+            session.refresh(record)
+            return record
+
+    def create_user_ksa_drill_attempt(
+        self,
+        *,
+        user_id: int,
+        assessment_version: str,
+        selected_topic_keys: list[str],
+        question_set_json: list[dict[str, object]],
+        source_topic_input: str = "",
+        topic_classification_json: dict[str, object] | None = None,
+        rounds_json: list[dict[str, object]] | None = None,
+    ) -> UserKSADrillAttempt:
+        with self.session() as session:
+            record = UserKSADrillAttempt(
+                user_id=user_id,
+                assessment_version=assessment_version,
+                status="in_progress",
+                selected_topic_keys_json=list(selected_topic_keys),
+                question_set_json=list(question_set_json),
+                source_topic_input_text=str(source_topic_input or ""),
+                topic_classification_json=dict(topic_classification_json or {}),
+                rounds_json=list(rounds_json or []),
+                answers_json={},
+                result_json=None,
+                started_at=datetime.now(timezone.utc),
+            )
+            session.add(record)
+            session.flush()
+            session.refresh(record)
+            return record
+
+    def get_user_ksa_drill_attempt(self, *, user_id: int, attempt_id: str) -> UserKSADrillAttempt | None:
+        with self.session() as session:
+            return session.scalar(
+                select(UserKSADrillAttempt).where(
+                    UserKSADrillAttempt.id == attempt_id,
+                    UserKSADrillAttempt.user_id == user_id,
+                )
+            )
+
+    def get_latest_user_ksa_drill_attempt(self, *, user_id: int) -> UserKSADrillAttempt | None:
+        with self.session() as session:
+            return session.scalar(
+                select(UserKSADrillAttempt)
+                .where(UserKSADrillAttempt.user_id == user_id)
+                .order_by(UserKSADrillAttempt.started_at.desc())
+                .limit(1)
+            )
+
+    def list_user_ksa_drill_attempts(self, *, user_id: int, limit: int = 25) -> list[UserKSADrillAttempt]:
+        with self.session() as session:
+            rows = session.scalars(
+                select(UserKSADrillAttempt)
+                .where(UserKSADrillAttempt.user_id == user_id)
+                .order_by(UserKSADrillAttempt.started_at.desc())
+                .limit(max(1, min(int(limit), 100)))
+            )
+            return list(rows)
+
+    def upsert_user_ksa_drill_answers(
+        self,
+        *,
+        user_id: int,
+        attempt_id: str,
+        answers_json: dict[str, object],
+    ) -> UserKSADrillAttempt | None:
+        with self.session() as session:
+            record = session.scalar(
+                select(UserKSADrillAttempt).where(
+                    UserKSADrillAttempt.id == attempt_id,
+                    UserKSADrillAttempt.user_id == user_id,
+                )
+            )
+            if record is None:
+                return None
+            record.answers_json = answers_json
+            record.updated_at = datetime.now(timezone.utc)
+            session.flush()
+            session.refresh(record)
+            return record
+
+    def complete_user_ksa_drill_attempt(
+        self,
+        *,
+        user_id: int,
+        attempt_id: str,
+        result_json: dict[str, object],
+    ) -> UserKSADrillAttempt | None:
+        with self.session() as session:
+            record = session.scalar(
+                select(UserKSADrillAttempt).where(
+                    UserKSADrillAttempt.id == attempt_id,
+                    UserKSADrillAttempt.user_id == user_id,
+                )
+            )
+            if record is None:
+                return None
+            now = datetime.now(timezone.utc)
+            record.result_json = result_json
+            record.status = "completed"
+            record.completed_at = now
+            record.updated_at = now
+            session.flush()
+            session.refresh(record)
+            return record
+
     def get_user_by_id(self, user_id: int) -> UserAccount | None:
         with self.session() as session:
             return session.get(UserAccount, user_id)
@@ -996,6 +1518,667 @@ class PostgresClient:
                 .where(UserSessionRecord.user_id == user_id, UserSessionRecord.revoked_at.is_(None))
                 .values(revoked_at=revoked_at, updated_at=revoked_at)
             )
+
+    def list_learning_paths(self, *, user_id: int, role: str) -> list[LearningPath]:
+        with self.session() as session:
+            query = select(LearningPath).order_by(LearningPath.updated_at.desc(), LearningPath.created_at.desc())
+            if role == "admin":
+                rows = session.scalars(query)
+                return list(rows)
+            rows = session.scalars(
+                query.where(
+                    (LearningPath.scope == "global") | (LearningPath.owner_user_id == user_id)
+                )
+            )
+            return list(rows)
+
+    def get_learning_path(self, learning_path_id: str) -> LearningPath | None:
+        with self.session() as session:
+            return session.get(LearningPath, learning_path_id)
+
+    def create_learning_path(self, payload: dict[str, object]) -> LearningPath:
+        with self.session() as session:
+            record = LearningPath(**payload)
+            session.add(record)
+            session.flush()
+            session.refresh(record)
+            return record
+
+    def update_learning_path(self, learning_path_id: str, fields: dict[str, object]) -> LearningPath | None:
+        with self.session() as session:
+            record = session.get(LearningPath, learning_path_id)
+            if record is None:
+                return None
+            for key, value in fields.items():
+                setattr(record, key, value)
+            record.updated_at = datetime.now(timezone.utc)
+            session.flush()
+            session.refresh(record)
+            return record
+
+    def delete_learning_path(self, learning_path_id: str) -> LearningPath | None:
+        with self.session() as session:
+            record = session.get(LearningPath, learning_path_id)
+            if record is None:
+                return None
+            session.delete(record)
+            return record
+
+    def list_learning_modules(self, learning_path_id: str) -> list[LearningModule]:
+        with self.session() as session:
+            rows = session.scalars(
+                select(LearningModule)
+                .where(LearningModule.learning_path_id == learning_path_id)
+                .order_by(LearningModule.order_index.asc(), LearningModule.created_at.asc())
+            )
+            return list(rows)
+
+    def get_learning_module(self, module_id: str) -> LearningModule | None:
+        with self.session() as session:
+            return session.get(LearningModule, module_id)
+
+    def create_learning_module(self, payload: dict[str, object]) -> LearningModule:
+        with self.session() as session:
+            record = LearningModule(**payload)
+            session.add(record)
+            session.flush()
+            session.refresh(record)
+            return record
+
+    def update_learning_module(self, module_id: str, fields: dict[str, object]) -> LearningModule | None:
+        with self.session() as session:
+            record = session.get(LearningModule, module_id)
+            if record is None:
+                return None
+            for key, value in fields.items():
+                setattr(record, key, value)
+            record.updated_at = datetime.now(timezone.utc)
+            session.flush()
+            session.refresh(record)
+            return record
+
+    def delete_learning_module(self, module_id: str) -> LearningModule | None:
+        with self.session() as session:
+            record = session.get(LearningModule, module_id)
+            if record is None:
+                return None
+            session.delete(record)
+            return record
+
+    def reorder_learning_modules(self, learning_path_id: str, module_orders: list[tuple[str, int]]) -> list[LearningModule]:
+        with self.session() as session:
+            modules = list(
+                session.scalars(
+                    select(LearningModule).where(LearningModule.learning_path_id == learning_path_id)
+                )
+            )
+            order_map = {module_id: order_index for module_id, order_index in module_orders}
+            for module in modules:
+                if module.id in order_map:
+                    module.order_index = order_map[module.id]
+                    module.updated_at = datetime.now(timezone.utc)
+            session.flush()
+            rows = session.scalars(
+                select(LearningModule)
+                .where(LearningModule.learning_path_id == learning_path_id)
+                .order_by(LearningModule.order_index.asc(), LearningModule.created_at.asc())
+            )
+            return list(rows)
+
+    def list_learning_lessons(self, module_id: str) -> list[LearningLesson]:
+        with self.session() as session:
+            rows = session.scalars(
+                select(LearningLesson)
+                .where(LearningLesson.module_id == module_id)
+                .order_by(LearningLesson.order_index.asc(), LearningLesson.created_at.asc())
+            )
+            return list(rows)
+
+    def get_learning_lesson(self, lesson_id: str) -> LearningLesson | None:
+        with self.session() as session:
+            return session.get(LearningLesson, lesson_id)
+
+    def create_learning_lesson(self, payload: dict[str, object]) -> LearningLesson:
+        with self.session() as session:
+            record = LearningLesson(**payload)
+            session.add(record)
+            session.flush()
+            session.refresh(record)
+            return record
+
+    def update_learning_lesson(self, lesson_id: str, fields: dict[str, object]) -> LearningLesson | None:
+        with self.session() as session:
+            record = session.get(LearningLesson, lesson_id)
+            if record is None:
+                return None
+            for key, value in fields.items():
+                setattr(record, key, value)
+            record.updated_at = datetime.now(timezone.utc)
+            session.flush()
+            session.refresh(record)
+            return record
+
+    def delete_learning_lesson(self, lesson_id: str) -> LearningLesson | None:
+        with self.session() as session:
+            record = session.get(LearningLesson, lesson_id)
+            if record is None:
+                return None
+            session.delete(record)
+            return record
+
+    def reorder_learning_lessons(self, module_id: str, lesson_orders: list[tuple[str, int]]) -> list[LearningLesson]:
+        with self.session() as session:
+            lessons = list(
+                session.scalars(select(LearningLesson).where(LearningLesson.module_id == module_id))
+            )
+            order_map = {lesson_id: order_index for lesson_id, order_index in lesson_orders}
+            for lesson in lessons:
+                if lesson.id in order_map:
+                    lesson.order_index = order_map[lesson.id]
+                    lesson.updated_at = datetime.now(timezone.utc)
+            session.flush()
+            rows = session.scalars(
+                select(LearningLesson)
+                .where(LearningLesson.module_id == module_id)
+                .order_by(LearningLesson.order_index.asc(), LearningLesson.created_at.asc())
+            )
+            return list(rows)
+
+    def replace_learning_path_structure(self, learning_path_id: str, modules: list[dict[str, object]]) -> list[LearningModule]:
+        with self.session() as session:
+            module_ids = list(
+                session.scalars(
+                    select(LearningModule.id).where(LearningModule.learning_path_id == learning_path_id)
+                )
+            )
+            if module_ids:
+                session.execute(delete(LearningLesson).where(LearningLesson.module_id.in_(module_ids)))
+            session.execute(delete(LearningModule).where(LearningModule.learning_path_id == learning_path_id))
+            # Ensure deletes are applied before inserts to avoid unique constraint
+            # collisions on (learning_path_id, order_index) during replacement.
+            session.flush()
+
+            for module_payload in modules:
+                lessons = list(module_payload.pop("lessons", []))
+                module_record = LearningModule(**module_payload)
+                session.add(module_record)
+                session.flush()
+                for lesson_payload in lessons:
+                    session.add(LearningLesson(module_id=module_record.id, **lesson_payload))
+
+            session.flush()
+            rows = session.scalars(
+                select(LearningModule)
+                .where(LearningModule.learning_path_id == learning_path_id)
+                .order_by(LearningModule.order_index.asc(), LearningModule.created_at.asc())
+            )
+            return list(rows)
+
+    def replace_learning_path_allowed_files(self, learning_path_id: str, file_ids: list[int]) -> None:
+        deduped = sorted(set(int(file_id) for file_id in file_ids))
+        with self.session() as session:
+            session.execute(
+                delete(LearningPathAllowedFile).where(LearningPathAllowedFile.learning_path_id == learning_path_id)
+            )
+            for file_id in deduped:
+                session.add(LearningPathAllowedFile(learning_path_id=learning_path_id, file_id=file_id))
+
+    def replace_learning_path_allowed_tags(self, learning_path_id: str, tags: list[str]) -> None:
+        normalized_tags = sorted({str(tag).strip().lower() for tag in tags if str(tag).strip()})
+        with self.session() as session:
+            session.execute(
+                delete(LearningPathAllowedTag).where(LearningPathAllowedTag.learning_path_id == learning_path_id)
+            )
+            for tag in normalized_tags:
+                session.add(LearningPathAllowedTag(learning_path_id=learning_path_id, tag=tag))
+
+    def list_learning_path_allowed_files(self, learning_path_id: str) -> list[LearningPathAllowedFile]:
+        with self.session() as session:
+            rows = session.scalars(
+                select(LearningPathAllowedFile)
+                .where(LearningPathAllowedFile.learning_path_id == learning_path_id)
+                .order_by(LearningPathAllowedFile.file_id.asc())
+            )
+            return list(rows)
+
+    def list_learning_path_allowed_tags(self, learning_path_id: str) -> list[LearningPathAllowedTag]:
+        with self.session() as session:
+            rows = session.scalars(
+                select(LearningPathAllowedTag)
+                .where(LearningPathAllowedTag.learning_path_id == learning_path_id)
+                .order_by(LearningPathAllowedTag.tag.asc())
+            )
+            return list(rows)
+
+    def list_user_learning_node_progress(self, *, user_id: int, learning_path_id: str) -> list[UserLearningNodeProgress]:
+        with self.session() as session:
+            rows = session.scalars(
+                select(UserLearningNodeProgress)
+                .where(
+                    UserLearningNodeProgress.user_id == user_id,
+                    UserLearningNodeProgress.learning_path_id == learning_path_id,
+                )
+                .order_by(UserLearningNodeProgress.updated_at.desc(), UserLearningNodeProgress.node_id.asc())
+            )
+            return list(rows)
+
+    def upsert_user_learning_node_progress(
+        self,
+        *,
+        user_id: int,
+        learning_path_id: str,
+        node_id: str,
+        status: str,
+        started_at: datetime | None = None,
+        completed_at: datetime | None = None,
+    ) -> UserLearningNodeProgress:
+        with self.session() as session:
+            record = session.scalar(
+                select(UserLearningNodeProgress).where(
+                    UserLearningNodeProgress.user_id == user_id,
+                    UserLearningNodeProgress.learning_path_id == learning_path_id,
+                    UserLearningNodeProgress.node_id == node_id,
+                )
+            )
+            now = datetime.now(timezone.utc)
+            if record is None:
+                record = UserLearningNodeProgress(
+                    user_id=user_id,
+                    learning_path_id=learning_path_id,
+                    node_id=node_id,
+                    status=status,
+                    started_at=started_at,
+                    completed_at=completed_at,
+                )
+                session.add(record)
+            else:
+                record.status = status
+                if started_at is not None:
+                    record.started_at = started_at
+                if completed_at is not None:
+                    record.completed_at = completed_at
+                record.updated_at = now
+            session.flush()
+            session.refresh(record)
+            return record
+
+    def delete_user_learning_node_progress(
+        self,
+        *,
+        user_id: int,
+        learning_path_id: str,
+        node_id: str,
+    ) -> None:
+        with self.session() as session:
+            session.execute(
+                delete(UserLearningNodeProgress).where(
+                    UserLearningNodeProgress.user_id == user_id,
+                    UserLearningNodeProgress.learning_path_id == learning_path_id,
+                    UserLearningNodeProgress.node_id == node_id,
+                )
+            )
+
+    def get_diagnostic_definition(self, diagnostic_type: str) -> DiagnosticDefinition | None:
+        with self.session() as session:
+            return session.scalar(
+                select(DiagnosticDefinition).where(DiagnosticDefinition.diagnostic_type == diagnostic_type)
+            )
+
+    def upsert_diagnostic_definition(self, *, diagnostic_type: str, title: str) -> DiagnosticDefinition:
+        with self.session() as session:
+            record = session.scalar(
+                select(DiagnosticDefinition).where(DiagnosticDefinition.diagnostic_type == diagnostic_type)
+            )
+            if record is None:
+                record = DiagnosticDefinition(id=diagnostic_type.lower(), diagnostic_type=diagnostic_type, title=title)
+                session.add(record)
+            else:
+                record.title = title
+                record.updated_at = datetime.now(timezone.utc)
+            session.flush()
+            session.refresh(record)
+            return record
+
+    def get_diagnostic_version(self, *, definition_id: str, version: str) -> DiagnosticVersion | None:
+        with self.session() as session:
+            return session.scalar(
+                select(DiagnosticVersion).where(
+                    DiagnosticVersion.definition_id == definition_id,
+                    DiagnosticVersion.version == version,
+                )
+            )
+
+    def list_latest_diagnostic_versions(self) -> list[DiagnosticVersion]:
+        with self.session() as session:
+            rows = session.scalars(
+                select(DiagnosticVersion)
+                .where(DiagnosticVersion.is_active.is_(True))
+                .order_by(DiagnosticVersion.created_at.desc())
+            )
+            latest_by_type: dict[str, DiagnosticVersion] = {}
+            for row in rows:
+                if row.definition_id in latest_by_type:
+                    continue
+                latest_by_type[row.definition_id] = row
+            return list(latest_by_type.values())
+
+    def get_latest_diagnostic_version(self, diagnostic_type: str) -> DiagnosticVersion | None:
+        with self.session() as session:
+            definition = session.scalar(
+                select(DiagnosticDefinition).where(DiagnosticDefinition.diagnostic_type == diagnostic_type)
+            )
+            if definition is None:
+                return None
+            return session.scalar(
+                select(DiagnosticVersion)
+                .where(DiagnosticVersion.definition_id == definition.id, DiagnosticVersion.is_active.is_(True))
+                .order_by(DiagnosticVersion.created_at.desc())
+                .limit(1)
+            )
+
+    def create_diagnostic_version(
+        self,
+        *,
+        definition_id: str,
+        version: str,
+        source_document_name: str,
+        source_document_hash: str,
+        content_json: dict[str, object],
+    ) -> DiagnosticVersion:
+        with self.session() as session:
+            record = DiagnosticVersion(
+                definition_id=definition_id,
+                version=version,
+                source_document_name=source_document_name,
+                source_document_hash=source_document_hash,
+                content_json=content_json,
+                is_active=True,
+            )
+            session.add(record)
+            session.flush()
+            session.refresh(record)
+            return record
+
+    def update_diagnostic_version_content(
+        self,
+        *,
+        version_id: str,
+        source_document_name: str,
+        source_document_hash: str,
+        content_json: dict[str, object],
+    ) -> DiagnosticVersion | None:
+        with self.session() as session:
+            record = session.get(DiagnosticVersion, version_id)
+            if record is None:
+                return None
+            record.source_document_name = source_document_name
+            record.source_document_hash = source_document_hash
+            record.content_json = content_json
+            session.flush()
+            session.refresh(record)
+            return record
+
+    def replace_diagnostic_version_structure(self, *, version_id: str, definition: dict[str, object]) -> None:
+        with self.session() as session:
+            session.execute(delete(DiagnosticOption).where(DiagnosticOption.question_id.in_(
+                select(DiagnosticQuestion.id).where(DiagnosticQuestion.version_id == version_id)
+            )))
+            session.execute(delete(DiagnosticQuestion).where(DiagnosticQuestion.version_id == version_id))
+            session.execute(delete(DiagnosticScoringRule).where(DiagnosticScoringRule.version_id == version_id))
+            session.flush()
+
+            order = 0
+            for section in list(definition.get("sections") or []):
+                section_id = str(section.get("id") or "")
+                for question in list(section.get("questions") or []):
+                    question_row = DiagnosticQuestion(
+                        version_id=version_id,
+                        question_key=str(question.get("id") or ""),
+                        section_key=section_id,
+                        order_index=order,
+                        question_type=str(question.get("type") or "single_choice"),
+                        question_text=str(question.get("text") or ""),
+                        scoring_json=dict(question.get("scoring") or {}),
+                        metadata_json={
+                            "min_value": question.get("min_value"),
+                            "max_value": question.get("max_value"),
+                        },
+                    )
+                    session.add(question_row)
+                    session.flush()
+                    order += 1
+
+                    for option_index, option in enumerate(list(question.get("options") or [])):
+                        session.add(
+                            DiagnosticOption(
+                                question_id=question_row.id,
+                                option_key=str(option.get("key") or f"o{option_index + 1}"),
+                                order_index=option_index,
+                                label=str(option.get("label") or ""),
+                                value_text=str(option.get("value") or ""),
+                                scoring_json=dict(option.get("scoring") or {}),
+                                metadata_json={"allows_text": bool(option.get("allows_text", False))},
+                            )
+                        )
+
+            session.add(
+                DiagnosticScoringRule(
+                    version_id=version_id,
+                    rule_key="default",
+                    rule_payload=dict(definition.get("scoring_rules") or {}),
+                )
+            )
+
+    def create_user_diagnostic_attempt(self, *, user_id: int, definition_versions: dict[str, str]) -> UserDiagnosticAttempt:
+        now = datetime.now(timezone.utc)
+        with self.session() as session:
+            session.execute(
+                update(UserDiagnosticAttempt)
+                .where(UserDiagnosticAttempt.user_id == user_id)
+                .values(is_latest=False, updated_at=now)
+            )
+            record = UserDiagnosticAttempt(
+                user_id=user_id,
+                definition_versions=definition_versions,
+                status="in_progress",
+                is_latest=True,
+                started_at=now,
+                updated_at=now,
+            )
+            session.add(record)
+            session.flush()
+            session.refresh(record)
+            return record
+
+    def get_user_diagnostic_attempt(self, *, user_id: int, attempt_id: str) -> UserDiagnosticAttempt | None:
+        with self.session() as session:
+            return session.scalar(
+                select(UserDiagnosticAttempt).where(
+                    UserDiagnosticAttempt.id == attempt_id, UserDiagnosticAttempt.user_id == user_id
+                )
+            )
+
+    def get_latest_user_diagnostic_attempt(self, *, user_id: int) -> UserDiagnosticAttempt | None:
+        with self.session() as session:
+            return session.scalar(
+                select(UserDiagnosticAttempt)
+                .where(UserDiagnosticAttempt.user_id == user_id, UserDiagnosticAttempt.is_latest.is_(True))
+                .order_by(UserDiagnosticAttempt.started_at.desc())
+                .limit(1)
+            )
+
+    def list_user_diagnostic_attempts(self, *, user_id: int) -> list[UserDiagnosticAttempt]:
+        with self.session() as session:
+            rows = session.scalars(
+                select(UserDiagnosticAttempt)
+                .where(UserDiagnosticAttempt.user_id == user_id)
+                .order_by(UserDiagnosticAttempt.started_at.desc())
+            )
+            return list(rows)
+
+    def delete_user_diagnostic_attempt(self, *, user_id: int, attempt_id: str) -> UserDiagnosticAttempt | None:
+        with self.session() as session:
+            record = session.scalar(
+                select(UserDiagnosticAttempt).where(
+                    UserDiagnosticAttempt.id == attempt_id,
+                    UserDiagnosticAttempt.user_id == user_id,
+                )
+            )
+            if record is None:
+                return None
+            was_latest = bool(record.is_latest)
+            session.delete(record)
+            session.flush()
+            if was_latest:
+                fallback = session.scalar(
+                    select(UserDiagnosticAttempt)
+                    .where(UserDiagnosticAttempt.user_id == user_id)
+                    .order_by(UserDiagnosticAttempt.started_at.desc())
+                    .limit(1)
+                )
+                if fallback is not None:
+                    fallback.is_latest = True
+                    fallback.updated_at = datetime.now(timezone.utc)
+            return record
+
+    def upsert_user_diagnostic_answer(
+        self,
+        *,
+        attempt_id: str,
+        diagnostic_type: str,
+        question_key: str,
+        answer_json: dict[str, object],
+    ) -> UserDiagnosticAnswer:
+        with self.session() as session:
+            record = session.scalar(
+                select(UserDiagnosticAnswer).where(
+                    UserDiagnosticAnswer.attempt_id == attempt_id,
+                    UserDiagnosticAnswer.diagnostic_type == diagnostic_type,
+                    UserDiagnosticAnswer.question_key == question_key,
+                )
+            )
+            if record is None:
+                record = UserDiagnosticAnswer(
+                    attempt_id=attempt_id,
+                    diagnostic_type=diagnostic_type,
+                    question_key=question_key,
+                    answer_json=answer_json,
+                )
+                session.add(record)
+            else:
+                record.answer_json = answer_json
+                record.updated_at = datetime.now(timezone.utc)
+            session.flush()
+            session.refresh(record)
+            return record
+
+    def list_user_diagnostic_answers(self, *, attempt_id: str) -> list[UserDiagnosticAnswer]:
+        with self.session() as session:
+            rows = session.scalars(
+                select(UserDiagnosticAnswer)
+                .where(UserDiagnosticAnswer.attempt_id == attempt_id)
+                .order_by(UserDiagnosticAnswer.id.asc())
+            )
+            return list(rows)
+
+    def upsert_user_diagnostic_result(self, *, attempt_id: str, result_json: dict[str, object]) -> UserDiagnosticResult:
+        with self.session() as session:
+            record = session.scalar(
+                select(UserDiagnosticResult).where(UserDiagnosticResult.attempt_id == attempt_id)
+            )
+            if record is None:
+                record = UserDiagnosticResult(attempt_id=attempt_id, result_json=result_json)
+                session.add(record)
+            else:
+                record.result_json = result_json
+                record.updated_at = datetime.now(timezone.utc)
+            session.flush()
+            session.refresh(record)
+            return record
+
+    def get_user_diagnostic_result(self, *, attempt_id: str) -> UserDiagnosticResult | None:
+        with self.session() as session:
+            return session.scalar(
+                select(UserDiagnosticResult).where(UserDiagnosticResult.attempt_id == attempt_id)
+            )
+
+    def mark_user_diagnostic_attempt_completed(self, *, attempt_id: str) -> UserDiagnosticAttempt | None:
+        with self.session() as session:
+            record = session.get(UserDiagnosticAttempt, attempt_id)
+            if record is None:
+                return None
+            now = datetime.now(timezone.utc)
+            record.status = "completed"
+            record.completed_at = now
+            record.updated_at = now
+            session.flush()
+            session.refresh(record)
+            return record
+
+    def create_learning_state_check(self, payload: dict[str, object]) -> LearningStateCheck:
+        with self.session() as session:
+            record = LearningStateCheck(**payload)
+            session.add(record)
+            session.flush()
+            session.refresh(record)
+            return record
+
+    def list_learning_state_checks(self, *, user_id: int, limit: int = 20) -> list[LearningStateCheck]:
+        with self.session() as session:
+            rows = session.scalars(
+                select(LearningStateCheck)
+                .where(LearningStateCheck.user_id == user_id)
+                .order_by(LearningStateCheck.created_at.desc())
+                .limit(limit)
+            )
+            return list(rows)
+
+    def create_explanation_feedback(self, payload: dict[str, object]) -> ExplanationFeedback:
+        with self.session() as session:
+            record = ExplanationFeedback(**payload)
+            session.add(record)
+            session.flush()
+            session.refresh(record)
+            return record
+
+    def _default_user_file_enabled(self, record: FileRecord, *, user_id: int) -> bool:
+        if record.is_global:
+            return True
+        return bool(record.uploaded_by_user_id == user_id)
+
+    def _materialize_file_record(self, record: FileRecord) -> None:
+        _ = (
+            record.id,
+            record.file_path,
+            record.file_name,
+            record.file_type,
+            record.extension,
+            record.size_bytes,
+            record.chunk_count,
+            list(record.tags or []),
+            record.is_embedded,
+            record.is_enabled,
+            record.is_system,
+            record.is_global,
+            record.source_origin,
+            record.uploaded_by_user_id,
+            record.processing_status,
+            record.updated_at,
+        )
+
+    def _resolve_user_file_enabled(
+        self,
+        record: FileRecord,
+        *,
+        user_id: int,
+        is_admin: bool,
+        explicit_setting: bool | None,
+    ) -> bool:
+        if record.is_global and not is_admin:
+            return True
+        if explicit_setting is not None:
+            return bool(explicit_setting)
+        return self._default_user_file_enabled(record, user_id=user_id)
 
     def _upsert_user_file_setting(self, session: Session, *, user_id: int, file_id: int, is_enabled: bool) -> None:
         setting = session.scalar(

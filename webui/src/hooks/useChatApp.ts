@@ -6,6 +6,15 @@ import type {
   AttachmentMeta,
   AuthSession,
   Chat,
+  CourseImportResponse,
+  CourseListItem,
+  CourseSort,
+  DiagnosticAttemptDetails,
+  DiagnosticAttemptSummary,
+  DiagnosticCatalog,
+  DiagnosticDefinition,
+  DiagnosticResult,
+  ExplanationFeedback,
   FilterFile,
   FilterTag,
   Gpt,
@@ -14,6 +23,20 @@ import type {
   GptUpsert,
   LibraryFile,
   LibraryResponse,
+  LearningLesson,
+  LearningGoal,
+  KsaDrillAttempt,
+  KsaDrillTopicClassification,
+  KsaDrillTopic,
+  KsaAssessmentAttempt,
+  KsaAssessmentDefinition,
+  KSAProfile,
+  LearningProfileBundle,
+  LearningProfileContext,
+  LearningPreferences,
+  LearningModule,
+  LearningPath,
+  LearningStateCheck,
   Message,
   Personalization,
   PersonalizationUpdate,
@@ -95,7 +118,10 @@ function triggerJsonDownload(fileName: string, data: unknown) {
   const anchor = document.createElement("a");
   anchor.href = url;
   anchor.download = fileName;
+  anchor.rel = "noopener";
+  document.body.appendChild(anchor);
   anchor.click();
+  document.body.removeChild(anchor);
   URL.revokeObjectURL(url);
 }
 
@@ -127,6 +153,41 @@ export function useChatApp() {
   const [bootstrapping, setBootstrapping] = useState(false);
   const [chats, setChats] = useState<Chat[]>([]);
   const [gpts, setGpts] = useState<Gpt[]>([]);
+  const [learningPaths, setLearningPaths] = useState<LearningPath[]>([]);
+  const [learningLoading, setLearningLoading] = useState(false);
+  const [learningError, setLearningError] = useState<string | null>(null);
+  const [learningSaving, setLearningSaving] = useState(false);
+  const [courses, setCourses] = useState<CourseListItem[]>([]);
+  const [coursesLoading, setCoursesLoading] = useState(false);
+  const [coursesError, setCoursesError] = useState<string | null>(null);
+  const [coursesImporting, setCoursesImporting] = useState(false);
+  const [learningProfile, setLearningProfile] = useState<LearningProfileBundle | null>(null);
+  const [ksaProfile, setKsaProfile] = useState<KSAProfile | null>(null);
+  const [ksaLoading, setKsaLoading] = useState(false);
+  const [ksaError, setKsaError] = useState<string | null>(null);
+  const [ksaAssessmentDefinition, setKsaAssessmentDefinition] = useState<KsaAssessmentDefinition | null>(null);
+  const [ksaAssessmentAttempt, setKsaAssessmentAttempt] = useState<KsaAssessmentAttempt | null>(null);
+  const [ksaDrillTopics, setKsaDrillTopics] = useState<KsaDrillTopic[]>([]);
+  const [ksaDrillAttempt, setKsaDrillAttempt] = useState<KsaDrillAttempt | null>(null);
+  const [ksaDrillAttempts, setKsaDrillAttempts] = useState<KsaDrillAttempt[]>([]);
+  const [ksaAssessmentSaving, setKsaAssessmentSaving] = useState(false);
+  const [learningProfileLoading, setLearningProfileLoading] = useState(false);
+  const [learningProfileSaving, setLearningProfileSaving] = useState(false);
+  const [learningProfileError, setLearningProfileError] = useState<string | null>(null);
+  const [learningProfileSuccess, setLearningProfileSuccess] = useState<string | null>(null);
+  const [diagnosticCatalog, setDiagnosticCatalog] = useState<DiagnosticCatalog | null>(null);
+  const [diagnosticDefinitions, setDiagnosticDefinitions] = useState<Record<"LAA" | "MOA" | "LTA", DiagnosticDefinition | null>>({ LAA: null, MOA: null, LTA: null });
+  const [diagnosticAttempt, setDiagnosticAttempt] = useState<DiagnosticAttemptDetails | null>(null);
+  const [diagnosticAttempts, setDiagnosticAttempts] = useState<DiagnosticAttemptSummary[]>([]);
+  const [diagnosticResult, setDiagnosticResult] = useState<DiagnosticResult | null>(null);
+  const [diagnosticLoading, setDiagnosticLoading] = useState(false);
+  const [diagnosticSaving, setDiagnosticSaving] = useState(false);
+  const [diagnosticError, setDiagnosticError] = useState<string | null>(null);
+  const [learningStateChecks, setLearningStateChecks] = useState<LearningStateCheck[]>([]);
+  const [learningStateSaving, setLearningStateSaving] = useState(false);
+  const [learningStateError, setLearningStateError] = useState<string | null>(null);
+  const [feedbackSaving, setFeedbackSaving] = useState(false);
+  const [feedbackError, setFeedbackError] = useState<string | null>(null);
   const [archivedChats, setArchivedChats] = useState<Chat[]>([]);
   const [messagesByChat, setMessagesByChat] = useState<Record<string, Message[]>>({});
   const [gptChatsById, setGptChatsById] = useState<Record<string, GptChat>>({});
@@ -137,6 +198,7 @@ export function useChatApp() {
   const [library, setLibrary] = useState<LibraryResponse | null>(null);
   const [libraryLoading, setLibraryLoading] = useState(false);
   const [libraryError, setLibraryError] = useState<string | null>(null);
+  const [libraryIncludeOtherUsers, setLibraryIncludeOtherUsers] = useState(false);
   const [uploading, setUploading] = useState(false);
   const [busyFileIds, setBusyFileIds] = useState<number[]>([]);
   const [assistantMode, setAssistantMode] = useState<AssistantMode>("simple");
@@ -221,15 +283,41 @@ export function useChatApp() {
     setBootstrapping(true);
     setAppError(null);
     try {
-      const [chatList, archivedList, runtimeSettings, personalizationSettings, gptList] = await Promise.all([
-        apiClient.listChats(),
-        apiClient.listArchivedChats(),
+      const isStudent = session.user.role === "student";
+      const [chatList, archivedList, runtimeSettings, personalizationSettings, gptList, learning, declaredLearningProfile, ksa, diagnostics, attempts, stateChecks] = await Promise.all([
+        isStudent ? Promise.resolve([]) : apiClient.listChats(),
+        isStudent ? Promise.resolve([]) : apiClient.listArchivedChats(),
         apiClient.getSettings(),
         apiClient.getPersonalization(),
-        apiClient.listGpts(),
+        isStudent ? Promise.resolve([]) : apiClient.listGpts(),
+        apiClient.listLearningPaths(),
+        apiClient.getLearningProfile(),
+        apiClient.getKsaProfile(),
+        apiClient.listDiagnosticDefinitions(),
+        apiClient.listDiagnosticAttempts(),
+        apiClient.listLearningStateChecks(),
       ]);
       setChats(sortChats(chatList));
       setGpts(gptList);
+      setLearningPaths(learning.paths);
+      setLearningProfile(declaredLearningProfile);
+      setKsaProfile(ksa);
+      setDiagnosticCatalog(diagnostics);
+      setDiagnosticDefinitions({
+        LAA: diagnostics.definitions.find((item) => item.type === "LAA") ?? null,
+        MOA: diagnostics.definitions.find((item) => item.type === "MOA") ?? null,
+        LTA: diagnostics.definitions.find((item) => item.type === "LTA") ?? null,
+      });
+      setDiagnosticAttempts(attempts);
+      setLearningStateChecks(stateChecks);
+      if (attempts.length > 0) {
+        const latest = await apiClient.getDiagnosticAttempt(attempts[0].attempt_id);
+        setDiagnosticAttempt(latest);
+        setDiagnosticResult(latest.result ? { attempt_id: latest.attempt.attempt_id, result: latest.result } : null);
+      } else {
+        setDiagnosticAttempt(null);
+        setDiagnosticResult(null);
+      }
       setArchivedChats(sortChats(archivedList));
       setSettings(runtimeSettings);
       setSettingsDraft({
@@ -242,7 +330,9 @@ export function useChatApp() {
       setPersonalizationDraft(personalizationSettings);
       setAssistantMode(runtimeSettings.default_assistant_mode);
 
-      if (chatList.length === 0) {
+      if (isStudent) {
+        setActiveChatInternal(null);
+      } else if (chatList.length === 0) {
         const created = await apiClient.createChat();
         setChats([created]);
         setActiveChatInternal(created.id);
@@ -262,12 +352,42 @@ export function useChatApp() {
   function clearAppState() {
     setChats([]);
     setGpts([]);
+    setLearningPaths([]);
+    setCourses([]);
+    setCoursesError(null);
+    setCoursesLoading(false);
+    setCoursesImporting(false);
+    setLearningProfile(null);
+    setKsaProfile(null);
+    setKsaLoading(false);
+    setKsaError(null);
+    setKsaAssessmentDefinition(null);
+    setKsaAssessmentAttempt(null);
+    setKsaAssessmentSaving(false);
+    setLearningProfileLoading(false);
+    setLearningProfileSaving(false);
+    setLearningProfileError(null);
+    setLearningProfileSuccess(null);
+    setDiagnosticCatalog(null);
+    setDiagnosticDefinitions({ LAA: null, MOA: null, LTA: null });
+    setDiagnosticAttempt(null);
+    setDiagnosticAttempts([]);
+    setDiagnosticResult(null);
+    setDiagnosticLoading(false);
+    setDiagnosticSaving(false);
+    setDiagnosticError(null);
+    setLearningStateChecks([]);
+    setLearningStateSaving(false);
+    setLearningStateError(null);
+    setFeedbackSaving(false);
+    setFeedbackError(null);
     setArchivedChats([]);
     setMessagesByChat({});
     setGptChatsById({});
     setActiveChatId(null);
     setLibrary(null);
     setLibraryError(null);
+    setLibraryIncludeOtherUsers(false);
     setSettings(null);
     setSettingsDraft(null);
     setPersonalization(null);
@@ -367,6 +487,9 @@ export function useChatApp() {
   }
 
   async function createChat() {
+    if (authSession?.user.role === "student") {
+      throw new Error("Students can only use learning mode");
+    }
     setAppError(null);
     const chat = await apiClient.createChat();
     setChats((current) => sortChats([chat, ...current]));
@@ -444,6 +567,10 @@ export function useChatApp() {
   }
 
   async function loadGpts() {
+    if (authSession?.user.role === "student") {
+      setGpts([]);
+      return [];
+    }
     const payload = await apiClient.listGpts();
     setGpts(payload);
     return payload;
@@ -469,6 +596,9 @@ export function useChatApp() {
   }
 
   async function createGpt(payload: GptUpsert) {
+    if (authSession?.user.role === "student") {
+      throw new Error("Students cannot create GPTs");
+    }
     setAppError(null);
     const created = await apiClient.createGpt(payload);
     setGpts((current) => sortGpts([created, ...current]));
@@ -738,11 +868,12 @@ export function useChatApp() {
     }
   }
 
-  async function loadLibrary() {
+  async function loadLibrary(includeOtherUsers = libraryIncludeOtherUsers) {
     setLibraryLoading(true);
     setLibraryError(null);
+    setLibraryIncludeOtherUsers(includeOtherUsers);
     try {
-      const payload = await apiClient.listLibraryFiles();
+      const payload = await apiClient.listLibraryFiles({ includeOtherUsers });
       setLibrary(payload);
       const userFiles = await apiClient.listUserFiles();
       setGlobalFileFilters(userFiles.files);
@@ -754,7 +885,7 @@ export function useChatApp() {
   }
 
   async function toggleLibraryFile(file: LibraryFile) {
-    if (!file.can_toggle_enabled) {
+    if (!file.can_disable) {
       return;
     }
     setBusyFileIds((current) => [...current, file.id]);
@@ -800,7 +931,7 @@ export function useChatApp() {
     setLibraryError(null);
     try {
       await apiClient.deleteLibraryFile(fileId);
-      await loadLibrary();
+      await loadLibrary(libraryIncludeOtherUsers);
     } catch (error) {
       setLibraryError(error instanceof Error ? error.message : "Failed to delete file");
     } finally {
@@ -813,7 +944,7 @@ export function useChatApp() {
     setLibraryError(null);
     try {
       await apiClient.uploadLibraryFiles(files, tagsByFile);
-      await loadLibrary();
+      await loadLibrary(libraryIncludeOtherUsers);
     } catch (error) {
       setLibraryError(error instanceof Error ? error.message : "Failed to upload files");
       throw error;
@@ -837,11 +968,949 @@ export function useChatApp() {
     }
   }
 
-  async function createAdminUser(payload: { username: string; displayname: string; role: "user" | "admin" }) {
+  async function createAdminUser(payload: { username: string; displayname: string; role: "user" | "admin" | "student" }) {
     setAdminError(null);
     const created = await apiClient.createAdminUser(payload);
     setAdminUsers((current) => [...current, created].sort((left, right) => left.username.localeCompare(right.username)));
     return created;
+  }
+
+  async function loadLearningPaths() {
+    setLearningLoading(true);
+    setLearningError(null);
+    try {
+      const payload = await apiClient.listLearningPaths();
+      setLearningPaths(payload.paths);
+      return payload.paths;
+    } catch (error) {
+      setLearningError(error instanceof Error ? error.message : "Failed to load learning paths");
+      return [];
+    } finally {
+      setLearningLoading(false);
+    }
+  }
+
+  async function loadCourses(params?: {
+    search?: string;
+    scope?: "global" | "user" | "all";
+    status?: "draft" | "published" | "archived" | "all";
+    owner_user_id?: number;
+    sort?: CourseSort;
+  }) {
+    setCoursesLoading(true);
+    setCoursesError(null);
+    try {
+      const payload = await apiClient.listCourses(params);
+      setCourses(payload.courses);
+      return payload.courses;
+    } catch (error) {
+      setCoursesError(error instanceof Error ? error.message : "Failed to load courses");
+      return [];
+    } finally {
+      setCoursesLoading(false);
+    }
+  }
+
+  async function importCourseFiles(files: File[], scopesByFile: Record<string, "global" | "user">) {
+    setCoursesImporting(true);
+    setCoursesError(null);
+    try {
+      const payload: CourseImportResponse = await apiClient.importCourseFiles(files, scopesByFile);
+      await loadCourses();
+      return payload;
+    } catch (error) {
+      setCoursesError(error instanceof Error ? error.message : "Failed to import course files");
+      throw error;
+    } finally {
+      setCoursesImporting(false);
+    }
+  }
+
+  async function downloadCourseTemplate() {
+    setCoursesError(null);
+    try {
+      const payload = await apiClient.getCourseTemplate();
+      triggerJsonDownload(payload.file_name, payload.template);
+    } catch (error) {
+      setCoursesError(error instanceof Error ? error.message : "Failed to download course template");
+      throw error;
+    }
+  }
+
+  async function loadLearningProfile() {
+    setLearningProfileLoading(true);
+    setLearningProfileError(null);
+    try {
+      const payload = await apiClient.getLearningProfile();
+      setLearningProfile(payload);
+      setLearningProfileSuccess(null);
+      return payload;
+    } catch (error) {
+      setLearningProfileError(error instanceof Error ? error.message : "Failed to load learning profile");
+      return null;
+    } finally {
+      setLearningProfileLoading(false);
+    }
+  }
+
+  async function loadKsaProfile() {
+    setKsaLoading(true);
+    setKsaError(null);
+    try {
+      const payload = await apiClient.getKsaProfile();
+      setKsaProfile(payload);
+      return payload;
+    } catch (error) {
+      setKsaError(error instanceof Error ? error.message : "Failed to load KSA profile");
+      return null;
+    } finally {
+      setKsaLoading(false);
+    }
+  }
+
+  async function loadKsaAssessmentDefinition() {
+    setKsaAssessmentSaving(true);
+    setKsaError(null);
+    try {
+      const payload = await apiClient.getKsaAssessmentDefinition();
+      setKsaAssessmentDefinition(payload);
+      return payload;
+    } catch (error) {
+      setKsaError(error instanceof Error ? error.message : "Failed to load KSA assessment definition");
+      throw error;
+    } finally {
+      setKsaAssessmentSaving(false);
+    }
+  }
+
+  async function startKsaAssessment() {
+    setKsaAssessmentSaving(true);
+    setKsaError(null);
+    try {
+      const started = await apiClient.startKsaAssessment();
+      const attempt = await apiClient.getKsaAssessmentAttempt(started.attempt_id);
+      setKsaAssessmentAttempt(attempt);
+      return attempt;
+    } catch (error) {
+      setKsaError(error instanceof Error ? error.message : "Failed to start KSA assessment");
+      throw error;
+    } finally {
+      setKsaAssessmentSaving(false);
+    }
+  }
+
+  async function loadLatestKsaAssessmentAttempt() {
+    setKsaAssessmentSaving(true);
+    setKsaError(null);
+    try {
+      const payload = await apiClient.getLatestKsaAssessmentAttempt();
+      setKsaAssessmentAttempt(payload);
+      return payload;
+    } catch (error) {
+      setKsaAssessmentAttempt(null);
+      return null;
+    } finally {
+      setKsaAssessmentSaving(false);
+    }
+  }
+
+  async function saveKsaAssessmentAnswers(attemptId: string, answers: Record<string, unknown>) {
+    setKsaAssessmentSaving(true);
+    setKsaError(null);
+    try {
+      const payload = await apiClient.upsertKsaAssessmentAnswers(attemptId, answers);
+      setKsaAssessmentAttempt(payload);
+      return payload;
+    } catch (error) {
+      setKsaError(error instanceof Error ? error.message : "Failed to save KSA assessment answers");
+      throw error;
+    } finally {
+      setKsaAssessmentSaving(false);
+    }
+  }
+
+  async function completeKsaAssessment(attemptId: string) {
+    setKsaAssessmentSaving(true);
+    setKsaError(null);
+    try {
+      const payload = await apiClient.completeKsaAssessment(attemptId);
+      setKsaProfile(payload);
+      const latest = await apiClient.getKsaAssessmentAttempt(attemptId);
+      setKsaAssessmentAttempt(latest);
+      return payload;
+    } catch (error) {
+      setKsaError(error instanceof Error ? error.message : "Failed to complete KSA assessment");
+      throw error;
+    } finally {
+      setKsaAssessmentSaving(false);
+    }
+  }
+
+  async function loadKsaDrillTopics() {
+    setKsaAssessmentSaving(true);
+    setKsaError(null);
+    try {
+      const payload = await apiClient.getKsaDrillTopics();
+      setKsaDrillTopics(payload.topics);
+      return payload.topics;
+    } catch (error) {
+      setKsaError(error instanceof Error ? error.message : "Failed to load KSA drill topics");
+      throw error;
+    } finally {
+      setKsaAssessmentSaving(false);
+    }
+  }
+
+  async function classifyKsaDrillTopic(sourceTopicInput: string) {
+    setKsaAssessmentSaving(true);
+    setKsaError(null);
+    try {
+      const payload = await apiClient.classifyKsaDrillTopic(sourceTopicInput);
+      return payload.classification;
+    } catch (error) {
+      setKsaError(error instanceof Error ? error.message : "Failed to classify KSA drill topic");
+      throw error;
+    } finally {
+      setKsaAssessmentSaving(false);
+    }
+  }
+
+  async function startKsaDrillAttempt(payload: { source_topic_input: string; topic_classification: KsaDrillTopicClassification }) {
+    setKsaAssessmentSaving(true);
+    setKsaError(null);
+    try {
+      const started = await apiClient.startKsaDrillAttempt(payload);
+      const attempt = await apiClient.getKsaDrillAttempt(started.attempt_id);
+      setKsaDrillAttempt(attempt);
+      return attempt;
+    } catch (error) {
+      setKsaError(error instanceof Error ? error.message : "Failed to start KSA drill attempt");
+      throw error;
+    } finally {
+      setKsaAssessmentSaving(false);
+    }
+  }
+
+  async function loadLatestKsaDrillAttempt() {
+    setKsaAssessmentSaving(true);
+    setKsaError(null);
+    try {
+      const payload = await apiClient.getLatestKsaDrillAttempt();
+      setKsaDrillAttempt(payload);
+      return payload;
+    } catch {
+      setKsaDrillAttempt(null);
+      return null;
+    } finally {
+      setKsaAssessmentSaving(false);
+    }
+  }
+
+  async function loadKsaDrillAttempts(limit = 25) {
+    setKsaAssessmentSaving(true);
+    setKsaError(null);
+    try {
+      const payload = await apiClient.getKsaDrillAttempts(limit);
+      setKsaDrillAttempts(payload.attempts ?? []);
+      return payload.attempts ?? [];
+    } catch (error) {
+      setKsaError(error instanceof Error ? error.message : "Failed to load KSA drill attempts");
+      throw error;
+    } finally {
+      setKsaAssessmentSaving(false);
+    }
+  }
+
+  async function saveKsaDrillAnswers(attemptId: string, answers: Record<string, unknown>) {
+    setKsaAssessmentSaving(true);
+    setKsaError(null);
+    try {
+      const payload = await apiClient.upsertKsaDrillAnswers(attemptId, answers);
+      setKsaDrillAttempt(payload);
+      return payload;
+    } catch (error) {
+      setKsaError(error instanceof Error ? error.message : "Failed to save KSA drill answers");
+      throw error;
+    } finally {
+      setKsaAssessmentSaving(false);
+    }
+  }
+
+  async function completeKsaDrillAttempt(attemptId: string) {
+    setKsaAssessmentSaving(true);
+    setKsaError(null);
+    try {
+      const payload = await apiClient.completeKsaDrillAttempt(attemptId);
+      setKsaProfile(payload);
+      const latest = await apiClient.getKsaDrillAttempt(attemptId);
+      setKsaDrillAttempt(latest);
+      const attempts = await apiClient.getKsaDrillAttempts(25);
+      setKsaDrillAttempts(attempts.attempts ?? []);
+      return payload;
+    } catch (error) {
+      setKsaError(error instanceof Error ? error.message : "Failed to complete KSA drill attempt");
+      throw error;
+    } finally {
+      setKsaAssessmentSaving(false);
+    }
+  }
+
+  async function saveLearningPreferences(payload: Partial<Omit<LearningPreferences, "updated_at">>) {
+    setLearningProfileSaving(true);
+    setLearningProfileError(null);
+    setLearningProfileSuccess(null);
+    try {
+      const updated = await apiClient.updateLearningPreferences(payload);
+      setLearningProfile((current) => {
+        if (!current) {
+          return {
+            preferences: updated,
+            context: {
+              profile_display_name: "",
+              about_me: "",
+              contact_location: "",
+              general_title: "",
+              date_of_birth: "",
+              current_skill_areas: [],
+              skills: [],
+              interests: [],
+              work_experience: [],
+              education_history: [],
+              current_reason_for_learning: "",
+              preferred_form_of_address: "",
+              learning_context_notes: "",
+              updated_at: null,
+            },
+            goals: [],
+            diagnostics_status: "not_started",
+          };
+        }
+        return { ...current, preferences: updated };
+      });
+      setLearningProfileSuccess("Learning preferences saved.");
+      return updated;
+    } catch (error) {
+      setLearningProfileError(error instanceof Error ? error.message : "Failed to save learning preferences");
+      throw error;
+    } finally {
+      setLearningProfileSaving(false);
+    }
+  }
+
+  async function saveLearningContext(payload: Partial<Omit<LearningProfileContext, "updated_at">>) {
+    setLearningProfileSaving(true);
+    setLearningProfileError(null);
+    setLearningProfileSuccess(null);
+    try {
+      const updated = await apiClient.updateLearningContext(payload);
+      setLearningProfile((current) => {
+        if (!current) {
+          return {
+            preferences: {
+              preferred_pace: "balanced",
+              explanation_depth: "balanced",
+              examples_vs_theory: "balanced",
+              structure_preference: "balanced",
+              checkpoint_frequency: "medium",
+              encouragement_level: "balanced",
+              guidance_level: "balanced",
+              recap_frequency: "medium",
+              preferred_learning_format: "mixed",
+              custom_preference_note: "",
+              updated_at: null,
+            },
+            context: updated,
+            goals: [],
+            diagnostics_status: "not_started",
+          };
+        }
+        return { ...current, context: updated };
+      });
+      setLearningProfileSuccess("Learning context saved.");
+      return updated;
+    } catch (error) {
+      setLearningProfileError(error instanceof Error ? error.message : "Failed to save learning context");
+      throw error;
+    } finally {
+      setLearningProfileSaving(false);
+    }
+  }
+
+  async function createLearningGoal(payload: {
+    target_topic: string;
+    reason_for_learning: string;
+    target_level: string;
+    deadline: string | null;
+    priority: "low" | "medium" | "high" | null;
+    notes: string;
+    is_active: boolean;
+  }) {
+    setLearningProfileSaving(true);
+    setLearningProfileError(null);
+    setLearningProfileSuccess(null);
+    try {
+      const created = await apiClient.createLearningGoal(payload);
+      setLearningProfile((current) => {
+        if (!current) {
+          return {
+            preferences: {
+              preferred_pace: "balanced",
+              explanation_depth: "balanced",
+              examples_vs_theory: "balanced",
+              structure_preference: "balanced",
+              checkpoint_frequency: "medium",
+              encouragement_level: "balanced",
+              guidance_level: "balanced",
+              recap_frequency: "medium",
+              preferred_learning_format: "mixed",
+              custom_preference_note: "",
+              updated_at: null,
+            },
+            context: {
+              profile_display_name: "",
+              about_me: "",
+              contact_location: "",
+              general_title: "",
+              date_of_birth: "",
+              current_skill_areas: [],
+              skills: [],
+              interests: [],
+              work_experience: [],
+              education_history: [],
+              current_reason_for_learning: "",
+              preferred_form_of_address: "",
+              learning_context_notes: "",
+              updated_at: null,
+            },
+            goals: [created],
+            diagnostics_status: "not_started",
+          };
+        }
+        return { ...current, goals: [created, ...current.goals.filter((goal) => goal.id !== created.id)] };
+      });
+      setLearningProfileSuccess("Learning goal saved.");
+      return created;
+    } catch (error) {
+      setLearningProfileError(error instanceof Error ? error.message : "Failed to save learning goal");
+      throw error;
+    } finally {
+      setLearningProfileSaving(false);
+    }
+  }
+
+  async function updateLearningGoal(goalId: string, payload: Partial<Omit<LearningGoal, "id" | "created_at" | "updated_at">>) {
+    setLearningProfileSaving(true);
+    setLearningProfileError(null);
+    setLearningProfileSuccess(null);
+    try {
+      const updated = await apiClient.updateLearningGoal(goalId, payload);
+      setLearningProfile((current) => (current ? { ...current, goals: current.goals.map((goal) => (goal.id === goalId ? updated : goal)) } : current));
+      setLearningProfileSuccess("Learning goal updated.");
+      return updated;
+    } catch (error) {
+      setLearningProfileError(error instanceof Error ? error.message : "Failed to update learning goal");
+      throw error;
+    } finally {
+      setLearningProfileSaving(false);
+    }
+  }
+
+  async function deleteLearningGoal(goalId: string) {
+    setLearningProfileSaving(true);
+    setLearningProfileError(null);
+    setLearningProfileSuccess(null);
+    try {
+      await apiClient.deleteLearningGoal(goalId);
+      setLearningProfile((current) => (current ? { ...current, goals: current.goals.filter((goal) => goal.id !== goalId) } : current));
+      setLearningProfileSuccess("Learning goal deleted.");
+    } catch (error) {
+      setLearningProfileError(error instanceof Error ? error.message : "Failed to delete learning goal");
+      throw error;
+    } finally {
+      setLearningProfileSaving(false);
+    }
+  }
+
+  async function loadDiagnosticCatalog() {
+    setDiagnosticLoading(true);
+    setDiagnosticError(null);
+    try {
+      const catalog = await apiClient.listDiagnosticDefinitions();
+      setDiagnosticCatalog(catalog);
+      setDiagnosticDefinitions({
+        LAA: catalog.definitions.find((item) => item.type === "LAA") ?? null,
+        MOA: catalog.definitions.find((item) => item.type === "MOA") ?? null,
+        LTA: catalog.definitions.find((item) => item.type === "LTA") ?? null,
+      });
+      return catalog;
+    } catch (error) {
+      setDiagnosticError(error instanceof Error ? error.message : "Failed to load diagnostics");
+      throw error;
+    } finally {
+      setDiagnosticLoading(false);
+    }
+  }
+
+  async function loadDiagnosticAttempts() {
+    setDiagnosticLoading(true);
+    setDiagnosticError(null);
+    try {
+      const attempts = await apiClient.listDiagnosticAttempts();
+      setDiagnosticAttempts(attempts);
+      if (attempts.length === 0) {
+        setDiagnosticAttempt(null);
+        setDiagnosticResult(null);
+        return attempts;
+      }
+
+      const inProgress = attempts.find((item) => item.status !== "completed");
+      const activeAttemptId = inProgress?.attempt_id ?? attempts[0].attempt_id;
+      const activeAttempt = await apiClient.getDiagnosticAttempt(activeAttemptId);
+      setDiagnosticAttempt(activeAttempt);
+
+      const latestCompleted = attempts.find((item) => item.status === "completed");
+      if (latestCompleted) {
+        const completedDetails = await apiClient.getDiagnosticAttempt(latestCompleted.attempt_id);
+        setDiagnosticResult(completedDetails.result ? { attempt_id: completedDetails.attempt.attempt_id, result: completedDetails.result } : null);
+      } else {
+        setDiagnosticResult(null);
+      }
+      return attempts;
+    } catch (error) {
+      setDiagnosticError(error instanceof Error ? error.message : "Failed to load attempts");
+      throw error;
+    } finally {
+      setDiagnosticLoading(false);
+    }
+  }
+
+  async function startDiagnosticAttempt() {
+    setDiagnosticSaving(true);
+    setDiagnosticError(null);
+    try {
+      const started = await apiClient.startDiagnosticAttempt();
+      const details = await apiClient.getDiagnosticAttempt(started.attempt_id);
+      setDiagnosticAttempt(details);
+      setDiagnosticResult(null);
+      await loadDiagnosticAttempts();
+      await loadLearningProfile();
+      return details;
+    } catch (error) {
+      setDiagnosticError(error instanceof Error ? error.message : "Failed to start diagnostic attempt");
+      throw error;
+    } finally {
+      setDiagnosticSaving(false);
+    }
+  }
+
+  async function saveDiagnosticAnswers(
+    attemptId: string,
+    diagnosticType: "LAA" | "MOA" | "LTA",
+    answers: Array<{ question_id: string; value: unknown }>,
+  ) {
+    setDiagnosticSaving(true);
+    setDiagnosticError(null);
+    try {
+      const updated = await apiClient.upsertDiagnosticAnswers(attemptId, { diagnostic_type: diagnosticType, answers });
+      setDiagnosticAttempt(updated);
+      return updated;
+    } catch (error) {
+      setDiagnosticError(error instanceof Error ? error.message : "Failed to save diagnostic answers");
+      throw error;
+    } finally {
+      setDiagnosticSaving(false);
+    }
+  }
+
+  async function completeDiagnosticAttempt(attemptId: string) {
+    setDiagnosticSaving(true);
+    setDiagnosticError(null);
+    try {
+      const result = await apiClient.completeDiagnosticAttempt(attemptId);
+      setDiagnosticResult(result);
+      await loadDiagnosticAttempts();
+      await loadLearningProfile();
+      return result;
+    } catch (error) {
+      setDiagnosticError(error instanceof Error ? error.message : "Failed to complete diagnostic");
+      throw error;
+    } finally {
+      setDiagnosticSaving(false);
+    }
+  }
+
+  async function deleteDiagnosticAttempt(attemptId: string) {
+    setDiagnosticSaving(true);
+    setDiagnosticError(null);
+    try {
+      await apiClient.deleteDiagnosticAttempt(attemptId);
+      await loadDiagnosticAttempts();
+      await loadLearningProfile();
+    } catch (error) {
+      setDiagnosticError(error instanceof Error ? error.message : "Failed to delete diagnostic attempt");
+      throw error;
+    } finally {
+      setDiagnosticSaving(false);
+    }
+  }
+
+  async function openDiagnosticAttempt(attemptId: string) {
+    setDiagnosticSaving(true);
+    setDiagnosticError(null);
+    try {
+      const details = await apiClient.getDiagnosticAttempt(attemptId);
+      setDiagnosticAttempt(details);
+      return details;
+    } catch (error) {
+      setDiagnosticError(error instanceof Error ? error.message : "Failed to open diagnostic attempt");
+      throw error;
+    } finally {
+      setDiagnosticSaving(false);
+    }
+  }
+
+  async function createLearningStateCheck(payload: {
+    chat_id?: string | null;
+    mood: string;
+    perceived_difficulty: string;
+    needs_pause_or_input: string;
+    preferred_format: string;
+    notes: string;
+  }) {
+    setLearningStateSaving(true);
+    setLearningStateError(null);
+    try {
+      const created = await apiClient.createLearningStateCheck(payload);
+      setLearningStateChecks((current) => [created, ...current]);
+      return created;
+    } catch (error) {
+      setLearningStateError(error instanceof Error ? error.message : "Failed to save learning state");
+      throw error;
+    } finally {
+      setLearningStateSaving(false);
+    }
+  }
+
+  async function loadLearningStateChecks(limit = 20) {
+    setLearningStateError(null);
+    const checks = await apiClient.listLearningStateChecks(limit);
+    setLearningStateChecks(checks);
+    return checks;
+  }
+
+  async function submitExplanationFeedback(payload: {
+    message_id?: number | null;
+    rating: number;
+    feedback_text: string;
+    re_explain_requested: boolean;
+  }) {
+    setFeedbackSaving(true);
+    setFeedbackError(null);
+    try {
+      return await apiClient.createExplanationFeedback(payload);
+    } catch (error) {
+      setFeedbackError(error instanceof Error ? error.message : "Failed to save feedback");
+      throw error;
+    } finally {
+      setFeedbackSaving(false);
+    }
+  }
+
+  async function createLearningPath(payload: {
+    scope: "global" | "user";
+    title: string;
+    description: string;
+    subject: string;
+    difficulty_level: string;
+    estimated_duration_minutes: number | null;
+    status: "draft" | "published" | "archived";
+    allowed_file_ids: number[];
+    allowed_tags: string[];
+  }) {
+    setLearningSaving(true);
+    setLearningError(null);
+    try {
+      const created = await apiClient.createLearningPath(payload);
+      setLearningPaths((current) => [created, ...current.filter((entry) => entry.id !== created.id)]);
+      return created;
+    } catch (error) {
+      setLearningError(error instanceof Error ? error.message : "Failed to create learning path");
+      throw error;
+    } finally {
+      setLearningSaving(false);
+    }
+  }
+
+  async function updateLearningPath(
+    pathId: string,
+    payload: Partial<{
+      title: string;
+      description: string;
+      subject: string;
+      difficulty_level: string;
+      estimated_duration_minutes: number | null;
+      status: "draft" | "published" | "archived";
+      allowed_file_ids: number[];
+      allowed_tags: string[];
+    }>,
+  ) {
+    setLearningSaving(true);
+    setLearningError(null);
+    try {
+      const updated = await apiClient.updateLearningPath(pathId, payload);
+      setLearningPaths((current) => current.map((entry) => (entry.id === pathId ? updated : entry)));
+      return updated;
+    } catch (error) {
+      setLearningError(error instanceof Error ? error.message : "Failed to update learning path");
+      throw error;
+    } finally {
+      setLearningSaving(false);
+    }
+  }
+
+  async function getLearningPathDetails(pathId: string) {
+    return await apiClient.getLearningPath(pathId);
+  }
+
+  async function updateLearningNodeProgress(
+    pathId: string,
+    nodeId: string,
+    payload: {
+      status: "in_progress" | "completed" | "mastered" | "optional_skipped" | "failed_needs_retry" | "reset";
+      evidence?: Record<string, unknown>;
+    },
+  ) {
+    setLearningSaving(true);
+    setLearningError(null);
+    try {
+      const updated = await apiClient.updateLearningNodeProgress(pathId, nodeId, payload);
+      setLearningPaths((current) => current.map((entry) => (entry.id === pathId ? updated : entry)));
+      return updated;
+    } catch (error) {
+      setLearningError(error instanceof Error ? error.message : "Failed to update node progress");
+      throw error;
+    } finally {
+      setLearningSaving(false);
+    }
+  }
+
+  async function deleteLearningPath(pathId: string) {
+    setLearningSaving(true);
+    setLearningError(null);
+    try {
+      await apiClient.deleteLearningPath(pathId);
+      setLearningPaths((current) => current.filter((entry) => entry.id !== pathId));
+    } catch (error) {
+      setLearningError(error instanceof Error ? error.message : "Failed to delete learning path");
+      throw error;
+    } finally {
+      setLearningSaving(false);
+    }
+  }
+
+  async function createLearningModule(pathId: string, payload: { title: string; description: string; learning_objectives: string[] }) {
+    setLearningSaving(true);
+    setLearningError(null);
+    try {
+      const module = await apiClient.createLearningModule(pathId, payload);
+      setLearningPaths((current) =>
+        current.map((entry) =>
+          entry.id === pathId
+            ? { ...entry, modules: [...entry.modules, module].sort((a, b) => a.order_index - b.order_index) }
+            : entry,
+        ),
+      );
+      return module;
+    } catch (error) {
+      setLearningError(error instanceof Error ? error.message : "Failed to create module");
+      throw error;
+    } finally {
+      setLearningSaving(false);
+    }
+  }
+
+  async function updateLearningModule(
+    pathId: string,
+    moduleId: string,
+    payload: Partial<{ title: string; description: string; learning_objectives: string[] }>,
+  ) {
+    setLearningSaving(true);
+    setLearningError(null);
+    try {
+      const updated = await apiClient.updateLearningModule(moduleId, payload);
+      setLearningPaths((current) =>
+        current.map((entry) =>
+          entry.id === pathId
+            ? { ...entry, modules: entry.modules.map((module) => (module.id === moduleId ? updated : module)) }
+            : entry,
+        ),
+      );
+      return updated;
+    } catch (error) {
+      setLearningError(error instanceof Error ? error.message : "Failed to update module");
+      throw error;
+    } finally {
+      setLearningSaving(false);
+    }
+  }
+
+  async function deleteLearningModule(pathId: string, moduleId: string) {
+    setLearningSaving(true);
+    setLearningError(null);
+    try {
+      await apiClient.deleteLearningModule(moduleId);
+      setLearningPaths((current) =>
+        current.map((entry) =>
+          entry.id === pathId ? { ...entry, modules: entry.modules.filter((module) => module.id !== moduleId) } : entry,
+        ),
+      );
+    } catch (error) {
+      setLearningError(error instanceof Error ? error.message : "Failed to delete module");
+      throw error;
+    } finally {
+      setLearningSaving(false);
+    }
+  }
+
+  async function reorderLearningModules(pathId: string, modules: LearningModule[]) {
+    setLearningSaving(true);
+    setLearningError(null);
+    try {
+      const reordered = await apiClient.reorderLearningModules(
+        pathId,
+        modules.map((module, index) => ({ id: module.id, order_index: index })),
+      );
+      setLearningPaths((current) =>
+        current.map((entry) => (entry.id === pathId ? { ...entry, modules: reordered } : entry)),
+      );
+      return reordered;
+    } catch (error) {
+      setLearningError(error instanceof Error ? error.message : "Failed to reorder modules");
+      throw error;
+    } finally {
+      setLearningSaving(false);
+    }
+  }
+
+  async function createLearningLesson(
+    pathId: string,
+    moduleId: string,
+    payload: { title: string; description: string; objectives: string[]; teaching_notes: string },
+  ) {
+    setLearningSaving(true);
+    setLearningError(null);
+    try {
+      const lesson = await apiClient.createLearningLesson(moduleId, payload);
+      setLearningPaths((current) =>
+        current.map((entry) =>
+          entry.id === pathId
+            ? {
+                ...entry,
+                modules: entry.modules.map((module) =>
+                  module.id === moduleId
+                    ? { ...module, lessons: [...module.lessons, lesson].sort((a, b) => a.order_index - b.order_index) }
+                    : module,
+                ),
+              }
+            : entry,
+        ),
+      );
+      return lesson;
+    } catch (error) {
+      setLearningError(error instanceof Error ? error.message : "Failed to create lesson");
+      throw error;
+    } finally {
+      setLearningSaving(false);
+    }
+  }
+
+  async function updateLearningLesson(
+    pathId: string,
+    moduleId: string,
+    lessonId: string,
+    payload: Partial<{ title: string; description: string; objectives: string[]; teaching_notes: string }>,
+  ) {
+    setLearningSaving(true);
+    setLearningError(null);
+    try {
+      const updated = await apiClient.updateLearningLesson(lessonId, payload);
+      setLearningPaths((current) =>
+        current.map((entry) =>
+          entry.id === pathId
+            ? {
+                ...entry,
+                modules: entry.modules.map((module) =>
+                  module.id === moduleId
+                    ? { ...module, lessons: module.lessons.map((lesson) => (lesson.id === lessonId ? updated : lesson)) }
+                    : module,
+                ),
+              }
+            : entry,
+        ),
+      );
+      return updated;
+    } catch (error) {
+      setLearningError(error instanceof Error ? error.message : "Failed to update lesson");
+      throw error;
+    } finally {
+      setLearningSaving(false);
+    }
+  }
+
+  async function deleteLearningLesson(pathId: string, moduleId: string, lessonId: string) {
+    setLearningSaving(true);
+    setLearningError(null);
+    try {
+      await apiClient.deleteLearningLesson(lessonId);
+      setLearningPaths((current) =>
+        current.map((entry) =>
+          entry.id === pathId
+            ? {
+                ...entry,
+                modules: entry.modules.map((module) =>
+                  module.id === moduleId
+                    ? { ...module, lessons: module.lessons.filter((lesson) => lesson.id !== lessonId) }
+                    : module,
+                ),
+              }
+            : entry,
+        ),
+      );
+    } catch (error) {
+      setLearningError(error instanceof Error ? error.message : "Failed to delete lesson");
+      throw error;
+    } finally {
+      setLearningSaving(false);
+    }
+  }
+
+  async function reorderLearningLessons(pathId: string, moduleId: string, lessons: LearningLesson[]) {
+    setLearningSaving(true);
+    setLearningError(null);
+    try {
+      const reordered = await apiClient.reorderLearningLessons(
+        moduleId,
+        lessons.map((lesson, index) => ({ id: lesson.id, order_index: index })),
+      );
+      setLearningPaths((current) =>
+        current.map((entry) =>
+          entry.id === pathId
+            ? {
+                ...entry,
+                modules: entry.modules.map((module) =>
+                  module.id === moduleId ? { ...module, lessons: reordered } : module,
+                ),
+              }
+            : entry,
+        ),
+      );
+      return reordered;
+    } catch (error) {
+      setLearningError(error instanceof Error ? error.message : "Failed to reorder lessons");
+      throw error;
+    } finally {
+      setLearningSaving(false);
+    }
   }
 
   async function updateAdminUser(userId: number, payload: Partial<Pick<AdminUser, "displayname" | "role" | "status" | "force_password_change">>) {
@@ -1009,6 +2078,10 @@ export function useChatApp() {
   }
 
   const activeMessages = useMemo(() => (activeChatId ? messagesByChat[activeChatId] ?? [] : []), [activeChatId, messagesByChat]);
+  const isStudent = authSession?.user.role === "student";
+  const canUseStandardChat = !isStudent;
+  const canUseGpts = !isStudent;
+  const canAuthorLearningPaths = authSession?.user.role === "admin" || authSession?.user.role === "user";
 
   return {
     authReady,
@@ -1033,6 +2106,41 @@ export function useChatApp() {
     bootstrapping,
     chats,
     gpts,
+    learningPaths,
+    courses,
+    learningLoading,
+    learningError,
+    learningSaving,
+    coursesLoading,
+    coursesError,
+    coursesImporting,
+    learningProfile,
+    ksaProfile,
+    ksaAssessmentDefinition,
+    ksaAssessmentAttempt,
+    ksaDrillTopics,
+    ksaDrillAttempt,
+    ksaDrillAttempts,
+    learningProfileLoading,
+    ksaLoading,
+    ksaError,
+    ksaAssessmentSaving,
+    learningProfileSaving,
+    learningProfileError,
+    learningProfileSuccess,
+    diagnosticCatalog,
+    diagnosticDefinitions,
+    diagnosticAttempt,
+    diagnosticAttempts,
+    diagnosticResult,
+    diagnosticLoading,
+    diagnosticSaving,
+    diagnosticError,
+    learningStateChecks,
+    learningStateSaving,
+    learningStateError,
+    feedbackSaving,
+    feedbackError,
     archivedChats,
     gptChatsById,
     activeChatId,
@@ -1043,6 +2151,7 @@ export function useChatApp() {
     library,
     libraryLoading,
     libraryError,
+    libraryIncludeOtherUsers,
     uploading,
     busyFileIds,
     assistantMode,
@@ -1065,6 +2174,11 @@ export function useChatApp() {
     filterLoading,
     filterError,
     filterBusyKeys,
+    isStudent,
+    canUseStandardChat,
+    canUseGpts,
+    canAuthorLearningPaths,
+    canCreateGlobalCourses: authSession?.user.role === "admin",
     setAssistantMode,
     ensureChatLoaded,
     createChat,
@@ -1095,7 +2209,54 @@ export function useChatApp() {
     toggleChatFileFilter,
     toggleGlobalTagFilter,
     toggleChatTagFilter,
+    loadLearningPaths,
+    loadCourses,
+    importCourseFiles,
+    downloadCourseTemplate,
+    loadLearningProfile,
+    loadKsaProfile,
+    loadKsaAssessmentDefinition,
+    loadLatestKsaAssessmentAttempt,
+    startKsaAssessment,
+    saveKsaAssessmentAnswers,
+    completeKsaAssessment,
+    loadKsaDrillTopics,
+    classifyKsaDrillTopic,
+    startKsaDrillAttempt,
+    loadLatestKsaDrillAttempt,
+    loadKsaDrillAttempts,
+    saveKsaDrillAnswers,
+    completeKsaDrillAttempt,
+    saveLearningPreferences,
+    saveLearningContext,
+    createLearningGoal,
+    updateLearningGoal,
+    deleteLearningGoal,
+    loadDiagnosticCatalog,
+    loadDiagnosticAttempts,
+    startDiagnosticAttempt,
+    saveDiagnosticAnswers,
+    completeDiagnosticAttempt,
+    deleteDiagnosticAttempt,
+    openDiagnosticAttempt,
+    createLearningStateCheck,
+    loadLearningStateChecks,
+    submitExplanationFeedback,
+    createLearningPath,
+    getLearningPathDetails,
+    updateLearningNodeProgress,
+    updateLearningPath,
+    deleteLearningPath,
+    createLearningModule,
+    updateLearningModule,
+    deleteLearningModule,
+    reorderLearningModules,
+    createLearningLesson,
+    updateLearningLesson,
+    deleteLearningLesson,
+    reorderLearningLessons,
     loadLibrary,
+    setLibraryIncludeOtherUsers,
     toggleLibraryFile,
     deleteLibraryFile,
     uploadLibraryFiles,

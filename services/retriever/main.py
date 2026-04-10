@@ -49,9 +49,13 @@ def main() -> None:
     )
     prompt_builder = PromptBuilder(prompts_dir)
     history_service = ChatHistoryService(postgres_client, settings.history_limit)
+    users = [user for user in postgres_client.list_users() if user.status == "active"]
+    if not users:
+        raise RuntimeError("No active users available for CLI session")
+    user_id = users[0].id
 
     session_id = str(uuid.uuid4())
-    chat_repository.ensure_chat(session_id, generate_chat_name())
+    chat_repository.ensure_chat(user_id, session_id, generate_chat_name())
     print(f"RAG session: {session_id}")
     print("Type 'exit' to quit.")
 
@@ -62,16 +66,17 @@ def main() -> None:
         if not user_input:
             continue
 
-        user_message = postgres_client.add_chat_message(session_id, "user", user_input)
-        history = history_service.fetch(session_id, exclude_message_id=user_message.id)
-        retrieved_chunks = retrieval_service.retrieve(user_input)
+        user_message = postgres_client.add_chat_message(session_id, user_id, "user", user_input)
+        history = history_service.fetch(session_id, user_id=user_id, exclude_message_id=user_message.id)
+        retrieved_chunks = retrieval_service.retrieve(user_input, user_id=user_id, chat_id=session_id)
         messages = prompt_builder.build_simple_messages(user_message=user_input, history=history, retrieved_chunks=retrieved_chunks)
         response = llm_client.invoke(messages)
-        assistant_message = postgres_client.add_chat_message(session_id, "assistant", response)
+        assistant_message = postgres_client.add_chat_message(session_id, user_id, "assistant", response)
         postgres_client.add_retrieval_logs(
             assistant_message_id=assistant_message.id,
             user_message_id=user_message.id,
             session_id=session_id,
+            user_id=user_id,
             used_chunks=retrieved_chunks,
         )
         print(f"AI: {response}")

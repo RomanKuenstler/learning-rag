@@ -8,6 +8,7 @@ import { SourcesPanel } from "../sources/SourcesPanel";
 
 type MessageBubbleProps = {
   message: Message;
+  onFeedback?: (payload: { message_id: number | null; rating: number; feedback_text: string; re_explain_requested: boolean }) => Promise<void> | void;
 };
 
 function attachmentTone(fileName: string) {
@@ -61,7 +62,7 @@ export function MessageBubble({ message }: MessageBubbleProps) {
         )}
       </div>
       {isAssistant ? attachments : null}
-      {isAssistant && message.sources.length > 0 ? (
+      {isAssistant ? (
         <div className="sources-wrap assistant-evidence-wrap">
           <button
             className={`sources-button assistant-evidence-trigger${sourcesOpen ? " active" : ""}`}
@@ -72,7 +73,7 @@ export function MessageBubble({ message }: MessageBubbleProps) {
             <span className="assistant-evidence-trigger-icon" aria-hidden="true">
               <Icon name="files" />
             </span>
-            <small>Sources</small>
+            <small>Sources ({message.sources.length})</small>
           </button>
           <SourcesPanel open={sourcesOpen} onClose={() => setSourcesOpen(false)} sources={message.sources} />
         </div>

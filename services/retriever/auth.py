@@ -17,6 +17,7 @@ from services.retriever.schemas.auth import AdminUserRead, AuthLoginResponse, Au
 
 
 DEFAULT_PASSWORD = "Passw0rd!"
+SUPPORTED_ROLES = {"admin", "user", "student"}
 
 
 @dataclass(slots=True)
@@ -47,6 +48,8 @@ class AuthManager:
             username = str(item["username"]).strip()
             displayname = str(item["displayname"]).strip()
             role = str(item["role"]).strip().lower()
+            if role not in SUPPORTED_ROLES:
+                raise ValueError(f"Unsupported role in users.json for {username}: {role}")
             active_usernames.add(username)
             user = self.repository.upsert_bootstrap_user(
                 username=username,
@@ -165,12 +168,15 @@ class AuthManager:
         return [self._map_admin_user(user) for user in self.repository.list_users()]
 
     def create_user(self, *, username: str, displayname: str, role: str) -> AdminUserRead:
+        normalized_role = role.strip().lower()
+        if normalized_role not in SUPPORTED_ROLES:
+            raise ValueError("Unsupported role")
         if self.repository.get_user_by_username(username.strip()) is not None:
             raise ValueError("Username already exists")
         user = self.repository.create_user(
             username=username.strip(),
             displayname=displayname.strip(),
-            role=role,
+            role=normalized_role,
             password_hash=self.hash_password(DEFAULT_PASSWORD),
             status="active",
             force_password_change=True,

@@ -25,6 +25,18 @@
 - `SourcesPanel` now renders as a compact evidence popover with summary text, stacked source rows, and restrained metadata styling.
 - `PreferencesDialog` and `LibraryPage` both rely on the shared section and table styling language introduced in Step 7.
 - `FilterTables` is the shared Step 9 filter surface for both global preferences and chat-specific filter dialogs.
+- `KsaPanel` is the Learning-page KSA surface for the 3-radar big-map, shared Dreyfus legend, and full initial assessment flow dialog.
+
+## KSA Visualization Notes
+
+- The KSA tab uses a custom SVG radar implementation instead of an external chart library to keep bundle size and styling control stable.
+- The layout is desktop-first: one row with three equal chart cards (`Knowledge`, `Skills`, `Abilities`), each using the same Dreyfus 1-5 ring model.
+- `Start Assessment` opens a multi-step assessment dialog:
+  - phase 1 slider sieve
+  - knowledge verification
+  - skill simulations
+  - timed ability tasks
+- Completed assessments refresh the persisted KSA profile and redraw the existing radar charts without changing layout.
 
 ## Step 9 Filtering UI
 

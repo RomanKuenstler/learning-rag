@@ -1,0 +1,4093 @@
+{
+  "schema_version": 2,
+  "source_schema_version": 2,
+  "id": "devops-roadmap-learning-tree-v3",
+  "title": "DevOps Roadmap Learning Tree",
+  "description": "A roadmap-based DevOps learning tree using branching progression, node-type variety, and KSA scoring.",
+  "scope": "user",
+  "owner_user_id": 3,
+  "subject": "DevOps",
+  "difficulty_level": "beginner_to_advanced",
+  "estimated_duration_minutes": 3180,
+  "status": "published",
+  "allowed_file_ids": [],
+  "allowed_tags": [
+    "ci-cd",
+    "cloud",
+    "devops",
+    "docker",
+    "git",
+    "gitops",
+    "kubernetes",
+    "linux",
+    "networking",
+    "observability",
+    "security",
+    "serverless",
+    "service-mesh",
+    "terraform"
+  ],
+  "chapters": [
+    {
+      "id": "chapter-foundations",
+      "title": "Foundations",
+      "description": "Core operating system, networking, scripting, programming, and version control skills.",
+      "order_index": 0,
+      "metadata": {}
+    },
+    {
+      "id": "chapter-platform",
+      "title": "Containers and Platform",
+      "description": "Containerization, orchestration, and production platform basics.",
+      "order_index": 1,
+      "metadata": {}
+    },
+    {
+      "id": "chapter-delivery",
+      "title": "Delivery and Automation",
+      "description": "CI/CD, GitOps, infrastructure provisioning, and configuration automation.",
+      "order_index": 2,
+      "metadata": {}
+    },
+    {
+      "id": "chapter-operations",
+      "title": "Operations and Reliability",
+      "description": "Monitoring, logging, tracing, secrets, and operational troubleshooting.",
+      "order_index": 3,
+      "metadata": {}
+    },
+    {
+      "id": "chapter-advanced",
+      "title": "Advanced Architecture",
+      "description": "Advanced runtime patterns, service mesh, serverless, and integrative delivery challenges.",
+      "order_index": 4,
+      "metadata": {}
+    }
+  ],
+  "branches": [
+    {
+      "id": "branch-core",
+      "title": "Core Route",
+      "description": "Recommended primary learning route.",
+      "required": true,
+      "metadata": {}
+    },
+    {
+      "id": "branch-alternative",
+      "title": "Alternative Route",
+      "description": "Equivalent alternatives where the roadmap suggests choosing one of several tools.",
+      "required": false,
+      "metadata": {}
+    },
+    {
+      "id": "branch-optional",
+      "title": "Optional Route",
+      "description": "Optional, unordered, or enrichment topics.",
+      "required": false,
+      "metadata": {}
+    }
+  ],
+  "nodes": [
+    {
+      "id": "node-linux",
+      "title": "Linux Fundamentals",
+      "description": "Filesystem, processes, packages, services, permissions, users, shell basics, and day-to-day Linux administration.",
+      "type": "learning_unit",
+      "chapter_id": "chapter-foundations",
+      "branch_id": "branch-core",
+      "required": true,
+      "prerequisites": {
+        "requires_all": [],
+        "requires_any": [],
+        "recommended": []
+      },
+      "completion_mode": "lesson_complete",
+      "estimated_duration_minutes": 90,
+      "layout": {
+        "x": 80.0,
+        "y": 80.0
+      },
+      "metadata": {},
+      "display": {},
+      "ksa": [
+        {
+          "dimension": "K",
+          "topic": "Information Technology",
+          "subtopic": "Networking Protocols",
+          "start_level": 1,
+          "target_level": 2,
+          "contribution_weight": 0.25,
+          "unlocks_assessment_check": false,
+          "recommends_assessment_check": false
+        },
+        {
+          "dimension": "S",
+          "topic": "Digital Craft",
+          "subtopic": "DevOps/Version Control",
+          "start_level": 1,
+          "target_level": 2,
+          "contribution_weight": 0.45,
+          "unlocks_assessment_check": false,
+          "recommends_assessment_check": true
+        },
+        {
+          "dimension": "S",
+          "topic": "Operational Skills",
+          "subtopic": "Technical Troubleshooting",
+          "start_level": 1,
+          "target_level": 2,
+          "contribution_weight": 0.2,
+          "unlocks_assessment_check": false,
+          "recommends_assessment_check": false
+        }
+      ],
+      "unlocks": {
+        "node_ids": [
+          "node-linux-practice",
+          "node-networking",
+          "node-terminal"
+        ],
+        "branch_ids": [],
+        "recommended_next_node_ids": [
+          "node-git"
+        ]
+      },
+      "rewards": {
+        "estimated_ksa_gain": {
+          "K.Information Technology.Networking Protocols": 0.08,
+          "S.Digital Craft.DevOps/Version Control": 0.16,
+          "S.Operational Skills.Technical Troubleshooting": 0.08
+        },
+        "effort_score": 55.0,
+        "reward_tags": [
+          "foundation",
+          "linux"
+        ]
+      },
+      "retrospective_hooks": {
+        "retrospective_after": false,
+        "review_recommended": false,
+        "recap_checkpoint_available": false
+      },
+      "ksa_hooks": {
+        "mini_assessment_available": false,
+        "recommended_reassessment_topics": [],
+        "unlocks_deeper_refinement": false
+      },
+      "remediation": {
+        "is_remediation_node": false,
+        "recommended_if_failed_node_ids": [],
+        "supports_review_for_node_ids": []
+      },
+      "adaptive_unlock": {
+        "ksa_thresholds": [],
+        "requires_branch_completion_ids": [],
+        "requires_checkpoint_node_ids": [],
+        "requires_review_recommended": false,
+        "recommended_only": false
+      }
+    },
+    {
+      "id": "node-linux-practice",
+      "title": "Linux CLI Practice",
+      "description": "Hands-on command line work: processes, logs, services, permissions, archives, SSH, and package operations.",
+      "type": "practice",
+      "chapter_id": "chapter-foundations",
+      "branch_id": "branch-core",
+      "required": true,
+      "prerequisites": {
+        "requires_all": [
+          "node-linux"
+        ],
+        "requires_any": [],
+        "recommended": []
+      },
+      "completion_mode": "practice_complete",
+      "estimated_duration_minutes": 75,
+      "layout": {
+        "x": 280.0,
+        "y": 80.0
+      },
+      "metadata": {},
+      "display": {},
+      "ksa": [
+        {
+          "dimension": "S",
+          "topic": "Operational Skills",
+          "subtopic": "Technical Troubleshooting",
+          "start_level": 1,
+          "target_level": 3,
+          "contribution_weight": 0.55,
+          "unlocks_assessment_check": false,
+          "recommends_assessment_check": false
+        },
+        {
+          "dimension": "A",
+          "topic": "Executive Function",
+          "subtopic": "Sustained Focus (Flow State)",
+          "start_level": 1,
+          "target_level": 2,
+          "contribution_weight": 0.2,
+          "unlocks_assessment_check": false,
+          "recommends_assessment_check": false
+        }
+      ],
+      "unlocks": {
+        "node_ids": [
+          "node-foundations-quiz"
+        ],
+        "branch_ids": [],
+        "recommended_next_node_ids": [
+          "node-terminal"
+        ]
+      },
+      "rewards": {
+        "estimated_ksa_gain": {
+          "S.Operational Skills.Technical Troubleshooting": 0.2,
+          "A.Executive Function.Sustained Focus (Flow State)": 0.06
+        },
+        "effort_score": 70.0,
+        "reward_tags": [
+          "hands_on",
+          "linux"
+        ]
+      },
+      "retrospective_hooks": {
+        "retrospective_after": false,
+        "review_recommended": false,
+        "recap_checkpoint_available": false
+      },
+      "ksa_hooks": {
+        "mini_assessment_available": false,
+        "recommended_reassessment_topics": [],
+        "unlocks_deeper_refinement": false
+      },
+      "remediation": {
+        "is_remediation_node": false,
+        "recommended_if_failed_node_ids": [],
+        "supports_review_for_node_ids": []
+      },
+      "adaptive_unlock": {
+        "ksa_thresholds": [],
+        "requires_branch_completion_ids": [],
+        "requires_checkpoint_node_ids": [],
+        "requires_review_recommended": false,
+        "recommended_only": false
+      }
+    },
+    {
+      "id": "node-networking",
+      "title": "Networking and Protocols",
+      "description": "HTTP/HTTPS, DNS, TCP/IP, SSH, TLS, SMTP, IMAP, ports, firewalls, proxies, load balancers, and the OSI model.",
+      "type": "learning_unit",
+      "chapter_id": "chapter-foundations",
+      "branch_id": "branch-core",
+      "required": true,
+      "prerequisites": {
+        "requires_all": [
+          "node-linux"
+        ],
+        "requires_any": [],
+        "recommended": []
+      },
+      "completion_mode": "lesson_complete",
+      "estimated_duration_minutes": 95,
+      "layout": {
+        "x": 280.0,
+        "y": 190.0
+      },
+      "metadata": {},
+      "display": {},
+      "ksa": [
+        {
+          "dimension": "K",
+          "topic": "Information Technology",
+          "subtopic": "Networking Protocols",
+          "start_level": 1,
+          "target_level": 3,
+          "contribution_weight": 0.75,
+          "unlocks_assessment_check": true,
+          "recommends_assessment_check": true
+        },
+        {
+          "dimension": "K",
+          "topic": "Information Technology",
+          "subtopic": "Cybersecurity",
+          "start_level": 1,
+          "target_level": 2,
+          "contribution_weight": 0.15,
+          "unlocks_assessment_check": false,
+          "recommends_assessment_check": false
+        }
+      ],
+      "unlocks": {
+        "node_ids": [
+          "node-foundations-quiz",
+          "node-cloud-providers",
+          "node-web-servers"
+        ],
+        "branch_ids": [],
+        "recommended_next_node_ids": []
+      },
+      "rewards": {
+        "estimated_ksa_gain": {
+          "K.Information Technology.Networking Protocols": 0.28,
+          "K.Information Technology.Cybersecurity": 0.05
+        },
+        "effort_score": 65.0,
+        "reward_tags": [
+          "foundation",
+          "networking"
+        ]
+      },
+      "retrospective_hooks": {
+        "retrospective_after": false,
+        "review_recommended": true,
+        "recap_checkpoint_available": false
+      },
+      "ksa_hooks": {
+        "mini_assessment_available": true,
+        "recommended_reassessment_topics": [
+          "K.Information Technology.Networking Protocols"
+        ],
+        "unlocks_deeper_refinement": true
+      },
+      "remediation": {
+        "is_remediation_node": false,
+        "recommended_if_failed_node_ids": [],
+        "supports_review_for_node_ids": []
+      },
+      "adaptive_unlock": {
+        "ksa_thresholds": [],
+        "requires_branch_completion_ids": [],
+        "requires_checkpoint_node_ids": [],
+        "requires_review_recommended": false,
+        "recommended_only": false
+      }
+    },
+    {
+      "id": "node-terminal",
+      "title": "Terminal Knowledge and Scripting",
+      "description": "Bash or PowerShell, text manipulation, pipelines, grep/sed/awk, process monitoring, and basic automation.",
+      "type": "learning_unit",
+      "chapter_id": "chapter-foundations",
+      "branch_id": "branch-core",
+      "required": true,
+      "prerequisites": {
+        "requires_all": [
+          "node-linux"
+        ],
+        "requires_any": [],
+        "recommended": [
+          "node-linux-practice"
+        ]
+      },
+      "completion_mode": "lesson_complete",
+      "estimated_duration_minutes": 90,
+      "layout": {
+        "x": 280.0,
+        "y": 300.0
+      },
+      "metadata": {},
+      "display": {},
+      "ksa": [
+        {
+          "dimension": "S",
+          "topic": "Digital Craft",
+          "subtopic": "DevOps/Version Control",
+          "start_level": 1,
+          "target_level": 3,
+          "contribution_weight": 0.45,
+          "unlocks_assessment_check": false,
+          "recommends_assessment_check": false
+        },
+        {
+          "dimension": "S",
+          "topic": "Operational Skills",
+          "subtopic": "Technical Troubleshooting",
+          "start_level": 1,
+          "target_level": 2,
+          "contribution_weight": 0.3,
+          "unlocks_assessment_check": false,
+          "recommends_assessment_check": false
+        },
+        {
+          "dimension": "A",
+          "topic": "Executive Function",
+          "subtopic": "Working Memory Span",
+          "start_level": 1,
+          "target_level": 2,
+          "contribution_weight": 0.1,
+          "unlocks_assessment_check": false,
+          "recommends_assessment_check": false
+        }
+      ],
+      "unlocks": {
+        "node_ids": [
+          "node-programming",
+          "node-foundations-quiz"
+        ],
+        "branch_ids": [],
+        "recommended_next_node_ids": [
+          "node-docker"
+        ]
+      },
+      "rewards": {
+        "estimated_ksa_gain": {
+          "S.Digital Craft.DevOps/Version Control": 0.15,
+          "S.Operational Skills.Technical Troubleshooting": 0.1,
+          "A.Executive Function.Working Memory Span": 0.04
+        },
+        "effort_score": 60.0,
+        "reward_tags": [
+          "shell",
+          "automation"
+        ]
+      },
+      "retrospective_hooks": {
+        "retrospective_after": false,
+        "review_recommended": false,
+        "recap_checkpoint_available": false
+      },
+      "ksa_hooks": {
+        "mini_assessment_available": false,
+        "recommended_reassessment_topics": [],
+        "unlocks_deeper_refinement": false
+      },
+      "remediation": {
+        "is_remediation_node": false,
+        "recommended_if_failed_node_ids": [],
+        "supports_review_for_node_ids": []
+      },
+      "adaptive_unlock": {
+        "ksa_thresholds": [],
+        "requires_branch_completion_ids": [],
+        "requires_checkpoint_node_ids": [],
+        "requires_review_recommended": false,
+        "recommended_only": false
+      }
+    },
+    {
+      "id": "node-git",
+      "title": "Git and Version Control",
+      "description": "Commits, branching, merging, rebasing, pull requests, conflict resolution, and collaboration workflows.",
+      "type": "learning_unit",
+      "chapter_id": "chapter-foundations",
+      "branch_id": "branch-core",
+      "required": true,
+      "prerequisites": {
+        "requires_all": [
+          "node-linux"
+        ],
+        "requires_any": [],
+        "recommended": []
+      },
+      "completion_mode": "lesson_complete",
+      "estimated_duration_minutes": 70,
+      "layout": {
+        "x": 280.0,
+        "y": 410.0
+      },
+      "metadata": {},
+      "display": {},
+      "ksa": [
+        {
+          "dimension": "S",
+          "topic": "Digital Craft",
+          "subtopic": "DevOps/Version Control",
+          "start_level": 1,
+          "target_level": 3,
+          "contribution_weight": 0.8,
+          "unlocks_assessment_check": false,
+          "recommends_assessment_check": true
+        },
+        {
+          "dimension": "S",
+          "topic": "Literacy & Numeracy",
+          "subtopic": "Technical Documentation",
+          "start_level": 1,
+          "target_level": 2,
+          "contribution_weight": 0.1,
+          "unlocks_assessment_check": false,
+          "recommends_assessment_check": false
+        }
+      ],
+      "unlocks": {
+        "node_ids": [
+          "node-foundations-quiz",
+          "node-ci-cd"
+        ],
+        "branch_ids": [],
+        "recommended_next_node_ids": []
+      },
+      "rewards": {
+        "estimated_ksa_gain": {
+          "S.Digital Craft.DevOps/Version Control": 0.3,
+          "S.Literacy & Numeracy.Technical Documentation": 0.04
+        },
+        "effort_score": 52.0,
+        "reward_tags": [
+          "git",
+          "vcs"
+        ]
+      },
+      "retrospective_hooks": {
+        "retrospective_after": false,
+        "review_recommended": true,
+        "recap_checkpoint_available": false
+      },
+      "ksa_hooks": {
+        "mini_assessment_available": false,
+        "recommended_reassessment_topics": [
+          "S.Digital Craft.DevOps/Version Control"
+        ],
+        "unlocks_deeper_refinement": false
+      },
+      "remediation": {
+        "is_remediation_node": false,
+        "recommended_if_failed_node_ids": [],
+        "supports_review_for_node_ids": []
+      },
+      "adaptive_unlock": {
+        "ksa_thresholds": [],
+        "requires_branch_completion_ids": [],
+        "requires_checkpoint_node_ids": [],
+        "requires_review_recommended": false,
+        "recommended_only": false
+      }
+    },
+    {
+      "id": "node-programming",
+      "title": "Programming for DevOps",
+      "description": "Learn Python, Go, or JavaScript for automation, APIs, tooling, scripts, and systems glue code.",
+      "type": "learning_unit",
+      "chapter_id": "chapter-foundations",
+      "branch_id": "branch-core",
+      "required": true,
+      "prerequisites": {
+        "requires_all": [
+          "node-terminal"
+        ],
+        "requires_any": [],
+        "recommended": []
+      },
+      "completion_mode": "lesson_complete",
+      "estimated_duration_minutes": 120,
+      "layout": {
+        "x": 500.0,
+        "y": 300.0
+      },
+      "metadata": {},
+      "display": {},
+      "ksa": [
+        {
+          "dimension": "S",
+          "topic": "Digital Craft",
+          "subtopic": "Full-Stack Development",
+          "start_level": 1,
+          "target_level": 2,
+          "contribution_weight": 0.45,
+          "unlocks_assessment_check": false,
+          "recommends_assessment_check": true
+        },
+        {
+          "dimension": "A",
+          "topic": "Quantitative Reasoning",
+          "subtopic": "Mathematical Patterning",
+          "start_level": 1,
+          "target_level": 2,
+          "contribution_weight": 0.2,
+          "unlocks_assessment_check": false,
+          "recommends_assessment_check": false
+        },
+        {
+          "dimension": "S",
+          "topic": "Literacy & Numeracy",
+          "subtopic": "Technical Documentation",
+          "start_level": 1,
+          "target_level": 2,
+          "contribution_weight": 0.15,
+          "unlocks_assessment_check": false,
+          "recommends_assessment_check": false
+        }
+      ],
+      "unlocks": {
+        "node_ids": [
+          "node-foundations-checkpoint"
+        ],
+        "branch_ids": [],
+        "recommended_next_node_ids": [
+          "node-docker"
+        ]
+      },
+      "rewards": {
+        "estimated_ksa_gain": {
+          "S.Digital Craft.Full-Stack Development": 0.18,
+          "A.Quantitative Reasoning.Mathematical Patterning": 0.07,
+          "S.Literacy & Numeracy.Technical Documentation": 0.05
+        },
+        "effort_score": 82.0,
+        "reward_tags": [
+          "programming",
+          "automation"
+        ]
+      },
+      "retrospective_hooks": {
+        "retrospective_after": false,
+        "review_recommended": true,
+        "recap_checkpoint_available": false
+      },
+      "ksa_hooks": {
+        "mini_assessment_available": false,
+        "recommended_reassessment_topics": [],
+        "unlocks_deeper_refinement": false
+      },
+      "remediation": {
+        "is_remediation_node": false,
+        "recommended_if_failed_node_ids": [],
+        "supports_review_for_node_ids": []
+      },
+      "adaptive_unlock": {
+        "ksa_thresholds": [],
+        "requires_branch_completion_ids": [],
+        "requires_checkpoint_node_ids": [],
+        "requires_review_recommended": false,
+        "recommended_only": false
+      }
+    },
+    {
+      "id": "node-web-servers",
+      "title": "Web Servers and Reverse Proxies",
+      "description": "Nginx, Caddy, Apache, IIS, Tomcat, forward/reverse proxying, load balancing, and runtime basics.",
+      "type": "learning_unit",
+      "chapter_id": "chapter-foundations",
+      "branch_id": "branch-optional",
+      "required": false,
+      "prerequisites": {
+        "requires_all": [
+          "node-networking"
+        ],
+        "requires_any": [],
+        "recommended": []
+      },
+      "completion_mode": "lesson_complete",
+      "estimated_duration_minutes": 55,
+      "layout": {
+        "x": 500.0,
+        "y": 190.0
+      },
+      "metadata": {},
+      "display": {},
+      "ksa": [
+        {
+          "dimension": "K",
+          "topic": "Information Technology",
+          "subtopic": "Networking Protocols",
+          "start_level": 2,
+          "target_level": 3,
+          "contribution_weight": 0.35,
+          "unlocks_assessment_check": false,
+          "recommends_assessment_check": false
+        },
+        {
+          "dimension": "S",
+          "topic": "Operational Skills",
+          "subtopic": "Technical Troubleshooting",
+          "start_level": 1,
+          "target_level": 2,
+          "contribution_weight": 0.2,
+          "unlocks_assessment_check": false,
+          "recommends_assessment_check": false
+        }
+      ],
+      "unlocks": {
+        "node_ids": [],
+        "branch_ids": [],
+        "recommended_next_node_ids": [
+          "node-docker"
+        ]
+      },
+      "rewards": {
+        "estimated_ksa_gain": {
+          "K.Information Technology.Networking Protocols": 0.08,
+          "S.Operational Skills.Technical Troubleshooting": 0.06
+        },
+        "effort_score": 28.0,
+        "reward_tags": [
+          "optional",
+          "web"
+        ]
+      },
+      "retrospective_hooks": {
+        "retrospective_after": false,
+        "review_recommended": false,
+        "recap_checkpoint_available": false
+      },
+      "ksa_hooks": {
+        "mini_assessment_available": false,
+        "recommended_reassessment_topics": [],
+        "unlocks_deeper_refinement": false
+      },
+      "remediation": {
+        "is_remediation_node": false,
+        "recommended_if_failed_node_ids": [],
+        "supports_review_for_node_ids": []
+      },
+      "adaptive_unlock": {
+        "ksa_thresholds": [],
+        "requires_branch_completion_ids": [],
+        "requires_checkpoint_node_ids": [],
+        "requires_review_recommended": false,
+        "recommended_only": true
+      }
+    },
+    {
+      "id": "node-foundations-quiz",
+      "title": "Foundations Quiz",
+      "description": "Scored validation of Linux, networking, shell, and Git essentials.",
+      "type": "quiz",
+      "chapter_id": "chapter-foundations",
+      "branch_id": "branch-core",
+      "required": true,
+      "prerequisites": {
+        "requires_all": [
+          "node-linux-practice"
+        ],
+        "requires_any": [
+          "node-networking",
+          "node-terminal",
+          "node-git"
+        ],
+        "recommended": []
+      },
+      "completion_mode": "quiz_pass",
+      "estimated_duration_minutes": 30,
+      "layout": {
+        "x": 500.0,
+        "y": 80.0
+      },
+      "metadata": {
+        "pass_threshold": 0.75
+      },
+      "display": {},
+      "ksa": [],
+      "unlocks": {
+        "node_ids": [
+          "node-foundations-review",
+          "node-foundations-checkpoint"
+        ],
+        "branch_ids": [],
+        "recommended_next_node_ids": []
+      },
+      "rewards": {
+        "estimated_ksa_gain": {
+          "K.Information Technology.Networking Protocols": 0.07,
+          "S.Digital Craft.DevOps/Version Control": 0.06
+        },
+        "effort_score": 24.0,
+        "reward_tags": [
+          "quiz",
+          "validation"
+        ]
+      },
+      "retrospective_hooks": {
+        "retrospective_after": true,
+        "review_recommended": true,
+        "recap_checkpoint_available": true
+      },
+      "ksa_hooks": {
+        "mini_assessment_available": true,
+        "recommended_reassessment_topics": [
+          "K.Information Technology.Networking Protocols",
+          "S.Digital Craft.DevOps/Version Control"
+        ],
+        "unlocks_deeper_refinement": true
+      },
+      "remediation": {
+        "is_remediation_node": false,
+        "recommended_if_failed_node_ids": [
+          "node-foundations-review"
+        ],
+        "supports_review_for_node_ids": []
+      },
+      "adaptive_unlock": {
+        "ksa_thresholds": [],
+        "requires_branch_completion_ids": [],
+        "requires_checkpoint_node_ids": [],
+        "requires_review_recommended": false,
+        "recommended_only": false
+      }
+    },
+    {
+      "id": "node-foundations-review",
+      "title": "Foundations Review",
+      "description": "Recap weak areas in Linux, networking, shell, and Git before platform work.",
+      "type": "review",
+      "chapter_id": "chapter-foundations",
+      "branch_id": "branch-optional",
+      "required": false,
+      "prerequisites": {
+        "requires_all": [
+          "node-foundations-quiz"
+        ],
+        "requires_any": [],
+        "recommended": []
+      },
+      "completion_mode": "review_complete",
+      "estimated_duration_minutes": 40,
+      "layout": {
+        "x": 720.0,
+        "y": 80.0
+      },
+      "metadata": {},
+      "display": {},
+      "ksa": [],
+      "unlocks": {
+        "node_ids": [],
+        "branch_ids": [],
+        "recommended_next_node_ids": [
+          "node-foundations-checkpoint"
+        ]
+      },
+      "rewards": {
+        "estimated_ksa_gain": {
+          "A.Verbal Comprehension.Critical Reading Speed": 0.04,
+          "S.Operational Skills.Technical Troubleshooting": 0.05
+        },
+        "effort_score": 18.0,
+        "reward_tags": [
+          "review",
+          "reinforcement"
+        ]
+      },
+      "retrospective_hooks": {
+        "retrospective_after": false,
+        "review_recommended": true,
+        "recap_checkpoint_available": false
+      },
+      "ksa_hooks": {
+        "mini_assessment_available": false,
+        "recommended_reassessment_topics": [],
+        "unlocks_deeper_refinement": false
+      },
+      "remediation": {
+        "is_remediation_node": true,
+        "recommended_if_failed_node_ids": [
+          "node-foundations-quiz"
+        ],
+        "supports_review_for_node_ids": [
+          "node-foundations-checkpoint"
+        ]
+      },
+      "adaptive_unlock": {
+        "ksa_thresholds": [],
+        "requires_branch_completion_ids": [],
+        "requires_checkpoint_node_ids": [],
+        "requires_review_recommended": true,
+        "recommended_only": true
+      }
+    },
+    {
+      "id": "node-foundations-checkpoint",
+      "title": "Foundations Checkpoint",
+      "description": "Readiness gate before containers, cloud, and delivery automation.",
+      "type": "checkpoint",
+      "chapter_id": "chapter-foundations",
+      "branch_id": "branch-core",
+      "required": true,
+      "prerequisites": {
+        "requires_all": [
+          "node-programming"
+        ],
+        "requires_any": [
+          "node-foundations-quiz"
+        ],
+        "recommended": [
+          "node-foundations-review"
+        ]
+      },
+      "completion_mode": "checkpoint_pass",
+      "estimated_duration_minutes": 25,
+      "layout": {
+        "x": 720.0,
+        "y": 300.0
+      },
+      "metadata": {
+        "pass_threshold": 0.7
+      },
+      "display": {},
+      "ksa": [
+        {
+          "dimension": "A",
+          "topic": "Executive Function",
+          "subtopic": "Working Memory Span",
+          "start_level": 1,
+          "target_level": 2,
+          "contribution_weight": 0.2,
+          "unlocks_assessment_check": true,
+          "recommends_assessment_check": true
+        }
+      ],
+      "unlocks": {
+        "node_ids": [
+          "node-foundations-milestone",
+          "node-docker",
+          "node-cloud-providers"
+        ],
+        "branch_ids": [],
+        "recommended_next_node_ids": []
+      },
+      "rewards": {
+        "estimated_ksa_gain": {
+          "A.Executive Function.Working Memory Span": 0.08
+        },
+        "effort_score": 20.0,
+        "reward_tags": [
+          "checkpoint"
+        ]
+      },
+      "retrospective_hooks": {
+        "retrospective_after": true,
+        "review_recommended": true,
+        "recap_checkpoint_available": true
+      },
+      "ksa_hooks": {
+        "mini_assessment_available": true,
+        "recommended_reassessment_topics": [
+          "A.Executive Function.Working Memory Span"
+        ],
+        "unlocks_deeper_refinement": true
+      },
+      "remediation": {
+        "is_remediation_node": false,
+        "recommended_if_failed_node_ids": [],
+        "supports_review_for_node_ids": []
+      },
+      "adaptive_unlock": {
+        "ksa_thresholds": [
+          {
+            "dimension": "S",
+            "topic": "Digital Craft",
+            "min_level": 2
+          }
+        ],
+        "requires_branch_completion_ids": [],
+        "requires_checkpoint_node_ids": [],
+        "requires_review_recommended": false,
+        "recommended_only": false
+      }
+    },
+    {
+      "id": "node-foundations-milestone",
+      "title": "Foundations Milestone",
+      "description": "Branch merge confirming baseline DevOps readiness.",
+      "type": "milestone",
+      "chapter_id": "chapter-foundations",
+      "branch_id": "branch-core",
+      "required": true,
+      "prerequisites": {
+        "requires_all": [
+          "node-foundations-checkpoint"
+        ],
+        "requires_any": [],
+        "recommended": []
+      },
+      "completion_mode": "manual",
+      "estimated_duration_minutes": 10,
+      "layout": {
+        "x": 920.0,
+        "y": 300.0
+      },
+      "metadata": {},
+      "display": {},
+      "ksa": [],
+      "unlocks": {
+        "node_ids": [
+          "node-docker",
+          "node-ci-cd"
+        ],
+        "branch_ids": [],
+        "recommended_next_node_ids": [
+          "node-kubernetes"
+        ]
+      },
+      "rewards": {
+        "estimated_ksa_gain": {
+          "S.Strategic Execution.Change Management": 0.04
+        },
+        "effort_score": 10.0,
+        "reward_tags": [
+          "milestone"
+        ]
+      },
+      "retrospective_hooks": {
+        "retrospective_after": true,
+        "review_recommended": false,
+        "recap_checkpoint_available": true
+      },
+      "ksa_hooks": {
+        "mini_assessment_available": false,
+        "recommended_reassessment_topics": [],
+        "unlocks_deeper_refinement": false
+      },
+      "remediation": {
+        "is_remediation_node": false,
+        "recommended_if_failed_node_ids": [],
+        "supports_review_for_node_ids": []
+      },
+      "adaptive_unlock": {
+        "ksa_thresholds": [],
+        "requires_branch_completion_ids": [],
+        "requires_checkpoint_node_ids": [
+          "node-foundations-checkpoint"
+        ],
+        "requires_review_recommended": false,
+        "recommended_only": false
+      }
+    },
+    {
+      "id": "node-docker",
+      "title": "Docker",
+      "description": "Images, containers, volumes, networks, registries, Dockerfiles, and container lifecycle management.",
+      "type": "learning_unit",
+      "chapter_id": "chapter-platform",
+      "branch_id": "branch-core",
+      "required": true,
+      "prerequisites": {
+        "requires_all": [
+          "node-foundations-milestone"
+        ],
+        "requires_any": [],
+        "recommended": []
+      },
+      "completion_mode": "lesson_complete",
+      "estimated_duration_minutes": 90,
+      "layout": {
+        "x": 1120.0,
+        "y": 170.0
+      },
+      "metadata": {},
+      "display": {},
+      "ksa": [
+        {
+          "dimension": "K",
+          "topic": "Information Technology",
+          "subtopic": "Cloud Architecture",
+          "start_level": 1,
+          "target_level": 2,
+          "contribution_weight": 0.25,
+          "unlocks_assessment_check": false,
+          "recommends_assessment_check": false
+        },
+        {
+          "dimension": "S",
+          "topic": "Digital Craft",
+          "subtopic": "DevOps/Version Control",
+          "start_level": 2,
+          "target_level": 3,
+          "contribution_weight": 0.55,
+          "unlocks_assessment_check": false,
+          "recommends_assessment_check": true
+        },
+        {
+          "dimension": "S",
+          "topic": "Operational Skills",
+          "subtopic": "Technical Troubleshooting",
+          "start_level": 1,
+          "target_level": 2,
+          "contribution_weight": 0.15,
+          "unlocks_assessment_check": false,
+          "recommends_assessment_check": false
+        }
+      ],
+      "unlocks": {
+        "node_ids": [
+          "node-docker-practice",
+          "node-lxc"
+        ],
+        "branch_ids": [],
+        "recommended_next_node_ids": [
+          "node-kubernetes"
+        ]
+      },
+      "rewards": {
+        "estimated_ksa_gain": {
+          "K.Information Technology.Cloud Architecture": 0.08,
+          "S.Digital Craft.DevOps/Version Control": 0.18,
+          "S.Operational Skills.Technical Troubleshooting": 0.05
+        },
+        "effort_score": 62.0,
+        "reward_tags": [
+          "docker",
+          "containers"
+        ]
+      },
+      "retrospective_hooks": {
+        "retrospective_after": false,
+        "review_recommended": false,
+        "recap_checkpoint_available": false
+      },
+      "ksa_hooks": {
+        "mini_assessment_available": false,
+        "recommended_reassessment_topics": [],
+        "unlocks_deeper_refinement": false
+      },
+      "remediation": {
+        "is_remediation_node": false,
+        "recommended_if_failed_node_ids": [],
+        "supports_review_for_node_ids": []
+      },
+      "adaptive_unlock": {
+        "ksa_thresholds": [],
+        "requires_branch_completion_ids": [],
+        "requires_checkpoint_node_ids": [],
+        "requires_review_recommended": false,
+        "recommended_only": false
+      }
+    },
+    {
+      "id": "node-docker-practice",
+      "title": "Docker Practice Lab",
+      "description": "Containerize an app, build images, attach volumes and networks, publish artifacts, and debug broken builds.",
+      "type": "practice",
+      "chapter_id": "chapter-platform",
+      "branch_id": "branch-core",
+      "required": true,
+      "prerequisites": {
+        "requires_all": [
+          "node-docker"
+        ],
+        "requires_any": [],
+        "recommended": []
+      },
+      "completion_mode": "practice_complete",
+      "estimated_duration_minutes": 95,
+      "layout": {
+        "x": 1320.0,
+        "y": 170.0
+      },
+      "metadata": {},
+      "display": {},
+      "ksa": [
+        {
+          "dimension": "S",
+          "topic": "Operational Skills",
+          "subtopic": "Technical Troubleshooting",
+          "start_level": 2,
+          "target_level": 3,
+          "contribution_weight": 0.45,
+          "unlocks_assessment_check": false,
+          "recommends_assessment_check": false
+        },
+        {
+          "dimension": "S",
+          "topic": "Digital Craft",
+          "subtopic": "DevOps/Version Control",
+          "start_level": 2,
+          "target_level": 3,
+          "contribution_weight": 0.35,
+          "unlocks_assessment_check": false,
+          "recommends_assessment_check": false
+        }
+      ],
+      "unlocks": {
+        "node_ids": [
+          "node-kubernetes"
+        ],
+        "branch_ids": [],
+        "recommended_next_node_ids": [
+          "node-lxc"
+        ]
+      },
+      "rewards": {
+        "estimated_ksa_gain": {
+          "S.Operational Skills.Technical Troubleshooting": 0.16,
+          "S.Digital Craft.DevOps/Version Control": 0.12
+        },
+        "effort_score": 76.0,
+        "reward_tags": [
+          "hands_on",
+          "containers"
+        ]
+      },
+      "retrospective_hooks": {
+        "retrospective_after": true,
+        "review_recommended": false,
+        "recap_checkpoint_available": false
+      },
+      "ksa_hooks": {
+        "mini_assessment_available": false,
+        "recommended_reassessment_topics": [],
+        "unlocks_deeper_refinement": false
+      },
+      "remediation": {
+        "is_remediation_node": false,
+        "recommended_if_failed_node_ids": [
+          "node-docker"
+        ],
+        "supports_review_for_node_ids": []
+      },
+      "adaptive_unlock": {
+        "ksa_thresholds": [],
+        "requires_branch_completion_ids": [],
+        "requires_checkpoint_node_ids": [],
+        "requires_review_recommended": false,
+        "recommended_only": false
+      }
+    },
+    {
+      "id": "node-lxc",
+      "title": "LXC and Container Alternatives",
+      "description": "Optional exposure to non-Docker container approaches and runtime differences.",
+      "type": "learning_unit",
+      "chapter_id": "chapter-platform",
+      "branch_id": "branch-alternative",
+      "required": false,
+      "prerequisites": {
+        "requires_all": [
+          "node-docker"
+        ],
+        "requires_any": [],
+        "recommended": []
+      },
+      "completion_mode": "lesson_complete",
+      "estimated_duration_minutes": 45,
+      "layout": {
+        "x": 1320.0,
+        "y": 70.0
+      },
+      "metadata": {},
+      "display": {},
+      "ksa": [],
+      "unlocks": {
+        "node_ids": [],
+        "branch_ids": [],
+        "recommended_next_node_ids": [
+          "node-kubernetes"
+        ]
+      },
+      "rewards": {
+        "estimated_ksa_gain": {
+          "K.Information Technology.Cloud Architecture": 0.05
+        },
+        "effort_score": 20.0,
+        "reward_tags": [
+          "alternative",
+          "containers"
+        ]
+      },
+      "retrospective_hooks": {
+        "retrospective_after": false,
+        "review_recommended": false,
+        "recap_checkpoint_available": false
+      },
+      "ksa_hooks": {
+        "mini_assessment_available": false,
+        "recommended_reassessment_topics": [],
+        "unlocks_deeper_refinement": false
+      },
+      "remediation": {
+        "is_remediation_node": false,
+        "recommended_if_failed_node_ids": [],
+        "supports_review_for_node_ids": []
+      },
+      "adaptive_unlock": {
+        "ksa_thresholds": [],
+        "requires_branch_completion_ids": [],
+        "requires_checkpoint_node_ids": [],
+        "requires_review_recommended": false,
+        "recommended_only": true
+      }
+    },
+    {
+      "id": "node-kubernetes",
+      "title": "Kubernetes",
+      "description": "Pods, deployments, services, ingress, config maps, scheduling, cluster architecture, and workload orchestration.",
+      "type": "learning_unit",
+      "chapter_id": "chapter-platform",
+      "branch_id": "branch-core",
+      "required": true,
+      "prerequisites": {
+        "requires_all": [
+          "node-docker-practice"
+        ],
+        "requires_any": [],
+        "recommended": []
+      },
+      "completion_mode": "lesson_complete",
+      "estimated_duration_minutes": 130,
+      "layout": {
+        "x": 1520.0,
+        "y": 170.0
+      },
+      "metadata": {},
+      "display": {},
+      "ksa": [
+        {
+          "dimension": "K",
+          "topic": "Information Technology",
+          "subtopic": "Cloud Architecture",
+          "start_level": 2,
+          "target_level": 4,
+          "contribution_weight": 0.5,
+          "unlocks_assessment_check": true,
+          "recommends_assessment_check": true
+        },
+        {
+          "dimension": "S",
+          "topic": "Digital Craft",
+          "subtopic": "DevOps/Version Control",
+          "start_level": 2,
+          "target_level": 4,
+          "contribution_weight": 0.35,
+          "unlocks_assessment_check": false,
+          "recommends_assessment_check": true
+        },
+        {
+          "dimension": "S",
+          "topic": "Operational Skills",
+          "subtopic": "Technical Troubleshooting",
+          "start_level": 2,
+          "target_level": 3,
+          "contribution_weight": 0.1,
+          "unlocks_assessment_check": false,
+          "recommends_assessment_check": false
+        }
+      ],
+      "unlocks": {
+        "node_ids": [
+          "node-kubernetes-practice",
+          "node-managed-k8s",
+          "node-gitops"
+        ],
+        "branch_ids": [],
+        "recommended_next_node_ids": [
+          "node-monitoring"
+        ]
+      },
+      "rewards": {
+        "estimated_ksa_gain": {
+          "K.Information Technology.Cloud Architecture": 0.22,
+          "S.Digital Craft.DevOps/Version Control": 0.14,
+          "S.Operational Skills.Technical Troubleshooting": 0.05
+        },
+        "effort_score": 100.0,
+        "reward_tags": [
+          "kubernetes",
+          "orchestration"
+        ]
+      },
+      "retrospective_hooks": {
+        "retrospective_after": false,
+        "review_recommended": true,
+        "recap_checkpoint_available": false
+      },
+      "ksa_hooks": {
+        "mini_assessment_available": true,
+        "recommended_reassessment_topics": [
+          "K.Information Technology.Cloud Architecture",
+          "S.Digital Craft.DevOps/Version Control"
+        ],
+        "unlocks_deeper_refinement": true
+      },
+      "remediation": {
+        "is_remediation_node": false,
+        "recommended_if_failed_node_ids": [],
+        "supports_review_for_node_ids": []
+      },
+      "adaptive_unlock": {
+        "ksa_thresholds": [
+          {
+            "dimension": "K",
+            "topic": "Information Technology",
+            "min_level": 2
+          }
+        ],
+        "requires_branch_completion_ids": [
+          "branch-core"
+        ],
+        "requires_checkpoint_node_ids": [
+          "node-foundations-checkpoint"
+        ],
+        "requires_review_recommended": false,
+        "recommended_only": false
+      }
+    },
+    {
+      "id": "node-kubernetes-practice",
+      "title": "Kubernetes Practice Lab",
+      "description": "Deploy workloads, expose services, configure ingress, mount configs, and debug failed pods.",
+      "type": "practice",
+      "chapter_id": "chapter-platform",
+      "branch_id": "branch-core",
+      "required": true,
+      "prerequisites": {
+        "requires_all": [
+          "node-kubernetes"
+        ],
+        "requires_any": [],
+        "recommended": []
+      },
+      "completion_mode": "practice_complete",
+      "estimated_duration_minutes": 120,
+      "layout": {
+        "x": 1720.0,
+        "y": 170.0
+      },
+      "metadata": {},
+      "display": {},
+      "ksa": [
+        {
+          "dimension": "S",
+          "topic": "Operational Skills",
+          "subtopic": "Technical Troubleshooting",
+          "start_level": 2,
+          "target_level": 4,
+          "contribution_weight": 0.5,
+          "unlocks_assessment_check": false,
+          "recommends_assessment_check": false
+        },
+        {
+          "dimension": "A",
+          "topic": "Executive Function",
+          "subtopic": "Multi-tasking Switching Cost",
+          "start_level": 1,
+          "target_level": 2,
+          "contribution_weight": 0.15,
+          "unlocks_assessment_check": false,
+          "recommends_assessment_check": false
+        }
+      ],
+      "unlocks": {
+        "node_ids": [
+          "node-platform-checkpoint"
+        ],
+        "branch_ids": [],
+        "recommended_next_node_ids": [
+          "node-managed-k8s"
+        ]
+      },
+      "rewards": {
+        "estimated_ksa_gain": {
+          "S.Operational Skills.Technical Troubleshooting": 0.2,
+          "A.Executive Function.Multi-tasking Switching Cost": 0.05
+        },
+        "effort_score": 96.0,
+        "reward_tags": [
+          "hands_on",
+          "k8s"
+        ]
+      },
+      "retrospective_hooks": {
+        "retrospective_after": true,
+        "review_recommended": false,
+        "recap_checkpoint_available": false
+      },
+      "ksa_hooks": {
+        "mini_assessment_available": false,
+        "recommended_reassessment_topics": [],
+        "unlocks_deeper_refinement": false
+      },
+      "remediation": {
+        "is_remediation_node": false,
+        "recommended_if_failed_node_ids": [
+          "node-kubernetes"
+        ],
+        "supports_review_for_node_ids": []
+      },
+      "adaptive_unlock": {
+        "ksa_thresholds": [],
+        "requires_branch_completion_ids": [],
+        "requires_checkpoint_node_ids": [],
+        "requires_review_recommended": false,
+        "recommended_only": false
+      }
+    },
+    {
+      "id": "node-managed-k8s",
+      "title": "Managed Kubernetes (GKE / EKS / AKS)",
+      "description": "Use cloud-managed Kubernetes platforms and understand control plane tradeoffs.",
+      "type": "learning_unit",
+      "chapter_id": "chapter-platform",
+      "branch_id": "branch-core",
+      "required": true,
+      "prerequisites": {
+        "requires_all": [
+          "node-kubernetes",
+          "node-cloud-providers"
+        ],
+        "requires_any": [],
+        "recommended": []
+      },
+      "completion_mode": "lesson_complete",
+      "estimated_duration_minutes": 60,
+      "layout": {
+        "x": 1720.0,
+        "y": 70.0
+      },
+      "metadata": {},
+      "display": {},
+      "ksa": [
+        {
+          "dimension": "K",
+          "topic": "Information Technology",
+          "subtopic": "Cloud Architecture",
+          "start_level": 2,
+          "target_level": 3,
+          "contribution_weight": 0.6,
+          "unlocks_assessment_check": false,
+          "recommends_assessment_check": true
+        }
+      ],
+      "unlocks": {
+        "node_ids": [
+          "node-platform-checkpoint"
+        ],
+        "branch_ids": [],
+        "recommended_next_node_ids": [
+          "node-gitops"
+        ]
+      },
+      "rewards": {
+        "estimated_ksa_gain": {
+          "K.Information Technology.Cloud Architecture": 0.12
+        },
+        "effort_score": 34.0,
+        "reward_tags": [
+          "cloud",
+          "managed-k8s"
+        ]
+      },
+      "retrospective_hooks": {
+        "retrospective_after": false,
+        "review_recommended": false,
+        "recap_checkpoint_available": false
+      },
+      "ksa_hooks": {
+        "mini_assessment_available": false,
+        "recommended_reassessment_topics": [],
+        "unlocks_deeper_refinement": false
+      },
+      "remediation": {
+        "is_remediation_node": false,
+        "recommended_if_failed_node_ids": [],
+        "supports_review_for_node_ids": []
+      },
+      "adaptive_unlock": {
+        "ksa_thresholds": [],
+        "requires_branch_completion_ids": [],
+        "requires_checkpoint_node_ids": [],
+        "requires_review_recommended": false,
+        "recommended_only": false
+      }
+    },
+    {
+      "id": "node-platform-checkpoint",
+      "title": "Containers and Orchestration Checkpoint",
+      "description": "Validation gate for production-ready container and cluster fundamentals.",
+      "type": "checkpoint",
+      "chapter_id": "chapter-platform",
+      "branch_id": "branch-core",
+      "required": true,
+      "prerequisites": {
+        "requires_all": [
+          "node-kubernetes-practice"
+        ],
+        "requires_any": [
+          "node-managed-k8s"
+        ],
+        "recommended": [
+          "node-lxc"
+        ]
+      },
+      "completion_mode": "checkpoint_pass",
+      "estimated_duration_minutes": 30,
+      "layout": {
+        "x": 1920.0,
+        "y": 170.0
+      },
+      "metadata": {
+        "pass_threshold": 0.72
+      },
+      "display": {},
+      "ksa": [
+        {
+          "dimension": "A",
+          "topic": "Executive Function",
+          "subtopic": "Working Memory Span",
+          "start_level": 2,
+          "target_level": 3,
+          "contribution_weight": 0.2,
+          "unlocks_assessment_check": true,
+          "recommends_assessment_check": true
+        }
+      ],
+      "unlocks": {
+        "node_ids": [
+          "node-delivery-milestone"
+        ],
+        "branch_ids": [],
+        "recommended_next_node_ids": [
+          "node-ci-cd",
+          "node-gitops"
+        ]
+      },
+      "rewards": {
+        "estimated_ksa_gain": {
+          "A.Executive Function.Working Memory Span": 0.08
+        },
+        "effort_score": 22.0,
+        "reward_tags": [
+          "checkpoint",
+          "platform"
+        ]
+      },
+      "retrospective_hooks": {
+        "retrospective_after": true,
+        "review_recommended": true,
+        "recap_checkpoint_available": true
+      },
+      "ksa_hooks": {
+        "mini_assessment_available": true,
+        "recommended_reassessment_topics": [
+          "K.Information Technology.Cloud Architecture",
+          "S.Operational Skills.Technical Troubleshooting"
+        ],
+        "unlocks_deeper_refinement": true
+      },
+      "remediation": {
+        "is_remediation_node": false,
+        "recommended_if_failed_node_ids": [],
+        "supports_review_for_node_ids": []
+      },
+      "adaptive_unlock": {
+        "ksa_thresholds": [
+          {
+            "dimension": "K",
+            "topic": "Information Technology",
+            "min_level": 3
+          }
+        ],
+        "requires_branch_completion_ids": [
+          "branch-core"
+        ],
+        "requires_checkpoint_node_ids": [
+          "node-foundations-checkpoint"
+        ],
+        "requires_review_recommended": false,
+        "recommended_only": false
+      }
+    },
+    {
+      "id": "node-cloud-providers",
+      "title": "Cloud Providers",
+      "description": "Core concepts across AWS, Azure, and Google Cloud: compute, storage, networking, IAM, and managed services.",
+      "type": "learning_unit",
+      "chapter_id": "chapter-delivery",
+      "branch_id": "branch-core",
+      "required": true,
+      "prerequisites": {
+        "requires_all": [
+          "node-foundations-checkpoint",
+          "node-networking"
+        ],
+        "requires_any": [],
+        "recommended": []
+      },
+      "completion_mode": "lesson_complete",
+      "estimated_duration_minutes": 95,
+      "layout": {
+        "x": 1120.0,
+        "y": 500.0
+      },
+      "metadata": {},
+      "display": {},
+      "ksa": [
+        {
+          "dimension": "K",
+          "topic": "Information Technology",
+          "subtopic": "Cloud Architecture",
+          "start_level": 1,
+          "target_level": 3,
+          "contribution_weight": 0.8,
+          "unlocks_assessment_check": true,
+          "recommends_assessment_check": true
+        },
+        {
+          "dimension": "K",
+          "topic": "Information Technology",
+          "subtopic": "Cybersecurity",
+          "start_level": 1,
+          "target_level": 2,
+          "contribution_weight": 0.1,
+          "unlocks_assessment_check": false,
+          "recommends_assessment_check": false
+        }
+      ],
+      "unlocks": {
+        "node_ids": [
+          "node-terraform",
+          "node-serverless"
+        ],
+        "branch_ids": [],
+        "recommended_next_node_ids": [
+          "node-managed-k8s"
+        ]
+      },
+      "rewards": {
+        "estimated_ksa_gain": {
+          "K.Information Technology.Cloud Architecture": 0.28,
+          "K.Information Technology.Cybersecurity": 0.04
+        },
+        "effort_score": 66.0,
+        "reward_tags": [
+          "cloud",
+          "infrastructure"
+        ]
+      },
+      "retrospective_hooks": {
+        "retrospective_after": false,
+        "review_recommended": true,
+        "recap_checkpoint_available": false
+      },
+      "ksa_hooks": {
+        "mini_assessment_available": true,
+        "recommended_reassessment_topics": [
+          "K.Information Technology.Cloud Architecture"
+        ],
+        "unlocks_deeper_refinement": true
+      },
+      "remediation": {
+        "is_remediation_node": false,
+        "recommended_if_failed_node_ids": [],
+        "supports_review_for_node_ids": []
+      },
+      "adaptive_unlock": {
+        "ksa_thresholds": [],
+        "requires_branch_completion_ids": [],
+        "requires_checkpoint_node_ids": [
+          "node-foundations-checkpoint"
+        ],
+        "requires_review_recommended": false,
+        "recommended_only": false
+      }
+    },
+    {
+      "id": "node-ci-cd",
+      "title": "CI/CD Fundamentals",
+      "description": "Build, test, artifact, deployment stages, environment promotion, and delivery patterns.",
+      "type": "learning_unit",
+      "chapter_id": "chapter-delivery",
+      "branch_id": "branch-core",
+      "required": true,
+      "prerequisites": {
+        "requires_all": [
+          "node-foundations-milestone",
+          "node-git"
+        ],
+        "requires_any": [],
+        "recommended": []
+      },
+      "completion_mode": "lesson_complete",
+      "estimated_duration_minutes": 75,
+      "layout": {
+        "x": 1120.0,
+        "y": 620.0
+      },
+      "metadata": {},
+      "display": {},
+      "ksa": [
+        {
+          "dimension": "S",
+          "topic": "Strategic Execution",
+          "subtopic": "Change Management",
+          "start_level": 1,
+          "target_level": 3,
+          "contribution_weight": 0.35,
+          "unlocks_assessment_check": false,
+          "recommends_assessment_check": true
+        },
+        {
+          "dimension": "S",
+          "topic": "Digital Craft",
+          "subtopic": "DevOps/Version Control",
+          "start_level": 2,
+          "target_level": 4,
+          "contribution_weight": 0.45,
+          "unlocks_assessment_check": false,
+          "recommends_assessment_check": true
+        },
+        {
+          "dimension": "S",
+          "topic": "Literacy & Numeracy",
+          "subtopic": "Technical Documentation",
+          "start_level": 1,
+          "target_level": 2,
+          "contribution_weight": 0.1,
+          "unlocks_assessment_check": false,
+          "recommends_assessment_check": false
+        }
+      ],
+      "unlocks": {
+        "node_ids": [
+          "node-github-actions",
+          "node-cicd-alts"
+        ],
+        "branch_ids": [],
+        "recommended_next_node_ids": [
+          "node-gitops"
+        ]
+      },
+      "rewards": {
+        "estimated_ksa_gain": {
+          "S.Strategic Execution.Change Management": 0.12,
+          "S.Digital Craft.DevOps/Version Control": 0.16,
+          "S.Literacy & Numeracy.Technical Documentation": 0.04
+        },
+        "effort_score": 56.0,
+        "reward_tags": [
+          "delivery",
+          "pipelines"
+        ]
+      },
+      "retrospective_hooks": {
+        "retrospective_after": false,
+        "review_recommended": false,
+        "recap_checkpoint_available": false
+      },
+      "ksa_hooks": {
+        "mini_assessment_available": false,
+        "recommended_reassessment_topics": [],
+        "unlocks_deeper_refinement": false
+      },
+      "remediation": {
+        "is_remediation_node": false,
+        "recommended_if_failed_node_ids": [],
+        "supports_review_for_node_ids": []
+      },
+      "adaptive_unlock": {
+        "ksa_thresholds": [],
+        "requires_branch_completion_ids": [],
+        "requires_checkpoint_node_ids": [],
+        "requires_review_recommended": false,
+        "recommended_only": false
+      }
+    },
+    {
+      "id": "node-github-actions",
+      "title": "GitHub Actions Pipeline Practice",
+      "description": "Implement CI/CD with GitHub Actions for build, test, lint, artifact, and deployment automation.",
+      "type": "practice",
+      "chapter_id": "chapter-delivery",
+      "branch_id": "branch-core",
+      "required": true,
+      "prerequisites": {
+        "requires_all": [
+          "node-ci-cd"
+        ],
+        "requires_any": [],
+        "recommended": []
+      },
+      "completion_mode": "practice_complete",
+      "estimated_duration_minutes": 90,
+      "layout": {
+        "x": 1320.0,
+        "y": 620.0
+      },
+      "metadata": {},
+      "display": {},
+      "ksa": [
+        {
+          "dimension": "S",
+          "topic": "Digital Craft",
+          "subtopic": "DevOps/Version Control",
+          "start_level": 3,
+          "target_level": 4,
+          "contribution_weight": 0.5,
+          "unlocks_assessment_check": false,
+          "recommends_assessment_check": false
+        },
+        {
+          "dimension": "S",
+          "topic": "Operational Skills",
+          "subtopic": "Technical Troubleshooting",
+          "start_level": 2,
+          "target_level": 3,
+          "contribution_weight": 0.25,
+          "unlocks_assessment_check": false,
+          "recommends_assessment_check": false
+        }
+      ],
+      "unlocks": {
+        "node_ids": [
+          "node-gitops",
+          "node-delivery-quiz"
+        ],
+        "branch_ids": [],
+        "recommended_next_node_ids": [
+          "node-cicd-alts"
+        ]
+      },
+      "rewards": {
+        "estimated_ksa_gain": {
+          "S.Digital Craft.DevOps/Version Control": 0.18,
+          "S.Operational Skills.Technical Troubleshooting": 0.08
+        },
+        "effort_score": 72.0,
+        "reward_tags": [
+          "hands_on",
+          "ci-cd"
+        ]
+      },
+      "retrospective_hooks": {
+        "retrospective_after": true,
+        "review_recommended": false,
+        "recap_checkpoint_available": false
+      },
+      "ksa_hooks": {
+        "mini_assessment_available": false,
+        "recommended_reassessment_topics": [],
+        "unlocks_deeper_refinement": false
+      },
+      "remediation": {
+        "is_remediation_node": false,
+        "recommended_if_failed_node_ids": [
+          "node-ci-cd"
+        ],
+        "supports_review_for_node_ids": []
+      },
+      "adaptive_unlock": {
+        "ksa_thresholds": [],
+        "requires_branch_completion_ids": [],
+        "requires_checkpoint_node_ids": [],
+        "requires_review_recommended": false,
+        "recommended_only": false
+      }
+    },
+    {
+      "id": "node-cicd-alts",
+      "title": "CI/CD Alternatives (Jenkins / GitLab CI / CircleCI / TeamCity / Octopus)",
+      "description": "Alternative tooling choices to the recommended CI/CD path.",
+      "type": "learning_unit",
+      "chapter_id": "chapter-delivery",
+      "branch_id": "branch-alternative",
+      "required": false,
+      "prerequisites": {
+        "requires_all": [
+          "node-ci-cd"
+        ],
+        "requires_any": [],
+        "recommended": []
+      },
+      "completion_mode": "lesson_complete",
+      "estimated_duration_minutes": 65,
+      "layout": {
+        "x": 1320.0,
+        "y": 720.0
+      },
+      "metadata": {},
+      "display": {},
+      "ksa": [],
+      "unlocks": {
+        "node_ids": [],
+        "branch_ids": [],
+        "recommended_next_node_ids": [
+          "node-delivery-quiz"
+        ]
+      },
+      "rewards": {
+        "estimated_ksa_gain": {
+          "S.Digital Craft.DevOps/Version Control": 0.06,
+          "K.Information Technology.Cloud Architecture": 0.04
+        },
+        "effort_score": 28.0,
+        "reward_tags": [
+          "alternative",
+          "ci-cd"
+        ]
+      },
+      "retrospective_hooks": {
+        "retrospective_after": false,
+        "review_recommended": false,
+        "recap_checkpoint_available": false
+      },
+      "ksa_hooks": {
+        "mini_assessment_available": false,
+        "recommended_reassessment_topics": [],
+        "unlocks_deeper_refinement": false
+      },
+      "remediation": {
+        "is_remediation_node": false,
+        "recommended_if_failed_node_ids": [],
+        "supports_review_for_node_ids": []
+      },
+      "adaptive_unlock": {
+        "ksa_thresholds": [],
+        "requires_branch_completion_ids": [],
+        "requires_checkpoint_node_ids": [],
+        "requires_review_recommended": false,
+        "recommended_only": true
+      }
+    },
+    {
+      "id": "node-terraform",
+      "title": "Provisioning with Terraform",
+      "description": "Provision infrastructure with modules, providers, variables, remote state, and plan/apply workflows.",
+      "type": "learning_unit",
+      "chapter_id": "chapter-delivery",
+      "branch_id": "branch-core",
+      "required": true,
+      "prerequisites": {
+        "requires_all": [
+          "node-cloud-providers"
+        ],
+        "requires_any": [],
+        "recommended": []
+      },
+      "completion_mode": "lesson_complete",
+      "estimated_duration_minutes": 90,
+      "layout": {
+        "x": 1320.0,
+        "y": 500.0
+      },
+      "metadata": {},
+      "display": {},
+      "ksa": [
+        {
+          "dimension": "K",
+          "topic": "Information Technology",
+          "subtopic": "Cloud Architecture",
+          "start_level": 2,
+          "target_level": 4,
+          "contribution_weight": 0.35,
+          "unlocks_assessment_check": false,
+          "recommends_assessment_check": true
+        },
+        {
+          "dimension": "S",
+          "topic": "Digital Craft",
+          "subtopic": "DevOps/Version Control",
+          "start_level": 2,
+          "target_level": 4,
+          "contribution_weight": 0.45,
+          "unlocks_assessment_check": false,
+          "recommends_assessment_check": true
+        }
+      ],
+      "unlocks": {
+        "node_ids": [
+          "node-provisioning-alts",
+          "node-config-management",
+          "node-secrets"
+        ],
+        "branch_ids": [],
+        "recommended_next_node_ids": [
+          "node-gitops"
+        ]
+      },
+      "rewards": {
+        "estimated_ksa_gain": {
+          "K.Information Technology.Cloud Architecture": 0.14,
+          "S.Digital Craft.DevOps/Version Control": 0.16
+        },
+        "effort_score": 72.0,
+        "reward_tags": [
+          "iac",
+          "terraform"
+        ]
+      },
+      "retrospective_hooks": {
+        "retrospective_after": false,
+        "review_recommended": true,
+        "recap_checkpoint_available": false
+      },
+      "ksa_hooks": {
+        "mini_assessment_available": false,
+        "recommended_reassessment_topics": [],
+        "unlocks_deeper_refinement": false
+      },
+      "remediation": {
+        "is_remediation_node": false,
+        "recommended_if_failed_node_ids": [],
+        "supports_review_for_node_ids": []
+      },
+      "adaptive_unlock": {
+        "ksa_thresholds": [],
+        "requires_branch_completion_ids": [],
+        "requires_checkpoint_node_ids": [],
+        "requires_review_recommended": false,
+        "recommended_only": false
+      }
+    },
+    {
+      "id": "node-provisioning-alts",
+      "title": "Provisioning Alternatives (CloudFormation / Pulumi / CDK)",
+      "description": "Alternative provisioning frameworks for cloud infrastructure automation.",
+      "type": "learning_unit",
+      "chapter_id": "chapter-delivery",
+      "branch_id": "branch-alternative",
+      "required": false,
+      "prerequisites": {
+        "requires_all": [
+          "node-cloud-providers"
+        ],
+        "requires_any": [],
+        "recommended": []
+      },
+      "completion_mode": "lesson_complete",
+      "estimated_duration_minutes": 55,
+      "layout": {
+        "x": 1520.0,
+        "y": 500.0
+      },
+      "metadata": {},
+      "display": {},
+      "ksa": [],
+      "unlocks": {
+        "node_ids": [],
+        "branch_ids": [],
+        "recommended_next_node_ids": [
+          "node-secrets"
+        ]
+      },
+      "rewards": {
+        "estimated_ksa_gain": {
+          "K.Information Technology.Cloud Architecture": 0.08
+        },
+        "effort_score": 24.0,
+        "reward_tags": [
+          "alternative",
+          "provisioning"
+        ]
+      },
+      "retrospective_hooks": {
+        "retrospective_after": false,
+        "review_recommended": false,
+        "recap_checkpoint_available": false
+      },
+      "ksa_hooks": {
+        "mini_assessment_available": false,
+        "recommended_reassessment_topics": [],
+        "unlocks_deeper_refinement": false
+      },
+      "remediation": {
+        "is_remediation_node": false,
+        "recommended_if_failed_node_ids": [],
+        "supports_review_for_node_ids": []
+      },
+      "adaptive_unlock": {
+        "ksa_thresholds": [],
+        "requires_branch_completion_ids": [],
+        "requires_checkpoint_node_ids": [],
+        "requires_review_recommended": false,
+        "recommended_only": true
+      }
+    },
+    {
+      "id": "node-config-management",
+      "title": "Configuration Management (Ansible Recommended)",
+      "description": "Automate machine setup, packages, files, users, and services with declarative configuration workflows.",
+      "type": "practice",
+      "chapter_id": "chapter-delivery",
+      "branch_id": "branch-core",
+      "required": true,
+      "prerequisites": {
+        "requires_all": [
+          "node-terraform"
+        ],
+        "requires_any": [],
+        "recommended": []
+      },
+      "completion_mode": "practice_complete",
+      "estimated_duration_minutes": 75,
+      "layout": {
+        "x": 1520.0,
+        "y": 620.0
+      },
+      "metadata": {},
+      "display": {},
+      "ksa": [
+        {
+          "dimension": "S",
+          "topic": "Operational Skills",
+          "subtopic": "Technical Troubleshooting",
+          "start_level": 2,
+          "target_level": 3,
+          "contribution_weight": 0.4,
+          "unlocks_assessment_check": false,
+          "recommends_assessment_check": false
+        },
+        {
+          "dimension": "S",
+          "topic": "Strategic Execution",
+          "subtopic": "Change Management",
+          "start_level": 1,
+          "target_level": 2,
+          "contribution_weight": 0.2,
+          "unlocks_assessment_check": false,
+          "recommends_assessment_check": false
+        }
+      ],
+      "unlocks": {
+        "node_ids": [
+          "node-delivery-quiz"
+        ],
+        "branch_ids": [],
+        "recommended_next_node_ids": [
+          "node-secrets"
+        ]
+      },
+      "rewards": {
+        "estimated_ksa_gain": {
+          "S.Operational Skills.Technical Troubleshooting": 0.12,
+          "S.Strategic Execution.Change Management": 0.06
+        },
+        "effort_score": 56.0,
+        "reward_tags": [
+          "config-management",
+          "automation"
+        ]
+      },
+      "retrospective_hooks": {
+        "retrospective_after": false,
+        "review_recommended": false,
+        "recap_checkpoint_available": false
+      },
+      "ksa_hooks": {
+        "mini_assessment_available": false,
+        "recommended_reassessment_topics": [],
+        "unlocks_deeper_refinement": false
+      },
+      "remediation": {
+        "is_remediation_node": false,
+        "recommended_if_failed_node_ids": [],
+        "supports_review_for_node_ids": []
+      },
+      "adaptive_unlock": {
+        "ksa_thresholds": [],
+        "requires_branch_completion_ids": [],
+        "requires_checkpoint_node_ids": [],
+        "requires_review_recommended": false,
+        "recommended_only": false
+      }
+    },
+    {
+      "id": "node-secrets",
+      "title": "Secrets Management",
+      "description": "Vault, External Secrets Operator, sealed secrets, SOPs, and cloud-native secret handling.",
+      "type": "learning_unit",
+      "chapter_id": "chapter-delivery",
+      "branch_id": "branch-core",
+      "required": true,
+      "prerequisites": {
+        "requires_all": [
+          "node-terraform"
+        ],
+        "requires_any": [],
+        "recommended": []
+      },
+      "completion_mode": "lesson_complete",
+      "estimated_duration_minutes": 60,
+      "layout": {
+        "x": 1520.0,
+        "y": 740.0
+      },
+      "metadata": {},
+      "display": {},
+      "ksa": [
+        {
+          "dimension": "K",
+          "topic": "Information Technology",
+          "subtopic": "Cybersecurity",
+          "start_level": 1,
+          "target_level": 3,
+          "contribution_weight": 0.7,
+          "unlocks_assessment_check": true,
+          "recommends_assessment_check": true
+        }
+      ],
+      "unlocks": {
+        "node_ids": [
+          "node-delivery-quiz"
+        ],
+        "branch_ids": [],
+        "recommended_next_node_ids": [
+          "node-gitops"
+        ]
+      },
+      "rewards": {
+        "estimated_ksa_gain": {
+          "K.Information Technology.Cybersecurity": 0.24
+        },
+        "effort_score": 42.0,
+        "reward_tags": [
+          "security",
+          "secrets"
+        ]
+      },
+      "retrospective_hooks": {
+        "retrospective_after": false,
+        "review_recommended": true,
+        "recap_checkpoint_available": false
+      },
+      "ksa_hooks": {
+        "mini_assessment_available": true,
+        "recommended_reassessment_topics": [
+          "K.Information Technology.Cybersecurity"
+        ],
+        "unlocks_deeper_refinement": true
+      },
+      "remediation": {
+        "is_remediation_node": false,
+        "recommended_if_failed_node_ids": [],
+        "supports_review_for_node_ids": []
+      },
+      "adaptive_unlock": {
+        "ksa_thresholds": [],
+        "requires_branch_completion_ids": [],
+        "requires_checkpoint_node_ids": [],
+        "requires_review_recommended": false,
+        "recommended_only": false
+      }
+    },
+    {
+      "id": "node-gitops",
+      "title": "GitOps (ArgoCD Recommended, FluxCD Alternative)",
+      "description": "Declarative deployment, reconciliation loops, drift control, and Git as the source of truth.",
+      "type": "learning_unit",
+      "chapter_id": "chapter-delivery",
+      "branch_id": "branch-core",
+      "required": true,
+      "prerequisites": {
+        "requires_all": [
+          "node-github-actions",
+          "node-kubernetes"
+        ],
+        "requires_any": [],
+        "recommended": [
+          "node-secrets"
+        ]
+      },
+      "completion_mode": "lesson_complete",
+      "estimated_duration_minutes": 80,
+      "layout": {
+        "x": 1520.0,
+        "y": 860.0
+      },
+      "metadata": {},
+      "display": {},
+      "ksa": [
+        {
+          "dimension": "S",
+          "topic": "Digital Craft",
+          "subtopic": "DevOps/Version Control",
+          "start_level": 3,
+          "target_level": 4,
+          "contribution_weight": 0.55,
+          "unlocks_assessment_check": false,
+          "recommends_assessment_check": true
+        },
+        {
+          "dimension": "S",
+          "topic": "Strategic Execution",
+          "subtopic": "Change Management",
+          "start_level": 2,
+          "target_level": 3,
+          "contribution_weight": 0.2,
+          "unlocks_assessment_check": false,
+          "recommends_assessment_check": true
+        }
+      ],
+      "unlocks": {
+        "node_ids": [
+          "node-delivery-quiz",
+          "node-delivery-milestone"
+        ],
+        "branch_ids": [],
+        "recommended_next_node_ids": [
+          "node-monitoring"
+        ]
+      },
+      "rewards": {
+        "estimated_ksa_gain": {
+          "S.Digital Craft.DevOps/Version Control": 0.2,
+          "S.Strategic Execution.Change Management": 0.08
+        },
+        "effort_score": 62.0,
+        "reward_tags": [
+          "gitops",
+          "delivery"
+        ]
+      },
+      "retrospective_hooks": {
+        "retrospective_after": false,
+        "review_recommended": true,
+        "recap_checkpoint_available": false
+      },
+      "ksa_hooks": {
+        "mini_assessment_available": false,
+        "recommended_reassessment_topics": [],
+        "unlocks_deeper_refinement": false
+      },
+      "remediation": {
+        "is_remediation_node": false,
+        "recommended_if_failed_node_ids": [],
+        "supports_review_for_node_ids": []
+      },
+      "adaptive_unlock": {
+        "ksa_thresholds": [],
+        "requires_branch_completion_ids": [],
+        "requires_checkpoint_node_ids": [
+          "node-platform-checkpoint"
+        ],
+        "requires_review_recommended": false,
+        "recommended_only": false
+      }
+    },
+    {
+      "id": "node-delivery-quiz",
+      "title": "Delivery and Automation Quiz",
+      "description": "Scored validation of CI/CD, provisioning, configuration automation, GitOps, and secrets management.",
+      "type": "quiz",
+      "chapter_id": "chapter-delivery",
+      "branch_id": "branch-core",
+      "required": true,
+      "prerequisites": {
+        "requires_all": [],
+        "requires_any": [
+          "node-gitops",
+          "node-config-management",
+          "node-secrets"
+        ],
+        "recommended": [
+          "node-cicd-alts"
+        ]
+      },
+      "completion_mode": "quiz_pass",
+      "estimated_duration_minutes": 35,
+      "layout": {
+        "x": 1720.0,
+        "y": 740.0
+      },
+      "metadata": {
+        "pass_threshold": 0.78
+      },
+      "display": {},
+      "ksa": [],
+      "unlocks": {
+        "node_ids": [
+          "node-delivery-milestone"
+        ],
+        "branch_ids": [],
+        "recommended_next_node_ids": [
+          "node-ops-gate"
+        ]
+      },
+      "rewards": {
+        "estimated_ksa_gain": {
+          "S.Digital Craft.DevOps/Version Control": 0.08,
+          "K.Information Technology.Cybersecurity": 0.06
+        },
+        "effort_score": 26.0,
+        "reward_tags": [
+          "quiz",
+          "delivery"
+        ]
+      },
+      "retrospective_hooks": {
+        "retrospective_after": true,
+        "review_recommended": true,
+        "recap_checkpoint_available": true
+      },
+      "ksa_hooks": {
+        "mini_assessment_available": true,
+        "recommended_reassessment_topics": [
+          "S.Digital Craft.DevOps/Version Control",
+          "K.Information Technology.Cybersecurity",
+          "K.Information Technology.Cloud Architecture"
+        ],
+        "unlocks_deeper_refinement": true
+      },
+      "remediation": {
+        "is_remediation_node": false,
+        "recommended_if_failed_node_ids": [],
+        "supports_review_for_node_ids": []
+      },
+      "adaptive_unlock": {
+        "ksa_thresholds": [],
+        "requires_branch_completion_ids": [],
+        "requires_checkpoint_node_ids": [],
+        "requires_review_recommended": false,
+        "recommended_only": false
+      }
+    },
+    {
+      "id": "node-delivery-milestone",
+      "title": "Delivery Milestone",
+      "description": "Merge point confirming readiness to manage and operate production systems.",
+      "type": "milestone",
+      "chapter_id": "chapter-delivery",
+      "branch_id": "branch-core",
+      "required": true,
+      "prerequisites": {
+        "requires_all": [
+          "node-platform-checkpoint"
+        ],
+        "requires_any": [
+          "node-gitops",
+          "node-delivery-quiz"
+        ],
+        "recommended": []
+      },
+      "completion_mode": "manual",
+      "estimated_duration_minutes": 10,
+      "layout": {
+        "x": 1920.0,
+        "y": 740.0
+      },
+      "metadata": {},
+      "display": {},
+      "ksa": [],
+      "unlocks": {
+        "node_ids": [
+          "node-ops-gate"
+        ],
+        "branch_ids": [],
+        "recommended_next_node_ids": [
+          "node-monitoring"
+        ]
+      },
+      "rewards": {
+        "estimated_ksa_gain": {
+          "S.Strategic Execution.Change Management": 0.05
+        },
+        "effort_score": 10.0,
+        "reward_tags": [
+          "milestone",
+          "merge"
+        ]
+      },
+      "retrospective_hooks": {
+        "retrospective_after": true,
+        "review_recommended": false,
+        "recap_checkpoint_available": true
+      },
+      "ksa_hooks": {
+        "mini_assessment_available": false,
+        "recommended_reassessment_topics": [],
+        "unlocks_deeper_refinement": false
+      },
+      "remediation": {
+        "is_remediation_node": false,
+        "recommended_if_failed_node_ids": [],
+        "supports_review_for_node_ids": []
+      },
+      "adaptive_unlock": {
+        "ksa_thresholds": [],
+        "requires_branch_completion_ids": [
+          "branch-core"
+        ],
+        "requires_checkpoint_node_ids": [
+          "node-platform-checkpoint"
+        ],
+        "requires_review_recommended": false,
+        "recommended_only": false
+      }
+    },
+    {
+      "id": "node-ops-gate",
+      "title": "Production Readiness Gate",
+      "description": "Explicit gate requiring operational evidence before advanced observability and reliability work.",
+      "type": "unlock_gate",
+      "chapter_id": "chapter-operations",
+      "branch_id": "branch-core",
+      "required": true,
+      "prerequisites": {
+        "requires_all": [
+          "node-delivery-milestone"
+        ],
+        "requires_any": [],
+        "recommended": []
+      },
+      "completion_mode": "gate_unlock",
+      "estimated_duration_minutes": 15,
+      "layout": {
+        "x": 2120.0,
+        "y": 740.0
+      },
+      "metadata": {
+        "gate_key": "prod-ready-evidence"
+      },
+      "display": {},
+      "ksa": [],
+      "unlocks": {
+        "node_ids": [
+          "node-monitoring",
+          "node-logging",
+          "node-ops-hook"
+        ],
+        "branch_ids": [],
+        "recommended_next_node_ids": [
+          "node-service-mesh"
+        ]
+      },
+      "rewards": {
+        "estimated_ksa_gain": {},
+        "effort_score": 12.0,
+        "reward_tags": [
+          "gate",
+          "production"
+        ]
+      },
+      "retrospective_hooks": {
+        "retrospective_after": false,
+        "review_recommended": false,
+        "recap_checkpoint_available": false
+      },
+      "ksa_hooks": {
+        "mini_assessment_available": false,
+        "recommended_reassessment_topics": [],
+        "unlocks_deeper_refinement": false
+      },
+      "remediation": {
+        "is_remediation_node": false,
+        "recommended_if_failed_node_ids": [],
+        "supports_review_for_node_ids": []
+      },
+      "adaptive_unlock": {
+        "ksa_thresholds": [],
+        "requires_branch_completion_ids": [
+          "branch-core"
+        ],
+        "requires_checkpoint_node_ids": [
+          "node-delivery-milestone"
+        ],
+        "requires_review_recommended": false,
+        "recommended_only": false
+      }
+    },
+    {
+      "id": "node-monitoring",
+      "title": "Infrastructure Monitoring (Prometheus and Grafana)",
+      "description": "Metrics, dashboards, alerting, scrape models, SLO views, and operational visibility.",
+      "type": "learning_unit",
+      "chapter_id": "chapter-operations",
+      "branch_id": "branch-core",
+      "required": true,
+      "prerequisites": {
+        "requires_all": [
+          "node-ops-gate"
+        ],
+        "requires_any": [],
+        "recommended": [
+          "node-kubernetes"
+        ]
+      },
+      "completion_mode": "lesson_complete",
+      "estimated_duration_minutes": 90,
+      "layout": {
+        "x": 2320.0,
+        "y": 620.0
+      },
+      "metadata": {},
+      "display": {},
+      "ksa": [
+        {
+          "dimension": "K",
+          "topic": "Information Technology",
+          "subtopic": "Cloud Architecture",
+          "start_level": 2,
+          "target_level": 3,
+          "contribution_weight": 0.25,
+          "unlocks_assessment_check": false,
+          "recommends_assessment_check": false
+        },
+        {
+          "dimension": "S",
+          "topic": "Operational Skills",
+          "subtopic": "Technical Troubleshooting",
+          "start_level": 2,
+          "target_level": 4,
+          "contribution_weight": 0.5,
+          "unlocks_assessment_check": false,
+          "recommends_assessment_check": true
+        }
+      ],
+      "unlocks": {
+        "node_ids": [
+          "node-observability-practice",
+          "node-tracing"
+        ],
+        "branch_ids": [],
+        "recommended_next_node_ids": [
+          "node-logging"
+        ]
+      },
+      "rewards": {
+        "estimated_ksa_gain": {
+          "K.Information Technology.Cloud Architecture": 0.08,
+          "S.Operational Skills.Technical Troubleshooting": 0.18
+        },
+        "effort_score": 66.0,
+        "reward_tags": [
+          "observability",
+          "monitoring"
+        ]
+      },
+      "retrospective_hooks": {
+        "retrospective_after": false,
+        "review_recommended": true,
+        "recap_checkpoint_available": false
+      },
+      "ksa_hooks": {
+        "mini_assessment_available": false,
+        "recommended_reassessment_topics": [],
+        "unlocks_deeper_refinement": false
+      },
+      "remediation": {
+        "is_remediation_node": false,
+        "recommended_if_failed_node_ids": [],
+        "supports_review_for_node_ids": []
+      },
+      "adaptive_unlock": {
+        "ksa_thresholds": [],
+        "requires_branch_completion_ids": [],
+        "requires_checkpoint_node_ids": [],
+        "requires_review_recommended": false,
+        "recommended_only": false
+      }
+    },
+    {
+      "id": "node-logging",
+      "title": "Logs Management",
+      "description": "Centralized logging with ELK, Loki, Graylog, Splunk, and log pipeline fundamentals.",
+      "type": "learning_unit",
+      "chapter_id": "chapter-operations",
+      "branch_id": "branch-core",
+      "required": true,
+      "prerequisites": {
+        "requires_all": [
+          "node-ops-gate"
+        ],
+        "requires_any": [],
+        "recommended": [
+          "node-monitoring"
+        ]
+      },
+      "completion_mode": "lesson_complete",
+      "estimated_duration_minutes": 75,
+      "layout": {
+        "x": 2320.0,
+        "y": 760.0
+      },
+      "metadata": {},
+      "display": {},
+      "ksa": [
+        {
+          "dimension": "S",
+          "topic": "Operational Skills",
+          "subtopic": "Technical Troubleshooting",
+          "start_level": 2,
+          "target_level": 4,
+          "contribution_weight": 0.55,
+          "unlocks_assessment_check": false,
+          "recommends_assessment_check": true
+        }
+      ],
+      "unlocks": {
+        "node_ids": [
+          "node-observability-practice"
+        ],
+        "branch_ids": [],
+        "recommended_next_node_ids": [
+          "node-tracing"
+        ]
+      },
+      "rewards": {
+        "estimated_ksa_gain": {
+          "S.Operational Skills.Technical Troubleshooting": 0.2
+        },
+        "effort_score": 56.0,
+        "reward_tags": [
+          "logging",
+          "operations"
+        ]
+      },
+      "retrospective_hooks": {
+        "retrospective_after": false,
+        "review_recommended": true,
+        "recap_checkpoint_available": false
+      },
+      "ksa_hooks": {
+        "mini_assessment_available": false,
+        "recommended_reassessment_topics": [],
+        "unlocks_deeper_refinement": false
+      },
+      "remediation": {
+        "is_remediation_node": false,
+        "recommended_if_failed_node_ids": [],
+        "supports_review_for_node_ids": []
+      },
+      "adaptive_unlock": {
+        "ksa_thresholds": [],
+        "requires_branch_completion_ids": [],
+        "requires_checkpoint_node_ids": [],
+        "requires_review_recommended": false,
+        "recommended_only": false
+      }
+    },
+    {
+      "id": "node-tracing",
+      "title": "Tracing and OpenTelemetry",
+      "description": "Distributed tracing with Jaeger and OpenTelemetry for request flow and latency analysis.",
+      "type": "learning_unit",
+      "chapter_id": "chapter-operations",
+      "branch_id": "branch-optional",
+      "required": false,
+      "prerequisites": {
+        "requires_all": [
+          "node-monitoring"
+        ],
+        "requires_any": [],
+        "recommended": [
+          "node-logging"
+        ]
+      },
+      "completion_mode": "lesson_complete",
+      "estimated_duration_minutes": 60,
+      "layout": {
+        "x": 2520.0,
+        "y": 620.0
+      },
+      "metadata": {},
+      "display": {},
+      "ksa": [
+        {
+          "dimension": "K",
+          "topic": "Information Technology",
+          "subtopic": "Cloud Architecture",
+          "start_level": 2,
+          "target_level": 3,
+          "contribution_weight": 0.35,
+          "unlocks_assessment_check": false,
+          "recommends_assessment_check": false
+        }
+      ],
+      "unlocks": {
+        "node_ids": [],
+        "branch_ids": [],
+        "recommended_next_node_ids": [
+          "node-observability-practice"
+        ]
+      },
+      "rewards": {
+        "estimated_ksa_gain": {
+          "K.Information Technology.Cloud Architecture": 0.08
+        },
+        "effort_score": 30.0,
+        "reward_tags": [
+          "optional",
+          "tracing"
+        ]
+      },
+      "retrospective_hooks": {
+        "retrospective_after": false,
+        "review_recommended": false,
+        "recap_checkpoint_available": false
+      },
+      "ksa_hooks": {
+        "mini_assessment_available": false,
+        "recommended_reassessment_topics": [],
+        "unlocks_deeper_refinement": false
+      },
+      "remediation": {
+        "is_remediation_node": false,
+        "recommended_if_failed_node_ids": [],
+        "supports_review_for_node_ids": []
+      },
+      "adaptive_unlock": {
+        "ksa_thresholds": [],
+        "requires_branch_completion_ids": [],
+        "requires_checkpoint_node_ids": [],
+        "requires_review_recommended": false,
+        "recommended_only": true
+      }
+    },
+    {
+      "id": "node-observability-practice",
+      "title": "Observability Practice Lab",
+      "description": "Build dashboards, alerts, logs, and troubleshooting playbooks for a sample platform.",
+      "type": "practice",
+      "chapter_id": "chapter-operations",
+      "branch_id": "branch-core",
+      "required": true,
+      "prerequisites": {
+        "requires_all": [
+          "node-monitoring",
+          "node-logging"
+        ],
+        "requires_any": [],
+        "recommended": [
+          "node-tracing"
+        ]
+      },
+      "completion_mode": "practice_complete",
+      "estimated_duration_minutes": 90,
+      "layout": {
+        "x": 2520.0,
+        "y": 760.0
+      },
+      "metadata": {},
+      "display": {},
+      "ksa": [
+        {
+          "dimension": "S",
+          "topic": "Operational Skills",
+          "subtopic": "Technical Troubleshooting",
+          "start_level": 3,
+          "target_level": 4,
+          "contribution_weight": 0.6,
+          "unlocks_assessment_check": false,
+          "recommends_assessment_check": false
+        },
+        {
+          "dimension": "A",
+          "topic": "Executive Function",
+          "subtopic": "Sustained Focus (Flow State)",
+          "start_level": 2,
+          "target_level": 3,
+          "contribution_weight": 0.15,
+          "unlocks_assessment_check": false,
+          "recommends_assessment_check": false
+        }
+      ],
+      "unlocks": {
+        "node_ids": [
+          "node-operations-checkpoint"
+        ],
+        "branch_ids": [],
+        "recommended_next_node_ids": [
+          "node-service-mesh"
+        ]
+      },
+      "rewards": {
+        "estimated_ksa_gain": {
+          "S.Operational Skills.Technical Troubleshooting": 0.22,
+          "A.Executive Function.Sustained Focus (Flow State)": 0.05
+        },
+        "effort_score": 72.0,
+        "reward_tags": [
+          "hands_on",
+          "observability"
+        ]
+      },
+      "retrospective_hooks": {
+        "retrospective_after": true,
+        "review_recommended": false,
+        "recap_checkpoint_available": false
+      },
+      "ksa_hooks": {
+        "mini_assessment_available": false,
+        "recommended_reassessment_topics": [],
+        "unlocks_deeper_refinement": false
+      },
+      "remediation": {
+        "is_remediation_node": false,
+        "recommended_if_failed_node_ids": [
+          "node-monitoring",
+          "node-logging"
+        ],
+        "supports_review_for_node_ids": []
+      },
+      "adaptive_unlock": {
+        "ksa_thresholds": [],
+        "requires_branch_completion_ids": [],
+        "requires_checkpoint_node_ids": [],
+        "requires_review_recommended": false,
+        "recommended_only": false
+      }
+    },
+    {
+      "id": "node-ops-hook",
+      "title": "Operations KSA Assessment Hook",
+      "description": "Pointer node for mini-assessment preparation around troubleshooting and operational reasoning.",
+      "type": "assessment_hook",
+      "chapter_id": "chapter-operations",
+      "branch_id": "branch-optional",
+      "required": false,
+      "prerequisites": {
+        "requires_all": [
+          "node-ops-gate"
+        ],
+        "requires_any": [],
+        "recommended": []
+      },
+      "completion_mode": "assessment_threshold",
+      "estimated_duration_minutes": 20,
+      "layout": {
+        "x": 2320.0,
+        "y": 900.0
+      },
+      "metadata": {
+        "assessment_threshold": 0.8,
+        "hook_type": "ksa-mini-check"
+      },
+      "display": {},
+      "ksa": [],
+      "unlocks": {
+        "node_ids": [],
+        "branch_ids": [],
+        "recommended_next_node_ids": [
+          "node-operations-checkpoint"
+        ]
+      },
+      "rewards": {
+        "estimated_ksa_gain": {},
+        "effort_score": 10.0,
+        "reward_tags": [
+          "assessment_hook"
+        ]
+      },
+      "retrospective_hooks": {
+        "retrospective_after": false,
+        "review_recommended": false,
+        "recap_checkpoint_available": false
+      },
+      "ksa_hooks": {
+        "mini_assessment_available": true,
+        "recommended_reassessment_topics": [
+          "S.Operational Skills.Technical Troubleshooting",
+          "A.Executive Function.Working Memory Span"
+        ],
+        "unlocks_deeper_refinement": true
+      },
+      "remediation": {
+        "is_remediation_node": false,
+        "recommended_if_failed_node_ids": [],
+        "supports_review_for_node_ids": []
+      },
+      "adaptive_unlock": {
+        "ksa_thresholds": [
+          {
+            "dimension": "S",
+            "topic": "Operational Skills",
+            "min_level": 3
+          }
+        ],
+        "requires_branch_completion_ids": [],
+        "requires_checkpoint_node_ids": [
+          "node-ops-gate"
+        ],
+        "requires_review_recommended": false,
+        "recommended_only": true
+      }
+    },
+    {
+      "id": "node-operations-checkpoint",
+      "title": "Operations Checkpoint",
+      "description": "Validation gate for production troubleshooting, monitoring, and observability maturity.",
+      "type": "checkpoint",
+      "chapter_id": "chapter-operations",
+      "branch_id": "branch-core",
+      "required": true,
+      "prerequisites": {
+        "requires_all": [
+          "node-observability-practice"
+        ],
+        "requires_any": [],
+        "recommended": [
+          "node-ops-hook"
+        ]
+      },
+      "completion_mode": "checkpoint_pass",
+      "estimated_duration_minutes": 30,
+      "layout": {
+        "x": 2720.0,
+        "y": 760.0
+      },
+      "metadata": {
+        "pass_threshold": 0.8
+      },
+      "display": {},
+      "ksa": [
+        {
+          "dimension": "A",
+          "topic": "Executive Function",
+          "subtopic": "Working Memory Span",
+          "start_level": 2,
+          "target_level": 3,
+          "contribution_weight": 0.2,
+          "unlocks_assessment_check": true,
+          "recommends_assessment_check": true
+        }
+      ],
+      "unlocks": {
+        "node_ids": [
+          "node-service-mesh",
+          "node-cloud-design",
+          "node-serverless"
+        ],
+        "branch_ids": [],
+        "recommended_next_node_ids": [
+          "node-devops-review"
+        ]
+      },
+      "rewards": {
+        "estimated_ksa_gain": {
+          "A.Executive Function.Working Memory Span": 0.08
+        },
+        "effort_score": 22.0,
+        "reward_tags": [
+          "checkpoint",
+          "operations"
+        ]
+      },
+      "retrospective_hooks": {
+        "retrospective_after": true,
+        "review_recommended": true,
+        "recap_checkpoint_available": true
+      },
+      "ksa_hooks": {
+        "mini_assessment_available": true,
+        "recommended_reassessment_topics": [
+          "S.Operational Skills.Technical Troubleshooting",
+          "A.Executive Function.Working Memory Span"
+        ],
+        "unlocks_deeper_refinement": true
+      },
+      "remediation": {
+        "is_remediation_node": false,
+        "recommended_if_failed_node_ids": [],
+        "supports_review_for_node_ids": []
+      },
+      "adaptive_unlock": {
+        "ksa_thresholds": [
+          {
+            "dimension": "S",
+            "topic": "Operational Skills",
+            "min_level": 3
+          }
+        ],
+        "requires_branch_completion_ids": [
+          "branch-core"
+        ],
+        "requires_checkpoint_node_ids": [
+          "node-ops-gate"
+        ],
+        "requires_review_recommended": false,
+        "recommended_only": false
+      }
+    },
+    {
+      "id": "node-service-mesh",
+      "title": "Service Mesh",
+      "description": "Istio, Linkerd, Envoy, and Consul for service-to-service traffic policy, observability, and security.",
+      "type": "learning_unit",
+      "chapter_id": "chapter-advanced",
+      "branch_id": "branch-core",
+      "required": true,
+      "prerequisites": {
+        "requires_all": [
+          "node-operations-checkpoint",
+          "node-kubernetes"
+        ],
+        "requires_any": [],
+        "recommended": [
+          "node-tracing"
+        ]
+      },
+      "completion_mode": "lesson_complete",
+      "estimated_duration_minutes": 80,
+      "layout": {
+        "x": 2920.0,
+        "y": 620.0
+      },
+      "metadata": {},
+      "display": {},
+      "ksa": [
+        {
+          "dimension": "K",
+          "topic": "Information Technology",
+          "subtopic": "Cloud Architecture",
+          "start_level": 3,
+          "target_level": 4,
+          "contribution_weight": 0.45,
+          "unlocks_assessment_check": false,
+          "recommends_assessment_check": true
+        },
+        {
+          "dimension": "S",
+          "topic": "Operational Skills",
+          "subtopic": "Technical Troubleshooting",
+          "start_level": 3,
+          "target_level": 4,
+          "contribution_weight": 0.25,
+          "unlocks_assessment_check": false,
+          "recommends_assessment_check": false
+        }
+      ],
+      "unlocks": {
+        "node_ids": [
+          "node-devops-capstone"
+        ],
+        "branch_ids": [],
+        "recommended_next_node_ids": [
+          "node-cloud-design"
+        ]
+      },
+      "rewards": {
+        "estimated_ksa_gain": {
+          "K.Information Technology.Cloud Architecture": 0.14,
+          "S.Operational Skills.Technical Troubleshooting": 0.08
+        },
+        "effort_score": 56.0,
+        "reward_tags": [
+          "advanced",
+          "service-mesh"
+        ]
+      },
+      "retrospective_hooks": {
+        "retrospective_after": false,
+        "review_recommended": false,
+        "recap_checkpoint_available": false
+      },
+      "ksa_hooks": {
+        "mini_assessment_available": false,
+        "recommended_reassessment_topics": [],
+        "unlocks_deeper_refinement": false
+      },
+      "remediation": {
+        "is_remediation_node": false,
+        "recommended_if_failed_node_ids": [],
+        "supports_review_for_node_ids": []
+      },
+      "adaptive_unlock": {
+        "ksa_thresholds": [],
+        "requires_branch_completion_ids": [
+          "branch-core"
+        ],
+        "requires_checkpoint_node_ids": [
+          "node-operations-checkpoint"
+        ],
+        "requires_review_recommended": false,
+        "recommended_only": false
+      }
+    },
+    {
+      "id": "node-serverless",
+      "title": "Serverless",
+      "description": "AWS Lambda, Cloudflare, Azure Functions, Netlify, and event-driven platform tradeoffs.",
+      "type": "learning_unit",
+      "chapter_id": "chapter-advanced",
+      "branch_id": "branch-optional",
+      "required": false,
+      "prerequisites": {
+        "requires_all": [
+          "node-cloud-providers"
+        ],
+        "requires_any": [],
+        "recommended": [
+          "node-operations-checkpoint"
+        ]
+      },
+      "completion_mode": "lesson_complete",
+      "estimated_duration_minutes": 60,
+      "layout": {
+        "x": 2920.0,
+        "y": 760.0
+      },
+      "metadata": {},
+      "display": {},
+      "ksa": [
+        {
+          "dimension": "K",
+          "topic": "Information Technology",
+          "subtopic": "Cloud Architecture",
+          "start_level": 2,
+          "target_level": 3,
+          "contribution_weight": 0.45,
+          "unlocks_assessment_check": false,
+          "recommends_assessment_check": false
+        }
+      ],
+      "unlocks": {
+        "node_ids": [],
+        "branch_ids": [],
+        "recommended_next_node_ids": [
+          "node-devops-capstone"
+        ]
+      },
+      "rewards": {
+        "estimated_ksa_gain": {
+          "K.Information Technology.Cloud Architecture": 0.1
+        },
+        "effort_score": 30.0,
+        "reward_tags": [
+          "optional",
+          "serverless"
+        ]
+      },
+      "retrospective_hooks": {
+        "retrospective_after": false,
+        "review_recommended": false,
+        "recap_checkpoint_available": false
+      },
+      "ksa_hooks": {
+        "mini_assessment_available": false,
+        "recommended_reassessment_topics": [],
+        "unlocks_deeper_refinement": false
+      },
+      "remediation": {
+        "is_remediation_node": false,
+        "recommended_if_failed_node_ids": [],
+        "supports_review_for_node_ids": []
+      },
+      "adaptive_unlock": {
+        "ksa_thresholds": [],
+        "requires_branch_completion_ids": [],
+        "requires_checkpoint_node_ids": [],
+        "requires_review_recommended": false,
+        "recommended_only": true
+      }
+    },
+    {
+      "id": "node-cloud-design",
+      "title": "Cloud Design Patterns",
+      "description": "Availability, resilience, data management, implementation, and management/monitoring design patterns.",
+      "type": "learning_unit",
+      "chapter_id": "chapter-advanced",
+      "branch_id": "branch-core",
+      "required": true,
+      "prerequisites": {
+        "requires_all": [
+          "node-operations-checkpoint",
+          "node-cloud-providers"
+        ],
+        "requires_any": [],
+        "recommended": []
+      },
+      "completion_mode": "lesson_complete",
+      "estimated_duration_minutes": 80,
+      "layout": {
+        "x": 2920.0,
+        "y": 900.0
+      },
+      "metadata": {},
+      "display": {},
+      "ksa": [
+        {
+          "dimension": "K",
+          "topic": "Information Technology",
+          "subtopic": "Cloud Architecture",
+          "start_level": 3,
+          "target_level": 4,
+          "contribution_weight": 0.55,
+          "unlocks_assessment_check": true,
+          "recommends_assessment_check": true
+        },
+        {
+          "dimension": "A",
+          "topic": "Divergent Thinking",
+          "subtopic": "Lateral Problem Solving",
+          "start_level": 1,
+          "target_level": 2,
+          "contribution_weight": 0.15,
+          "unlocks_assessment_check": false,
+          "recommends_assessment_check": false
+        }
+      ],
+      "unlocks": {
+        "node_ids": [
+          "node-devops-review",
+          "node-devops-capstone"
+        ],
+        "branch_ids": [],
+        "recommended_next_node_ids": []
+      },
+      "rewards": {
+        "estimated_ksa_gain": {
+          "K.Information Technology.Cloud Architecture": 0.18,
+          "A.Divergent Thinking.Lateral Problem Solving": 0.05
+        },
+        "effort_score": 52.0,
+        "reward_tags": [
+          "architecture",
+          "patterns"
+        ]
+      },
+      "retrospective_hooks": {
+        "retrospective_after": false,
+        "review_recommended": true,
+        "recap_checkpoint_available": false
+      },
+      "ksa_hooks": {
+        "mini_assessment_available": true,
+        "recommended_reassessment_topics": [
+          "K.Information Technology.Cloud Architecture"
+        ],
+        "unlocks_deeper_refinement": true
+      },
+      "remediation": {
+        "is_remediation_node": false,
+        "recommended_if_failed_node_ids": [],
+        "supports_review_for_node_ids": []
+      },
+      "adaptive_unlock": {
+        "ksa_thresholds": [],
+        "requires_branch_completion_ids": [],
+        "requires_checkpoint_node_ids": [
+          "node-operations-checkpoint"
+        ],
+        "requires_review_recommended": false,
+        "recommended_only": false
+      }
+    },
+    {
+      "id": "node-devops-review",
+      "title": "DevOps Review and Readiness",
+      "description": "Recap and remediate weak areas across delivery, cloud, operations, and architecture before the capstone.",
+      "type": "review",
+      "chapter_id": "chapter-advanced",
+      "branch_id": "branch-optional",
+      "required": false,
+      "prerequisites": {
+        "requires_all": [
+          "node-cloud-design"
+        ],
+        "requires_any": [],
+        "recommended": [
+          "node-ops-hook"
+        ]
+      },
+      "completion_mode": "review_complete",
+      "estimated_duration_minutes": 45,
+      "layout": {
+        "x": 3120.0,
+        "y": 900.0
+      },
+      "metadata": {},
+      "display": {},
+      "ksa": [],
+      "unlocks": {
+        "node_ids": [],
+        "branch_ids": [],
+        "recommended_next_node_ids": [
+          "node-devops-capstone"
+        ]
+      },
+      "rewards": {
+        "estimated_ksa_gain": {
+          "A.Verbal Comprehension.Logical Argument Synthesis": 0.05,
+          "S.Operational Skills.Technical Troubleshooting": 0.05
+        },
+        "effort_score": 20.0,
+        "reward_tags": [
+          "review",
+          "readiness"
+        ]
+      },
+      "retrospective_hooks": {
+        "retrospective_after": false,
+        "review_recommended": true,
+        "recap_checkpoint_available": false
+      },
+      "ksa_hooks": {
+        "mini_assessment_available": false,
+        "recommended_reassessment_topics": [],
+        "unlocks_deeper_refinement": false
+      },
+      "remediation": {
+        "is_remediation_node": true,
+        "recommended_if_failed_node_ids": [
+          "node-delivery-quiz",
+          "node-operations-checkpoint"
+        ],
+        "supports_review_for_node_ids": [
+          "node-devops-capstone"
+        ]
+      },
+      "adaptive_unlock": {
+        "ksa_thresholds": [],
+        "requires_branch_completion_ids": [],
+        "requires_checkpoint_node_ids": [
+          "node-operations-checkpoint"
+        ],
+        "requires_review_recommended": true,
+        "recommended_only": true
+      }
+    },
+    {
+      "id": "node-devops-capstone",
+      "title": "DevOps Capstone",
+      "description": "Integrate Git, CI/CD, containers, Kubernetes, IaC, observability, secrets, and cloud architecture in a production-style system.",
+      "type": "capstone",
+      "chapter_id": "chapter-advanced",
+      "branch_id": "branch-core",
+      "required": true,
+      "prerequisites": {
+        "requires_all": [
+          "node-service-mesh",
+          "node-cloud-design",
+          "node-operations-checkpoint"
+        ],
+        "requires_any": [
+          "node-gitops",
+          "node-delivery-quiz"
+        ],
+        "recommended": [
+          "node-serverless",
+          "node-tracing",
+          "node-devops-review"
+        ]
+      },
+      "completion_mode": "checkpoint_pass",
+      "estimated_duration_minutes": 180,
+      "layout": {
+        "x": 3320.0,
+        "y": 760.0
+      },
+      "metadata": {
+        "pass_threshold": 0.85
+      },
+      "display": {},
+      "ksa": [
+        {
+          "dimension": "S",
+          "topic": "Strategic Execution",
+          "subtopic": "Risk Mitigation Planning",
+          "start_level": 1,
+          "target_level": 3,
+          "contribution_weight": 0.2,
+          "unlocks_assessment_check": true,
+          "recommends_assessment_check": true
+        },
+        {
+          "dimension": "S",
+          "topic": "Operational Skills",
+          "subtopic": "Technical Troubleshooting",
+          "start_level": 3,
+          "target_level": 4,
+          "contribution_weight": 0.25,
+          "unlocks_assessment_check": true,
+          "recommends_assessment_check": true
+        },
+        {
+          "dimension": "K",
+          "topic": "Information Technology",
+          "subtopic": "Cloud Architecture",
+          "start_level": 3,
+          "target_level": 4,
+          "contribution_weight": 0.25,
+          "unlocks_assessment_check": true,
+          "recommends_assessment_check": true
+        },
+        {
+          "dimension": "S",
+          "topic": "Literacy & Numeracy",
+          "subtopic": "Technical Documentation",
+          "start_level": 2,
+          "target_level": 3,
+          "contribution_weight": 0.1,
+          "unlocks_assessment_check": false,
+          "recommends_assessment_check": false
+        }
+      ],
+      "unlocks": {
+        "node_ids": [],
+        "branch_ids": [],
+        "recommended_next_node_ids": []
+      },
+      "rewards": {
+        "estimated_ksa_gain": {
+          "S.Strategic Execution.Risk Mitigation Planning": 0.1,
+          "S.Operational Skills.Technical Troubleshooting": 0.12,
+          "K.Information Technology.Cloud Architecture": 0.12,
+          "S.Literacy & Numeracy.Technical Documentation": 0.05
+        },
+        "effort_score": 140.0,
+        "reward_tags": [
+          "capstone",
+          "production",
+          "integration"
+        ]
+      },
+      "retrospective_hooks": {
+        "retrospective_after": true,
+        "review_recommended": true,
+        "recap_checkpoint_available": true
+      },
+      "ksa_hooks": {
+        "mini_assessment_available": true,
+        "recommended_reassessment_topics": [
+          "K.Information Technology.Cloud Architecture",
+          "S.Operational Skills.Technical Troubleshooting",
+          "S.Strategic Execution.Risk Mitigation Planning"
+        ],
+        "unlocks_deeper_refinement": true
+      },
+      "remediation": {
+        "is_remediation_node": false,
+        "recommended_if_failed_node_ids": [],
+        "supports_review_for_node_ids": []
+      },
+      "adaptive_unlock": {
+        "ksa_thresholds": [
+          {
+            "dimension": "K",
+            "topic": "Information Technology",
+            "min_level": 4
+          },
+          {
+            "dimension": "S",
+            "topic": "Operational Skills",
+            "min_level": 3
+          }
+        ],
+        "requires_branch_completion_ids": [
+          "branch-core"
+        ],
+        "requires_checkpoint_node_ids": [
+          "node-operations-checkpoint"
+        ],
+        "requires_review_recommended": false,
+        "recommended_only": false
+      }
+    }
+  ],
+  "edges": [
+    {
+      "from_node_id": "node-ci-cd",
+      "to_node_id": "node-cicd-alts",
+      "relationship": "optional"
+    },
+    {
+      "from_node_id": "node-cloud-design",
+      "to_node_id": "node-devops-review",
+      "relationship": "optional"
+    },
+    {
+      "from_node_id": "node-cloud-providers",
+      "to_node_id": "node-serverless",
+      "relationship": "optional"
+    },
+    {
+      "from_node_id": "node-docker",
+      "to_node_id": "node-lxc",
+      "relationship": "optional"
+    },
+    {
+      "from_node_id": "node-foundations-quiz",
+      "to_node_id": "node-foundations-review",
+      "relationship": "optional"
+    },
+    {
+      "from_node_id": "node-monitoring",
+      "to_node_id": "node-tracing",
+      "relationship": "optional"
+    },
+    {
+      "from_node_id": "node-ops-gate",
+      "to_node_id": "node-ops-hook",
+      "relationship": "optional"
+    },
+    {
+      "from_node_id": "node-cicd-alts",
+      "to_node_id": "node-delivery-quiz",
+      "relationship": "recommended"
+    },
+    {
+      "from_node_id": "node-devops-review",
+      "to_node_id": "node-devops-capstone",
+      "relationship": "recommended"
+    },
+    {
+      "from_node_id": "node-foundations-review",
+      "to_node_id": "node-foundations-checkpoint",
+      "relationship": "recommended"
+    },
+    {
+      "from_node_id": "node-kubernetes",
+      "to_node_id": "node-monitoring",
+      "relationship": "recommended"
+    },
+    {
+      "from_node_id": "node-linux-practice",
+      "to_node_id": "node-terminal",
+      "relationship": "recommended"
+    },
+    {
+      "from_node_id": "node-logging",
+      "to_node_id": "node-tracing",
+      "relationship": "recommended"
+    },
+    {
+      "from_node_id": "node-lxc",
+      "to_node_id": "node-platform-checkpoint",
+      "relationship": "recommended"
+    },
+    {
+      "from_node_id": "node-monitoring",
+      "to_node_id": "node-logging",
+      "relationship": "recommended"
+    },
+    {
+      "from_node_id": "node-operations-checkpoint",
+      "to_node_id": "node-serverless",
+      "relationship": "recommended"
+    },
+    {
+      "from_node_id": "node-ops-hook",
+      "to_node_id": "node-devops-review",
+      "relationship": "recommended"
+    },
+    {
+      "from_node_id": "node-ops-hook",
+      "to_node_id": "node-operations-checkpoint",
+      "relationship": "recommended"
+    },
+    {
+      "from_node_id": "node-secrets",
+      "to_node_id": "node-gitops",
+      "relationship": "recommended"
+    },
+    {
+      "from_node_id": "node-serverless",
+      "to_node_id": "node-devops-capstone",
+      "relationship": "recommended"
+    },
+    {
+      "from_node_id": "node-tracing",
+      "to_node_id": "node-devops-capstone",
+      "relationship": "recommended"
+    },
+    {
+      "from_node_id": "node-tracing",
+      "to_node_id": "node-observability-practice",
+      "relationship": "recommended"
+    },
+    {
+      "from_node_id": "node-tracing",
+      "to_node_id": "node-service-mesh",
+      "relationship": "recommended"
+    },
+    {
+      "from_node_id": "node-ci-cd",
+      "to_node_id": "node-cicd-alts",
+      "relationship": "requires_all"
+    },
+    {
+      "from_node_id": "node-ci-cd",
+      "to_node_id": "node-github-actions",
+      "relationship": "requires_all"
+    },
+    {
+      "from_node_id": "node-cloud-design",
+      "to_node_id": "node-devops-capstone",
+      "relationship": "requires_all"
+    },
+    {
+      "from_node_id": "node-cloud-design",
+      "to_node_id": "node-devops-review",
+      "relationship": "requires_all"
+    },
+    {
+      "from_node_id": "node-cloud-providers",
+      "to_node_id": "node-cloud-design",
+      "relationship": "requires_all"
+    },
+    {
+      "from_node_id": "node-cloud-providers",
+      "to_node_id": "node-managed-k8s",
+      "relationship": "requires_all"
+    },
+    {
+      "from_node_id": "node-cloud-providers",
+      "to_node_id": "node-provisioning-alts",
+      "relationship": "requires_all"
+    },
+    {
+      "from_node_id": "node-cloud-providers",
+      "to_node_id": "node-serverless",
+      "relationship": "requires_all"
+    },
+    {
+      "from_node_id": "node-cloud-providers",
+      "to_node_id": "node-terraform",
+      "relationship": "requires_all"
+    },
+    {
+      "from_node_id": "node-delivery-milestone",
+      "to_node_id": "node-ops-gate",
+      "relationship": "requires_all"
+    },
+    {
+      "from_node_id": "node-docker",
+      "to_node_id": "node-docker-practice",
+      "relationship": "requires_all"
+    },
+    {
+      "from_node_id": "node-docker",
+      "to_node_id": "node-lxc",
+      "relationship": "requires_all"
+    },
+    {
+      "from_node_id": "node-docker-practice",
+      "to_node_id": "node-kubernetes",
+      "relationship": "requires_all"
+    },
+    {
+      "from_node_id": "node-foundations-checkpoint",
+      "to_node_id": "node-cloud-providers",
+      "relationship": "requires_all"
+    },
+    {
+      "from_node_id": "node-foundations-checkpoint",
+      "to_node_id": "node-foundations-milestone",
+      "relationship": "requires_all"
+    },
+    {
+      "from_node_id": "node-foundations-milestone",
+      "to_node_id": "node-ci-cd",
+      "relationship": "requires_all"
+    },
+    {
+      "from_node_id": "node-foundations-milestone",
+      "to_node_id": "node-docker",
+      "relationship": "requires_all"
+    },
+    {
+      "from_node_id": "node-foundations-quiz",
+      "to_node_id": "node-foundations-review",
+      "relationship": "requires_all"
+    },
+    {
+      "from_node_id": "node-git",
+      "to_node_id": "node-ci-cd",
+      "relationship": "requires_all"
+    },
+    {
+      "from_node_id": "node-github-actions",
+      "to_node_id": "node-gitops",
+      "relationship": "requires_all"
+    },
+    {
+      "from_node_id": "node-kubernetes",
+      "to_node_id": "node-gitops",
+      "relationship": "requires_all"
+    },
+    {
+      "from_node_id": "node-kubernetes",
+      "to_node_id": "node-kubernetes-practice",
+      "relationship": "requires_all"
+    },
+    {
+      "from_node_id": "node-kubernetes",
+      "to_node_id": "node-managed-k8s",
+      "relationship": "requires_all"
+    },
+    {
+      "from_node_id": "node-kubernetes",
+      "to_node_id": "node-service-mesh",
+      "relationship": "requires_all"
+    },
+    {
+      "from_node_id": "node-kubernetes-practice",
+      "to_node_id": "node-platform-checkpoint",
+      "relationship": "requires_all"
+    },
+    {
+      "from_node_id": "node-linux",
+      "to_node_id": "node-git",
+      "relationship": "requires_all"
+    },
+    {
+      "from_node_id": "node-linux",
+      "to_node_id": "node-linux-practice",
+      "relationship": "requires_all"
+    },
+    {
+      "from_node_id": "node-linux",
+      "to_node_id": "node-networking",
+      "relationship": "requires_all"
+    },
+    {
+      "from_node_id": "node-linux",
+      "to_node_id": "node-terminal",
+      "relationship": "requires_all"
+    },
+    {
+      "from_node_id": "node-linux-practice",
+      "to_node_id": "node-foundations-quiz",
+      "relationship": "requires_all"
+    },
+    {
+      "from_node_id": "node-logging",
+      "to_node_id": "node-observability-practice",
+      "relationship": "requires_all"
+    },
+    {
+      "from_node_id": "node-monitoring",
+      "to_node_id": "node-observability-practice",
+      "relationship": "requires_all"
+    },
+    {
+      "from_node_id": "node-monitoring",
+      "to_node_id": "node-tracing",
+      "relationship": "requires_all"
+    },
+    {
+      "from_node_id": "node-networking",
+      "to_node_id": "node-cloud-providers",
+      "relationship": "requires_all"
+    },
+    {
+      "from_node_id": "node-networking",
+      "to_node_id": "node-web-servers",
+      "relationship": "requires_all"
+    },
+    {
+      "from_node_id": "node-observability-practice",
+      "to_node_id": "node-operations-checkpoint",
+      "relationship": "requires_all"
+    },
+    {
+      "from_node_id": "node-operations-checkpoint",
+      "to_node_id": "node-cloud-design",
+      "relationship": "requires_all"
+    },
+    {
+      "from_node_id": "node-operations-checkpoint",
+      "to_node_id": "node-devops-capstone",
+      "relationship": "requires_all"
+    },
+    {
+      "from_node_id": "node-operations-checkpoint",
+      "to_node_id": "node-service-mesh",
+      "relationship": "requires_all"
+    },
+    {
+      "from_node_id": "node-ops-gate",
+      "to_node_id": "node-logging",
+      "relationship": "requires_all"
+    },
+    {
+      "from_node_id": "node-ops-gate",
+      "to_node_id": "node-monitoring",
+      "relationship": "requires_all"
+    },
+    {
+      "from_node_id": "node-ops-gate",
+      "to_node_id": "node-ops-hook",
+      "relationship": "requires_all"
+    },
+    {
+      "from_node_id": "node-platform-checkpoint",
+      "to_node_id": "node-delivery-milestone",
+      "relationship": "requires_all"
+    },
+    {
+      "from_node_id": "node-programming",
+      "to_node_id": "node-foundations-checkpoint",
+      "relationship": "requires_all"
+    },
+    {
+      "from_node_id": "node-service-mesh",
+      "to_node_id": "node-devops-capstone",
+      "relationship": "requires_all"
+    },
+    {
+      "from_node_id": "node-terminal",
+      "to_node_id": "node-programming",
+      "relationship": "requires_all"
+    },
+    {
+      "from_node_id": "node-terraform",
+      "to_node_id": "node-config-management",
+      "relationship": "requires_all"
+    },
+    {
+      "from_node_id": "node-terraform",
+      "to_node_id": "node-secrets",
+      "relationship": "requires_all"
+    },
+    {
+      "from_node_id": "node-config-management",
+      "to_node_id": "node-delivery-quiz",
+      "relationship": "requires_any"
+    },
+    {
+      "from_node_id": "node-delivery-quiz",
+      "to_node_id": "node-delivery-milestone",
+      "relationship": "requires_any"
+    },
+    {
+      "from_node_id": "node-delivery-quiz",
+      "to_node_id": "node-devops-capstone",
+      "relationship": "requires_any"
+    },
+    {
+      "from_node_id": "node-foundations-quiz",
+      "to_node_id": "node-foundations-checkpoint",
+      "relationship": "requires_any"
+    },
+    {
+      "from_node_id": "node-git",
+      "to_node_id": "node-foundations-quiz",
+      "relationship": "requires_any"
+    },
+    {
+      "from_node_id": "node-gitops",
+      "to_node_id": "node-delivery-milestone",
+      "relationship": "requires_any"
+    },
+    {
+      "from_node_id": "node-gitops",
+      "to_node_id": "node-delivery-quiz",
+      "relationship": "requires_any"
+    },
+    {
+      "from_node_id": "node-gitops",
+      "to_node_id": "node-devops-capstone",
+      "relationship": "requires_any"
+    },
+    {
+      "from_node_id": "node-managed-k8s",
+      "to_node_id": "node-platform-checkpoint",
+      "relationship": "requires_any"
+    },
+    {
+      "from_node_id": "node-networking",
+      "to_node_id": "node-foundations-quiz",
+      "relationship": "requires_any"
+    },
+    {
+      "from_node_id": "node-secrets",
+      "to_node_id": "node-delivery-quiz",
+      "relationship": "requires_any"
+    },
+    {
+      "from_node_id": "node-terminal",
+      "to_node_id": "node-foundations-quiz",
+      "relationship": "requires_any"
+    }
+  ],
+  "entry_node_ids": [
+    "node-linux"
+  ],
+  "completion_rules": {
+    "required_completion": "all_required_nodes",
+    "optional_branch_completion": "enrichment_only",
+    "course_complete_when": "required_branches_and_global_capstones",
+    "recommendation_mode": "deterministic_rule_based"
+  },
+  "visual_layout": {
+    "layout_engine": "manual-grid"
+  },
+  "metadata": {
+    "domain": "devops",
+    "roadmap_based": true,
+    "version": 3,
+    "includes_ksa": true,
+    "uses_all_supported_node_types": true
+  }
+}

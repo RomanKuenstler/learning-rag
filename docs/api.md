@@ -47,6 +47,10 @@ Clears the persistent GPT chat while keeping the GPT definition intact.
 
 Exports the GPT chat as JSON.
 
+Student restriction:
+
+- `student` role receives `403` for GPT endpoints in Step A.
+
 ## Chats
 
 ### `POST /api/chats`
@@ -105,6 +109,310 @@ JSON request:
   "assistant_mode": "thinking"
 }
 ```
+
+Student restriction:
+
+- `student` role receives `403` for normal chat endpoints in Step A.
+
+## Learning Paths
+
+### `GET /api/learning-paths`
+
+Lists learning paths visible to the authenticated user.
+
+## Courses
+
+### `GET /api/courses`
+
+Lists course/path records for the authenticated user with optional query params:
+
+- `search`
+- `scope` (`global|user`)
+- `status` (`draft|published|archived`)
+- `owner_user_id`
+- `sort` (`name_asc|name_desc|updated_desc|updated_asc|modules_desc|lessons_desc|scope_global_first|scope_user_first`)
+
+Course list responses expose both skilltree and compatibility counters:
+
+- `chapter_count`
+- `node_count`
+- `module_count`
+- `lesson_count`
+
+### `GET /api/courses/template`
+
+Returns a reusable v2 skilltree JSON template payload (`path-template.json`).
+
+### `POST /api/courses/import`
+
+Multipart upload endpoint for up to 5 `.json` course files.
+
+- form field `files`: one to five JSON files
+- form field `scopes_by_file`: optional JSON object mapping file name -> `global|user`
+
+Behavior:
+
+- files are schema validated
+- `schema_version: 2` is primary
+- `schema_version: 1` is accepted through compatibility migration into v2 graph format
+- per-file scope is enforced against role permissions (`global` requires admin)
+- valid files are imported
+- invalid files are rejected with per-file errors
+- response includes partial-success details (`imported_count`, `failed_count`, per-file results)
+
+### `POST /api/learning-paths`
+
+Creates a learning path.
+
+Permission rules:
+
+- `admin`: can create `global` and `user` scope.
+- `user`: can create `user` scope only.
+- `student`: `403`.
+
+### `GET /api/learning-paths/{learning_path_id}`
+
+Returns one visible learning path with:
+
+- skilltree graph payload (`chapters`, `nodes`, `edges`, `entry_node_ids`)
+- node metadata (`type`, `required`, `completion_mode`, `layout`, `ksa`)
+- computed node progress map (`node_progress`)
+- chapter progress and overall completion summary
+- compatibility module/lesson projection (`modules`, `lessons`)
+
+### `PATCH /api/learning-paths/{learning_path_id}`
+
+Updates path metadata and source scoping (`allowed_file_ids`, `allowed_tags`).
+
+### `DELETE /api/learning-paths/{learning_path_id}`
+
+Deletes a learning path.
+
+### `POST /api/learning-paths/{learning_path_id}/modules`
+
+Creates a module appended to the end of the path.
+
+### `PATCH /api/learning-paths/{learning_path_id}/modules/reorder`
+
+Reorders modules by explicit `order_index`.
+
+### `PATCH /api/learning-modules/{module_id}`
+
+Updates one module.
+
+### `DELETE /api/learning-modules/{module_id}`
+
+Deletes one module and its lessons.
+
+### `POST /api/learning-modules/{module_id}/lessons`
+
+Creates a lesson appended to the end of the module.
+
+### `PATCH /api/learning-modules/{module_id}/lessons/reorder`
+
+Reorders lessons by explicit `order_index`.
+
+### `PATCH /api/learning-lessons/{lesson_id}`
+
+Updates one lesson.
+
+### `DELETE /api/learning-lessons/{lesson_id}`
+
+Deletes one lesson.
+
+## Declared Learning Profile (Step B)
+
+### `GET /api/learning-profile`
+
+Returns the current user bundle:
+
+- `preferences` (declared learning preferences)
+- `context` (learner background/context)
+- `goals` (structured learning goals)
+- `diagnostics_status` (`not_started|in_progress|completed`)
+
+### `PATCH /api/learning-profile/preferences`
+
+Partial update for declared learning preferences.
+
+Supported enum fields:
+
+- `preferred_pace`: `slow|balanced|fast`
+- `explanation_depth`: `concise|balanced|detailed`
+- `examples_vs_theory`: `more_examples|balanced|more_theory`
+- `structure_preference`: `more_structured|balanced|more_conversational`
+- `checkpoint_frequency`: `low|medium|high`
+- `encouragement_level`: `low|balanced|high`
+- `guidance_level`: `step_by_step|balanced|more_independent`
+- `recap_frequency`: `low|medium|high`
+- `preferred_learning_format`: `reading|dialogue|exercises|mixed`
+
+### `PATCH /api/learning-profile/context`
+
+Partial update for learner background/context:
+
+- `education_background`
+- `current_skill_areas`
+- `interests`
+- `professional_context`
+- `current_reason_for_learning`
+- `preferred_form_of_address`
+- `learning_context_notes`
+
+### `POST /api/learning-profile/goals`
+
+Creates one user-scoped learning goal.
+
+### `PATCH /api/learning-profile/goals/{goal_id}`
+
+Partially updates one user-owned goal (`404` when not owned or missing).
+
+### `DELETE /api/learning-profile/goals/{goal_id}`
+
+Deletes one user-owned goal (`404` when not owned or missing).
+
+## KSA
+
+### `GET /api/learning-profile/ksa`
+
+Returns the KSA profile used by the Learning-page big-map.
+
+Profile source modes:
+
+- `student_default_baseline` (no completed assessment yet)
+- `placeholder_baseline` (no completed assessment yet, non-student)
+- `assessment` (persisted scored result)
+
+### `GET /api/ksa/assessment/definition`
+
+Returns the current assessment definition:
+
+- phase 1 sliders
+- knowledge question bank
+- skill scenarios
+- ability tasks + time limit
+
+Knowledge definitions intentionally do not expose correct answers.
+
+### `POST /api/ksa/assessment/attempts`
+
+Starts a new assessment attempt for the authenticated user.
+
+### `GET /api/ksa/assessment/attempts/latest`
+
+Returns the latest attempt for the authenticated user (`404` if none).
+
+### `GET /api/ksa/assessment/attempts/{attempt_id}`
+
+Returns one user-owned assessment attempt (`404` if missing).
+
+### `PUT /api/ksa/assessment/attempts/{attempt_id}/answers`
+
+Upserts staged answers payload for the attempt.
+
+### `POST /api/ksa/assessment/attempts/{attempt_id}/complete`
+
+Runs deterministic scoring, persists the result, and upserts the user KSA profile.
+
+Persisted scoring behavior:
+
+- knowledge: `FS = slider * multiplier` with levels mapped into `1..3`, plus topic status (`verified|uncharted`)
+- skills: `A -> level 1`, `B -> level 3`
+- abilities: `capacity = correctness*0.7 + time_bonus*0.3`, mapped into display `1..5`
+
+### `GET /api/ksa/drills/topics`
+
+Returns available drill topics grouped by KSA domain. Payload includes:
+
+- `key`, `group`, `name`
+- configured `subtopics`
+- `archetype_subtopics` discovered from `prds/interaction-archetypes_ksa.json`
+
+### `POST /api/ksa/drills/attempts`
+
+Starts a new KSA drill attempt.
+
+Request:
+
+- `selected_topic_keys`: array size `1..3`
+
+Response:
+
+- `attempt_id`
+
+### `GET /api/ksa/drills/attempts/latest`
+
+Returns latest user-owned drill attempt (`404` if none).
+
+### `GET /api/ksa/drills/attempts/{attempt_id}`
+
+Returns one user-owned drill attempt (`404` if missing).
+
+### `PUT /api/ksa/drills/attempts/{attempt_id}/answers`
+
+Upserts staged drill answers for the attempt.
+
+### `POST /api/ksa/drills/attempts/{attempt_id}/complete`
+
+Scores the drill attempt, refines persisted KSA profile, and returns updated profile.
+
+Drill result behavior:
+
+- deterministic triple-drill (`12` questions per selected topic)
+- parent topic delta + map-decay handling
+- sub-topic (`sub_nodes`) create/update for block 2 and 3
+- top-level chart values updated from refined topic levels
+- ability stress-test scoring with 15-second time target
+
+## Diagnostics (Step B.1)
+
+### `GET /api/diagnostics/definitions`
+
+Returns active diagnostic definitions loaded from source `.docx`.
+
+### `GET /api/diagnostics/definitions/{diagnostic_type}`
+
+Returns one definition for `LAA|MOA|LTA`.
+
+### `POST /api/diagnostics/attempts`
+
+Starts a new user attempt and snapshots active definition versions.
+
+### `GET /api/diagnostics/attempts`
+
+Returns all attempts for the current user (latest first).
+
+### `GET /api/diagnostics/attempts/latest`
+
+Returns latest attempt with grouped answers and optional result.
+
+### `GET /api/diagnostics/attempts/{attempt_id}`
+
+Returns one user-owned attempt with answers and result.
+
+### `PUT /api/diagnostics/attempts/{attempt_id}/answers`
+
+Upserts answers for one diagnostic step (`LAA|MOA|LTA`).
+
+### `POST /api/diagnostics/attempts/{attempt_id}/complete`
+
+Runs deterministic scoring and persists the result payload.
+
+## Learning State Checks
+
+### `POST /api/learning-state-checks`
+
+Persists a lightweight runtime learning state signal (`mood`, `perceived_difficulty`, `needs_pause_or_input`, `preferred_format`, `notes`, optional `chat_id`).
+
+### `GET /api/learning-state-checks`
+
+Lists latest state checks for the authenticated user.
+
+## Explanation Feedback
+
+### `POST /api/explanation-feedback`
+
+Persists message-level feedback (`message_id`, `rating 1..5`, optional text, `re_explain_requested` flag).
 
 Multipart request:
 
@@ -190,6 +498,17 @@ Request:
 
 Returns embedded library files and upload constraints.
 
+Query params:
+
+- `include_other_users` (boolean, default `false`)
+
+When `false`, the list includes:
+
+- global files
+- files owned by the authenticated user
+
+When `true`, other users' files are also included.
+
 ### `POST /api/library/files/upload`
 
 Multipart upload endpoint used by the web UI.
@@ -200,14 +519,27 @@ Rules:
 - allowed extensions come from `ALLOWED_UPLOAD_EXTENSIONS`
 - tags default to `DEFAULT_TAG`
 - duplicate names are rejected
+- admin uploads are persisted as global files (`is_global=true`, `source_origin=admin_upload`)
+- non-admin uploads are persisted as user-owned files (`is_global=false`, `source_origin=user_upload`)
 
 ### `PATCH /api/library/files/{file_id}`
 
 Toggles `is_enabled` without deleting vectors.
 
+Permission rules:
+
+- normal users cannot disable global files (`403`)
+- admins can toggle any file
+
 ### `DELETE /api/library/files/{file_id}`
 
 Deletes the library file from local storage, PostgreSQL, Qdrant, and tag metadata.
+
+Permission rules:
+
+- normal users cannot delete global files (`403`)
+- normal users cannot delete other users' files (`403`)
+- admins can delete any file
 
 ## Internal Embedder Attachment Job
 
@@ -284,6 +616,11 @@ File filters return:
 - `is_enabled`
 - `is_locked`
 - `updated_at`
+
+File filter permissions:
+
+- `PATCH /api/user/files/{file_id}` returns `403` when a non-admin tries to disable a global file
+- `PATCH /api/chats/{chat_id}/files/{file_id}` returns `403` for the same restriction
 
 Tag filters return:
 

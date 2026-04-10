@@ -1,0 +1,260 @@
+{
+  "schema_version": 2,
+  "source_schema_version": 2,
+  "id": "course-example-docker-fundamentals",
+  "title": "Example: Docker Fundamentals",
+  "description": "Starter path demonstrating a complete learning setup.",
+  "scope": "global",
+  "owner_user_id": null,
+  "subject": "Docker",
+  "difficulty_level": "beginner",
+  "estimated_duration_minutes": 120,
+  "status": "published",
+  "allowed_file_ids": [],
+  "allowed_tags": [],
+  "chapters": [
+    {
+      "id": "6cddf606-fed6-47e3-bd8c-8624b57a0599",
+      "title": "Getting Started",
+      "description": "Core concepts and first practical steps.",
+      "order_index": 0,
+      "metadata": {
+        "learning_objectives": [
+          "Understand images/containers",
+          "Run and inspect containers"
+        ],
+        "migrated_from": "module"
+      }
+    },
+    {
+      "id": "144c9dc7-4826-4126-9e2e-8964aaf21633",
+      "title": "Compose Basics",
+      "description": "Model multi-service local development.",
+      "order_index": 1,
+      "metadata": {
+        "learning_objectives": [
+          "Read compose files",
+          "Start and manage service stacks"
+        ],
+        "migrated_from": "module"
+      }
+    }
+  ],
+  "branches": [],
+  "nodes": [
+    {
+      "id": "40811d45-7ee4-456d-9ac2-6a2c6ad48456",
+      "title": "What Docker Is",
+      "description": "Mental model for images, containers, and registries.",
+      "type": "learning_unit",
+      "chapter_id": "6cddf606-fed6-47e3-bd8c-8624b57a0599",
+      "branch_id": null,
+      "required": true,
+      "prerequisites": {
+        "requires_all": [],
+        "requires_any": [],
+        "recommended": []
+      },
+      "completion_mode": "lesson_complete",
+      "estimated_duration_minutes": 40,
+      "layout": {
+        "x": 120.0,
+        "y": 120.0
+      },
+      "metadata": {
+        "objectives": [
+          "Differentiate image vs container",
+          "Know when to use Docker"
+        ],
+        "teaching_notes": "",
+        "migrated_from": "lesson"
+      },
+      "display": {},
+      "ksa": [],
+      "unlocks": {
+        "node_ids": [],
+        "branch_ids": [],
+        "recommended_next_node_ids": []
+      },
+      "rewards": {
+        "estimated_ksa_gain": {},
+        "effort_score": null,
+        "reward_tags": []
+      },
+      "retrospective_hooks": {
+        "retrospective_after": false,
+        "review_recommended": false,
+        "recap_checkpoint_available": false
+      },
+      "ksa_hooks": {
+        "mini_assessment_available": false,
+        "recommended_reassessment_topics": [],
+        "unlocks_deeper_refinement": false
+      },
+      "remediation": {
+        "is_remediation_node": false,
+        "recommended_if_failed_node_ids": [],
+        "supports_review_for_node_ids": []
+      },
+      "adaptive_unlock": {
+        "ksa_thresholds": [],
+        "requires_branch_completion_ids": [],
+        "requires_checkpoint_node_ids": [],
+        "requires_review_recommended": false,
+        "recommended_only": false
+      }
+    },
+    {
+      "id": "e6df951a-7550-4756-9fe2-95915205733e",
+      "title": "First Container Run",
+      "description": "Run, stop, and inspect a hello-world style container.",
+      "type": "learning_unit",
+      "chapter_id": "6cddf606-fed6-47e3-bd8c-8624b57a0599",
+      "branch_id": null,
+      "required": true,
+      "prerequisites": {
+        "requires_all": [
+          "40811d45-7ee4-456d-9ac2-6a2c6ad48456"
+        ],
+        "requires_any": [],
+        "recommended": []
+      },
+      "completion_mode": "lesson_complete",
+      "estimated_duration_minutes": 40,
+      "layout": {
+        "x": 300.0,
+        "y": 120.0
+      },
+      "metadata": {
+        "objectives": [
+          "Use run/ps/stop/logs"
+        ],
+        "teaching_notes": "",
+        "migrated_from": "lesson"
+      },
+      "display": {},
+      "ksa": [],
+      "unlocks": {
+        "node_ids": [],
+        "branch_ids": [],
+        "recommended_next_node_ids": []
+      },
+      "rewards": {
+        "estimated_ksa_gain": {},
+        "effort_score": null,
+        "reward_tags": []
+      },
+      "retrospective_hooks": {
+        "retrospective_after": false,
+        "review_recommended": false,
+        "recap_checkpoint_available": false
+      },
+      "ksa_hooks": {
+        "mini_assessment_available": false,
+        "recommended_reassessment_topics": [],
+        "unlocks_deeper_refinement": false
+      },
+      "remediation": {
+        "is_remediation_node": false,
+        "recommended_if_failed_node_ids": [],
+        "supports_review_for_node_ids": []
+      },
+      "adaptive_unlock": {
+        "ksa_thresholds": [],
+        "requires_branch_completion_ids": [],
+        "requires_checkpoint_node_ids": [],
+        "requires_review_recommended": false,
+        "recommended_only": false
+      }
+    },
+    {
+      "id": "18ef7b23-b9d0-4f89-a14d-edacb138cc57",
+      "title": "Compose File Structure",
+      "description": "Services, volumes, ports, and environment basics.",
+      "type": "learning_unit",
+      "chapter_id": "144c9dc7-4826-4126-9e2e-8964aaf21633",
+      "branch_id": null,
+      "required": true,
+      "prerequisites": {
+        "requires_all": [
+          "e6df951a-7550-4756-9fe2-95915205733e"
+        ],
+        "requires_any": [],
+        "recommended": []
+      },
+      "completion_mode": "lesson_complete",
+      "estimated_duration_minutes": 40,
+      "layout": {
+        "x": 480.0,
+        "y": 290.0
+      },
+      "metadata": {
+        "objectives": [
+          "Understand core compose keys"
+        ],
+        "teaching_notes": "",
+        "migrated_from": "lesson"
+      },
+      "display": {},
+      "ksa": [],
+      "unlocks": {
+        "node_ids": [],
+        "branch_ids": [],
+        "recommended_next_node_ids": []
+      },
+      "rewards": {
+        "estimated_ksa_gain": {},
+        "effort_score": null,
+        "reward_tags": []
+      },
+      "retrospective_hooks": {
+        "retrospective_after": false,
+        "review_recommended": false,
+        "recap_checkpoint_available": false
+      },
+      "ksa_hooks": {
+        "mini_assessment_available": false,
+        "recommended_reassessment_topics": [],
+        "unlocks_deeper_refinement": false
+      },
+      "remediation": {
+        "is_remediation_node": false,
+        "recommended_if_failed_node_ids": [],
+        "supports_review_for_node_ids": []
+      },
+      "adaptive_unlock": {
+        "ksa_thresholds": [],
+        "requires_branch_completion_ids": [],
+        "requires_checkpoint_node_ids": [],
+        "requires_review_recommended": false,
+        "recommended_only": false
+      }
+    }
+  ],
+  "edges": [
+    {
+      "from_node_id": "40811d45-7ee4-456d-9ac2-6a2c6ad48456",
+      "to_node_id": "e6df951a-7550-4756-9fe2-95915205733e",
+      "relationship": "requires_all"
+    },
+    {
+      "from_node_id": "e6df951a-7550-4756-9fe2-95915205733e",
+      "to_node_id": "18ef7b23-b9d0-4f89-a14d-edacb138cc57",
+      "relationship": "requires_all"
+    }
+  ],
+  "entry_node_ids": [
+    "40811d45-7ee4-456d-9ac2-6a2c6ad48456"
+  ],
+  "completion_rules": {
+    "required_completion": "all_required_nodes",
+    "migrated_from_schema": 1
+  },
+  "visual_layout": {
+    "layout_engine": "manual",
+    "migrated_from_schema": 1
+  },
+  "metadata": {
+    "migrated_from_schema": 1
+  }
+}

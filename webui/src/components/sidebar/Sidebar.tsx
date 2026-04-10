@@ -7,10 +7,15 @@ type SidebarProps = {
   chats: Chat[];
   gpts: Gpt[];
   activeChatId: string | null;
-  activeView: "chat" | "gpt" | "library" | "admin";
+  activeView: "chat" | "gpt" | "library" | "admin" | "learning" | "courses";
   currentUser: CurrentUser;
+  canUseStandardChat: boolean;
+  canUseGpts: boolean;
+  canUseLibrary: boolean;
   onCreateChat: () => void;
   onCreateGpt: () => void;
+  onOpenLearning: () => void;
+  onOpenCourses: () => void;
   onOpenLibrary: () => void;
   onOpenAdmin: () => void;
   onOpenArchive: () => void;
@@ -38,8 +43,13 @@ export function Sidebar({
   activeChatId,
   activeView,
   currentUser,
+  canUseStandardChat,
+  canUseGpts,
+  canUseLibrary,
   onCreateChat,
   onCreateGpt,
+  onOpenLearning,
+  onOpenCourses,
   onOpenLibrary,
   onOpenAdmin,
   onOpenArchive,
@@ -100,14 +110,26 @@ export function Sidebar({
   return (
     <div className="side-nav-inner">
       <div className="side-nav-top">
-        <button className="side-nav-item" type="button" onClick={onCreateChat}>
-          <span className="side-nav-item-icon">+</span>
-          <span>New chat</span>
-        </button>
-        <button className={`side-nav-item${activeView === "library" ? " active" : ""}`} type="button" onClick={onOpenLibrary}>
+        {canUseStandardChat ? (
+          <button className="side-nav-item" type="button" onClick={onCreateChat}>
+            <span className="side-nav-item-icon">+</span>
+            <span>New chat</span>
+          </button>
+        ) : null}
+        <button className={`side-nav-item${activeView === "learning" ? " active" : ""}`} type="button" onClick={onOpenLearning}>
           <Icon name="book" className="side-nav-item-svg" />
-          <span>Library</span>
+          <span>Learning</span>
         </button>
+        <button className={`side-nav-item${activeView === "courses" ? " active" : ""}`} type="button" onClick={onOpenCourses}>
+          <Icon name="chalkboard" className="side-nav-item-svg" />
+          <span>Courses</span>
+        </button>
+        {canUseLibrary ? (
+          <button className={`side-nav-item${activeView === "library" ? " active" : ""}`} type="button" onClick={onOpenLibrary}>
+            <Icon name="files" className="side-nav-item-svg" />
+            <span>Library</span>
+          </button>
+        ) : null}
         {currentUser.role === "admin" ? (
           <button className={`side-nav-item${activeView === "admin" ? " active" : ""}`} type="button" onClick={onOpenAdmin}>
             <Icon name="settings" className="side-nav-item-svg" />
@@ -121,9 +143,9 @@ export function Sidebar({
       </div>
 
       <div className="side-nav-sections">
-        <p className="side-nav-headline">GPTs</p>
+        {canUseGpts ? <p className="side-nav-headline">GPTs</p> : null}
 
-        <div className="side-nav-chat-list side-nav-gpt-list" aria-label="GPTs">
+        {canUseGpts ? <div className="side-nav-chat-list side-nav-gpt-list" aria-label="GPTs">
           {gpts.map((gpt) => (
             <div
               key={gpt.id}
@@ -179,11 +201,11 @@ export function Sidebar({
             <span className="side-nav-item-icon">+</span>
             <span>New GPT</span>
           </button>
-        </div>
+        </div> : null}
 
-        <p className="side-nav-headline">Your chats</p>
+        {canUseStandardChat ? <p className="side-nav-headline">Your chats</p> : null}
 
-        <div className="side-nav-chat-list side-nav-chat-list-compact" aria-label="Chats">
+        {canUseStandardChat ? <div className="side-nav-chat-list side-nav-chat-list-compact" aria-label="Chats">
           {chats.map((chat) => (
             <div
               key={chat.id}
@@ -270,7 +292,7 @@ export function Sidebar({
               </div>
             </div>
           ))}
-        </div>
+        </div> : null}
       </div>
 
       <div className="side-nav-bottom">

@@ -50,6 +50,8 @@ type PreferencesDialogProps = {
   onSavePersonalization: () => void;
   onOpenFilterTab: () => void;
   onToggleGlobalTag: (tag: FilterTag, isEnabled: boolean) => void;
+  isStudent?: boolean;
+  onOpenLearningProfile?: () => void;
 };
 
 const BASE_STYLE_OPTIONS: Array<{ value: PersonalizationBaseStyle; label: string }> = [
@@ -104,8 +106,16 @@ export function PreferencesDialog({
   onSavePersonalization,
   onOpenFilterTab,
   onToggleGlobalTag,
+  isStudent = false,
+  onOpenLearningProfile,
 }: PreferencesDialogProps) {
-  const [activeTab, setActiveTab] = useState<(typeof TABS)[number]["id"]>(initialTab);
+  const visibleTabs = useMemo(
+    () => (isStudent ? TABS.filter((tab) => tab.id !== "filter" && tab.id !== "settings") : TABS),
+    [isStudent],
+  );
+  const [activeTab, setActiveTab] = useState<(typeof TABS)[number]["id"]>(() => (
+    visibleTabs.some((tab) => tab.id === initialTab) ? initialTab : "general"
+  ));
   const [openPersonalizationDropdown, setOpenPersonalizationDropdown] = useState<string | null>(null);
   const personalizationDropdownRef = useRef<HTMLDivElement | null>(null);
   const settingsValidation = useMemo(() => {
@@ -139,6 +149,12 @@ export function PreferencesDialog({
       document.removeEventListener("keydown", handleEscape);
     };
   }, []);
+
+  useEffect(() => {
+    if (!visibleTabs.some((tab) => tab.id === activeTab)) {
+      setActiveTab("general");
+    }
+  }, [activeTab, visibleTabs]);
 
   const renderPersonalizationSelectRow = (
     dropdownId: string,
@@ -208,7 +224,7 @@ export function PreferencesDialog({
               x
             </button>
           </div>
-          {TABS.map((tab) => (
+          {visibleTabs.map((tab) => (
             <button
               key={tab.id}
               type="button"
@@ -234,16 +250,25 @@ export function PreferencesDialog({
           {activeTab === "general" ? (
             <div className="preferences-section info-groups">
               <section className="info-group-card">
-                <h4>Assistant Modes</h4>
-                <p className="preferences-copy">Available assistant modes for this system.</p>
+                <h4>{isStudent ? "Learning Mode" : "Assistant Modes"}</h4>
+                <p className="preferences-copy">
+                  {isStudent ? "Your account uses Learning mode." : "Available assistant modes for this system."}
+                </p>
               </section>
               <div className="preferences-mode-list assistant-mode-grid">
-                {availableModes.map((mode) => (
-                  <div key={mode} className="preferences-mode-card assistant-mode-card">
-                    <strong>{mode}</strong>
-                    <span>{describeAssistantMode(mode)}</span>
+                {isStudent ? (
+                  <div className="preferences-mode-card assistant-mode-card">
+                    <strong>Learning</strong>
+                    <span>Adaptive learning guidance based on your profile and diagnostic context.</span>
                   </div>
-                ))}
+                ) : (
+                  availableModes.map((mode) => (
+                    <div key={mode} className="preferences-mode-card assistant-mode-card">
+                      <strong>{mode}</strong>
+                      <span>{describeAssistantMode(mode)}</span>
+                    </div>
+                  ))
+                )}
               </div>
             </div>
           ) : null}
@@ -308,114 +333,136 @@ export function PreferencesDialog({
                   LEVEL_OPTIONS.map((option) => ({ ...option })),
                 )}
 
-                <div className="personalization-custom-instructions-row">
-                  <label className="personalization-field-label" htmlFor="personalization-custom-instructions">
-                    Custom Instructions
-                  </label>
-                  <div className="personalization-custom-instructions-input-shell">
-                    <textarea
-                      id="personalization-custom-instructions"
-                      className="dialog-input personalization-custom-instructions-input preferences-textarea is-single-line"
-                      rows={1}
-                      placeholder="Additional behavior, style, and tone preferences"
-                      value={personalizationDraft?.custom_instructions ?? ""}
-                      onChange={(event) => onPersonalizationFieldChange({ custom_instructions: event.target.value })}
-                      disabled={personalizationLoading || personalizationSaving}
-                    />
-                    <button
-                      className={`personalization-custom-save-button${personalizationSaveDisabled ? "" : " active"}`}
-                      type="button"
-                      onClick={onSavePersonalization}
-                      disabled={personalizationSaveDisabled}
-                      aria-label="Save personalization"
-                    >
-                      <Icon name="check" />
-                    </button>
-                  </div>
-                </div>
-
-                <section className="personalization-about-you-block">
-                  <h5 className="personalization-about-title">About You</h5>
-                  <div className="personalization-section-divider" aria-hidden="true" />
-
-                  <div className="personalization-custom-instructions-row personalization-about-you-row">
-                    <label className="personalization-field-label" htmlFor="personalization-nickname">
-                      Nickname
-                    </label>
-                    <div className="personalization-custom-instructions-input-shell">
-                      <input
-                        id="personalization-nickname"
-                        className="dialog-input personalization-custom-instructions-input"
-                        type="text"
-                        placeholder="What should the assistant call you?"
-                        value={personalizationDraft?.nickname ?? ""}
-                        onChange={(event) => onPersonalizationFieldChange({ nickname: event.target.value })}
-                        disabled={personalizationLoading || personalizationSaving}
-                      />
+                {isStudent ? (
+                  <section className="personalization-about-you-block">
+                    <h5 className="personalization-about-title">Learning Profile</h5>
+                    <div className="personalization-section-divider" aria-hidden="true" />
+                    <p className="preferences-copy">Manage profile details in the Learning page.</p>
+                    <div className="library-table-footer">
                       <button
-                        className={`personalization-custom-save-button${personalizationSaveDisabled ? "" : " active"}`}
+                        className="primary-button"
                         type="button"
-                        onClick={onSavePersonalization}
-                        disabled={personalizationSaveDisabled}
-                        aria-label="Save personalization"
+                        onClick={() => {
+                          onOpenLearningProfile?.();
+                          onClose();
+                        }}
                       >
-                        <Icon name="check" />
+                        Open Learning Profile
                       </button>
                     </div>
-                  </div>
-
-                  <div className="personalization-custom-instructions-row personalization-about-you-row">
-                    <label className="personalization-field-label" htmlFor="personalization-occupation">
-                      Occupation
-                    </label>
-                    <div className="personalization-custom-instructions-input-shell">
-                      <input
-                        id="personalization-occupation"
-                        className="dialog-input personalization-custom-instructions-input"
-                        type="text"
-                        placeholder="What do you do?"
-                        value={personalizationDraft?.occupation ?? ""}
-                        onChange={(event) => onPersonalizationFieldChange({ occupation: event.target.value })}
-                        disabled={personalizationLoading || personalizationSaving}
-                      />
-                      <button
-                        className={`personalization-custom-save-button${personalizationSaveDisabled ? "" : " active"}`}
-                        type="button"
-                        onClick={onSavePersonalization}
-                        disabled={personalizationSaveDisabled}
-                        aria-label="Save personalization"
-                      >
-                        <Icon name="check" />
-                      </button>
+                  </section>
+                ) : (
+                  <>
+                    <div className="personalization-custom-instructions-row">
+                      <label className="personalization-field-label" htmlFor="personalization-custom-instructions">
+                        Custom Instructions
+                      </label>
+                      <div className="personalization-custom-instructions-input-shell">
+                        <textarea
+                          id="personalization-custom-instructions"
+                          className="dialog-input personalization-custom-instructions-input preferences-textarea is-single-line"
+                          rows={1}
+                          placeholder="Additional behavior, style, and tone preferences"
+                          value={personalizationDraft?.custom_instructions ?? ""}
+                          onChange={(event) => onPersonalizationFieldChange({ custom_instructions: event.target.value })}
+                          disabled={personalizationLoading || personalizationSaving}
+                        />
+                        <button
+                          className={`personalization-custom-save-button${personalizationSaveDisabled ? "" : " active"}`}
+                          type="button"
+                          onClick={onSavePersonalization}
+                          disabled={personalizationSaveDisabled}
+                          aria-label="Save personalization"
+                        >
+                          <Icon name="check" />
+                        </button>
+                      </div>
                     </div>
-                  </div>
 
-                  <div className="personalization-custom-instructions-row personalization-about-you-row">
-                    <label className="personalization-field-label" htmlFor="personalization-more-about-you">
-                      More about you
-                    </label>
-                    <div className="personalization-custom-instructions-input-shell">
-                      <textarea
-                        id="personalization-more-about-you"
-                        className="dialog-input personalization-custom-instructions-input preferences-textarea is-single-line"
-                        rows={1}
-                        placeholder="Anything else that helps personalize responses"
-                        value={personalizationDraft?.more_about_user ?? ""}
-                        onChange={(event) => onPersonalizationFieldChange({ more_about_user: event.target.value })}
-                        disabled={personalizationLoading || personalizationSaving}
-                      />
-                      <button
-                        className={`personalization-custom-save-button${personalizationSaveDisabled ? "" : " active"}`}
-                        type="button"
-                        onClick={onSavePersonalization}
-                        disabled={personalizationSaveDisabled}
-                        aria-label="Save personalization"
-                      >
-                        <Icon name="check" />
-                      </button>
-                    </div>
-                  </div>
-                </section>
+                    <section className="personalization-about-you-block">
+                      <h5 className="personalization-about-title">About You</h5>
+                      <div className="personalization-section-divider" aria-hidden="true" />
+
+                      <div className="personalization-custom-instructions-row personalization-about-you-row">
+                        <label className="personalization-field-label" htmlFor="personalization-nickname">
+                          Nickname
+                        </label>
+                        <div className="personalization-custom-instructions-input-shell">
+                          <input
+                            id="personalization-nickname"
+                            className="dialog-input personalization-custom-instructions-input"
+                            type="text"
+                            placeholder="What should the assistant call you?"
+                            value={personalizationDraft?.nickname ?? ""}
+                            onChange={(event) => onPersonalizationFieldChange({ nickname: event.target.value })}
+                            disabled={personalizationLoading || personalizationSaving}
+                          />
+                          <button
+                            className={`personalization-custom-save-button${personalizationSaveDisabled ? "" : " active"}`}
+                            type="button"
+                            onClick={onSavePersonalization}
+                            disabled={personalizationSaveDisabled}
+                            aria-label="Save personalization"
+                          >
+                            <Icon name="check" />
+                          </button>
+                        </div>
+                      </div>
+
+                      <div className="personalization-custom-instructions-row personalization-about-you-row">
+                        <label className="personalization-field-label" htmlFor="personalization-occupation">
+                          Occupation
+                        </label>
+                        <div className="personalization-custom-instructions-input-shell">
+                          <input
+                            id="personalization-occupation"
+                            className="dialog-input personalization-custom-instructions-input"
+                            type="text"
+                            placeholder="What do you do?"
+                            value={personalizationDraft?.occupation ?? ""}
+                            onChange={(event) => onPersonalizationFieldChange({ occupation: event.target.value })}
+                            disabled={personalizationLoading || personalizationSaving}
+                          />
+                          <button
+                            className={`personalization-custom-save-button${personalizationSaveDisabled ? "" : " active"}`}
+                            type="button"
+                            onClick={onSavePersonalization}
+                            disabled={personalizationSaveDisabled}
+                            aria-label="Save personalization"
+                          >
+                            <Icon name="check" />
+                          </button>
+                        </div>
+                      </div>
+
+                      <div className="personalization-custom-instructions-row personalization-about-you-row">
+                        <label className="personalization-field-label" htmlFor="personalization-more-about-you">
+                          More about you
+                        </label>
+                        <div className="personalization-custom-instructions-input-shell">
+                          <textarea
+                            id="personalization-more-about-you"
+                            className="dialog-input personalization-custom-instructions-input preferences-textarea is-single-line"
+                            rows={1}
+                            placeholder="Anything else that helps personalize responses"
+                            value={personalizationDraft?.more_about_user ?? ""}
+                            onChange={(event) => onPersonalizationFieldChange({ more_about_user: event.target.value })}
+                            disabled={personalizationLoading || personalizationSaving}
+                          />
+                          <button
+                            className={`personalization-custom-save-button${personalizationSaveDisabled ? "" : " active"}`}
+                            type="button"
+                            onClick={onSavePersonalization}
+                            disabled={personalizationSaveDisabled}
+                            aria-label="Save personalization"
+                          >
+                            <Icon name="check" />
+                          </button>
+                        </div>
+                      </div>
+                    </section>
+                  </>
+                )}
               </section>
 
               {personalizationError ? <p className="inline-error config-settings-error">{personalizationError}</p> : null}

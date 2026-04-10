@@ -29,8 +29,13 @@ class LibraryManager:
         self.tags_path = data_dir / "tags.json"
         self.uploads_dir = data_dir / "uploads"
 
-    def list_files(self, user: UserAccount) -> LibraryListResponse:
-        records = self.processor.postgres_client.list_files_for_user(user_id=user.id, is_admin=user.role == "admin")
+    def list_files(self, user: UserAccount, *, include_other_users: bool = False) -> LibraryListResponse:
+        records = self.processor.postgres_client.list_files_for_user(
+            user_id=user.id,
+            is_admin=user.role == "admin",
+            include_other_users=include_other_users,
+        )
+        users_by_id = {account.id: account for account in self.processor.postgres_client.list_users()}
         tags_map = load_tags(self.tags_path)
         normalized_records = []
         for record in records:
@@ -51,11 +56,7 @@ class LibraryManager:
         )
         return LibraryListResponse(
             files=[
-                map_library_file(
-                    record,
-                    can_delete=user.role == "admin" or record.uploaded_by_user_id == user.id,
-                    can_toggle_enabled=user.role == "admin" or not record.is_system,
-                )
+                self._map_for_user(record, user=user, users_by_id=users_by_id)
                 for record in normalized_records
             ],
             summary=summary,
@@ -74,18 +75,18 @@ class LibraryManager:
         )
         if record is None:
             return None
-        return map_library_file(
-            record,
-            can_delete=user.role == "admin" or record.uploaded_by_user_id == user.id,
-            can_toggle_enabled=user.role == "admin" or not record.is_system,
-        )
+        users_by_id = {account.id: account for account in self.processor.postgres_client.list_users()}
+        return self._map_for_user(record, user=user, users_by_id=users_by_id)
 
     def delete_file(self, user: UserAccount, file_id: int):
         record = self.processor.postgres_client.get_file_by_id(file_id)
         if record is None:
             return None
-        if user.role != "admin" and record.uploaded_by_user_id != user.id:
-            raise PermissionError("Users can only delete files they uploaded")
+        if user.role != "admin":
+            if record.is_global:
+                raise PermissionError("Global files cannot be deleted by non-admin users")
+            if record.uploaded_by_user_id != user.id:
+                raise PermissionError("Users can only delete files they uploaded")
 
         absolute_path = self.data_dir / record.file_path
         if absolute_path.exists():
@@ -93,11 +94,8 @@ class LibraryManager:
 
         self.processor.delete(record.file_path)
         self._remove_tags(record.file_path, record.file_name)
-        return map_library_file(
-            record,
-            can_delete=user.role == "admin" or record.uploaded_by_user_id == user.id,
-            can_toggle_enabled=user.role == "admin" or not record.is_system,
-        )
+        users_by_id = {account.id: account for account in self.processor.postgres_client.list_users()}
+        return self._map_for_user(record, user=user, users_by_id=users_by_id)
 
     def upload_files(self, user: UserAccount, uploads: list[UploadFilePayload], tags_by_file: dict[str, list[str]]):
         if len(uploads) > self.settings.max_upload_files:
@@ -106,6 +104,7 @@ class LibraryManager:
         seen_names: set[str] = set()
         stored_records = []
         current_tags = load_tags(self.tags_path)
+        users_by_id = {account.id: account for account in self.processor.postgres_client.list_users()}
         existing_names = {record.file_name for record in self.processor.postgres_client.list_files()}
         user_dir = self.uploads_dir / user.username
         user_dir.mkdir(parents=True, exist_ok=True)
@@ -141,13 +140,7 @@ class LibraryManager:
             self.processor.process(target_path)
             record = self.processor.postgres_client.get_file(relative_path)
             if record is not None:
-                stored_records.append(
-                    map_library_file(
-                        record,
-                        can_delete=True,
-                        can_toggle_enabled=True,
-                    )
-                )
+                stored_records.append(self._map_for_user(record, user=user, users_by_id=users_by_id))
 
         return stored_records
 
@@ -179,3 +172,20 @@ class LibraryManager:
         if removed:
             save_tags(self.tags_path, tags_map)
         self.processor.tags_map = tags_map
+
+    def _map_for_user(self, record, *, user: UserAccount, users_by_id: dict[int, UserAccount]):
+        owner = users_by_id.get(record.uploaded_by_user_id or -1)
+        is_owned_by_current_user = record.uploaded_by_user_id == user.id
+        can_delete = user.role == "admin" or (not record.is_global and is_owned_by_current_user)
+        can_toggle_enabled = user.role == "admin" or not record.is_global
+        return map_library_file(
+            record,
+            can_delete=can_delete,
+            can_toggle_enabled=can_toggle_enabled,
+            owner_user_id=record.uploaded_by_user_id,
+            owner_username=owner.username if owner else None,
+            owner_displayname=owner.displayname if owner else None,
+            is_global=record.is_global,
+            source_origin=record.source_origin,
+            is_owned_by_current_user=is_owned_by_current_user,
+        )

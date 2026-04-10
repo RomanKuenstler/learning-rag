@@ -9,6 +9,8 @@ from pydantic import BaseModel, Field
 class ChatCreateResponse(BaseModel):
     id: str
     chat_name: str
+    chat_type: str = "normal"
+    learning_path_id: str | None = None
     gpt_id: str | None = None
     created_at: datetime
     updated_at: datetime
@@ -240,8 +242,15 @@ class LibraryFileRead(BaseModel):
     is_embedded: bool
     is_enabled: bool
     is_system: bool = False
+    is_global: bool = False
+    source_origin: str = "unknown"
     uploaded_by_user_id: int | None = None
+    owner_user_id: int | None = None
+    owner_username: str | None = None
+    owner_displayname: str | None = None
+    is_owned_by_current_user: bool = False
     can_delete: bool = False
+    can_disable: bool = True
     can_toggle_enabled: bool = True
     processing_status: str
     updated_at: datetime
@@ -309,3 +318,16 @@ class ErrorResponse(BaseModel):
 
 class HealthResponse(BaseModel):
     status: str
+
+
+class SystemServiceStatusRead(BaseModel):
+    key: str
+    label: str
+    description: str
+    status: str
+    detail: str
+
+
+class SystemStatusResponse(BaseModel):
+    checked_at: datetime
+    services: list[SystemServiceStatusRead] = Field(default_factory=list)

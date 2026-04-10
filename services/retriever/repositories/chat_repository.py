@@ -3,11 +3,30 @@ from __future__ import annotations
 from services.common.models import (
     ChatMessage,
     ChatSession,
+    DiagnosticDefinition,
+    DiagnosticVersion,
+    ExplanationFeedback,
     GPTChatSession,
     GPTRecord,
+    LearningLesson,
+    LearningStateCheck,
+    LearningModule,
+    LearningPath,
+    LearningPathAllowedFile,
+    LearningPathAllowedTag,
     MessageAttachment,
     RetrievalLog,
     SettingRecord,
+    UserLearningGoal,
+    UserLearningNodeProgress,
+    UserKSAAssessmentAttempt,
+    UserKSADrillAttempt,
+    UserKSAProfile,
+    UserLearningPreference,
+    UserLearningProfile,
+    UserDiagnosticAnswer,
+    UserDiagnosticAttempt,
+    UserDiagnosticResult,
     UserAccount,
     UserSessionRecord,
 )
@@ -101,17 +120,164 @@ class ChatRepository:
     def upsert_setting(self, user_id: int, key: str, value: str) -> SettingRecord:
         return self.postgres_client.upsert_setting(user_id=user_id, key=key, value=value)
 
-    def list_user_file_filters(self, user_id: int):
-        return self.postgres_client.list_user_file_filters(user_id=user_id)
+    def get_user_learning_preference(self, user_id: int) -> UserLearningPreference | None:
+        return self.postgres_client.get_user_learning_preference(user_id=user_id)
 
-    def set_user_file_filter(self, user_id: int, file_id: int, is_enabled: bool):
-        return self.postgres_client.set_user_file_filter(user_id=user_id, file_id=file_id, is_enabled=is_enabled)
+    def upsert_user_learning_preference(self, user_id: int, fields: dict[str, object]) -> UserLearningPreference:
+        return self.postgres_client.upsert_user_learning_preference(user_id=user_id, fields=fields)
 
-    def list_chat_file_filters(self, user_id: int, chat_id: str):
-        return self.postgres_client.list_chat_file_filters(user_id=user_id, chat_id=chat_id)
+    def get_user_learning_profile(self, user_id: int) -> UserLearningProfile | None:
+        return self.postgres_client.get_user_learning_profile(user_id=user_id)
 
-    def set_chat_file_filter(self, user_id: int, chat_id: str, file_id: int, is_enabled: bool):
-        return self.postgres_client.set_chat_file_filter(user_id=user_id, chat_id=chat_id, file_id=file_id, is_enabled=is_enabled)
+    def upsert_user_learning_profile(self, user_id: int, fields: dict[str, object]) -> UserLearningProfile:
+        return self.postgres_client.upsert_user_learning_profile(user_id=user_id, fields=fields)
+
+    def list_user_learning_goals(self, user_id: int) -> list[UserLearningGoal]:
+        return self.postgres_client.list_user_learning_goals(user_id=user_id)
+
+    def create_user_learning_goal(self, payload: dict[str, object]) -> UserLearningGoal:
+        return self.postgres_client.create_user_learning_goal(payload=payload)
+
+    def update_user_learning_goal(self, user_id: int, goal_id: str, fields: dict[str, object]) -> UserLearningGoal | None:
+        return self.postgres_client.update_user_learning_goal(user_id=user_id, goal_id=goal_id, fields=fields)
+
+    def delete_user_learning_goal(self, user_id: int, goal_id: str) -> UserLearningGoal | None:
+        return self.postgres_client.delete_user_learning_goal(user_id=user_id, goal_id=goal_id)
+
+    def get_user_ksa_profile(self, user_id: int) -> UserKSAProfile | None:
+        return self.postgres_client.get_user_ksa_profile(user_id=user_id)
+
+    def upsert_user_ksa_profile(
+        self,
+        user_id: int,
+        *,
+        has_assessment: bool,
+        assessment_version: str,
+        profile_json: dict[str, object],
+    ) -> UserKSAProfile:
+        return self.postgres_client.upsert_user_ksa_profile(
+            user_id=user_id,
+            has_assessment=has_assessment,
+            assessment_version=assessment_version,
+            profile_json=profile_json,
+        )
+
+    def create_user_ksa_assessment_attempt(self, *, user_id: int, assessment_version: str) -> UserKSAAssessmentAttempt:
+        return self.postgres_client.create_user_ksa_assessment_attempt(
+            user_id=user_id,
+            assessment_version=assessment_version,
+        )
+
+    def get_user_ksa_assessment_attempt(self, *, user_id: int, attempt_id: str) -> UserKSAAssessmentAttempt | None:
+        return self.postgres_client.get_user_ksa_assessment_attempt(user_id=user_id, attempt_id=attempt_id)
+
+    def get_latest_user_ksa_assessment_attempt(self, *, user_id: int) -> UserKSAAssessmentAttempt | None:
+        return self.postgres_client.get_latest_user_ksa_assessment_attempt(user_id=user_id)
+
+    def upsert_user_ksa_assessment_answers(
+        self,
+        *,
+        user_id: int,
+        attempt_id: str,
+        answers_json: dict[str, object],
+    ) -> UserKSAAssessmentAttempt | None:
+        return self.postgres_client.upsert_user_ksa_assessment_answers(
+            user_id=user_id,
+            attempt_id=attempt_id,
+            answers_json=answers_json,
+        )
+
+    def complete_user_ksa_assessment_attempt(
+        self,
+        *,
+        user_id: int,
+        attempt_id: str,
+        result_json: dict[str, object],
+    ) -> UserKSAAssessmentAttempt | None:
+        return self.postgres_client.complete_user_ksa_assessment_attempt(
+            user_id=user_id,
+            attempt_id=attempt_id,
+            result_json=result_json,
+        )
+
+    def create_user_ksa_drill_attempt(
+        self,
+        *,
+        user_id: int,
+        assessment_version: str,
+        selected_topic_keys: list[str],
+        question_set_json: list[dict[str, object]],
+        source_topic_input: str = "",
+        topic_classification_json: dict[str, object] | None = None,
+        rounds_json: list[dict[str, object]] | None = None,
+    ) -> UserKSADrillAttempt:
+        return self.postgres_client.create_user_ksa_drill_attempt(
+            user_id=user_id,
+            assessment_version=assessment_version,
+            selected_topic_keys=selected_topic_keys,
+            question_set_json=question_set_json,
+            source_topic_input=source_topic_input,
+            topic_classification_json=topic_classification_json,
+            rounds_json=rounds_json,
+        )
+
+    def get_user_ksa_drill_attempt(self, *, user_id: int, attempt_id: str) -> UserKSADrillAttempt | None:
+        return self.postgres_client.get_user_ksa_drill_attempt(user_id=user_id, attempt_id=attempt_id)
+
+    def get_latest_user_ksa_drill_attempt(self, *, user_id: int) -> UserKSADrillAttempt | None:
+        return self.postgres_client.get_latest_user_ksa_drill_attempt(user_id=user_id)
+
+    def list_user_ksa_drill_attempts(self, *, user_id: int, limit: int = 25) -> list[UserKSADrillAttempt]:
+        return self.postgres_client.list_user_ksa_drill_attempts(user_id=user_id, limit=limit)
+
+    def upsert_user_ksa_drill_answers(
+        self,
+        *,
+        user_id: int,
+        attempt_id: str,
+        answers_json: dict[str, object],
+    ) -> UserKSADrillAttempt | None:
+        return self.postgres_client.upsert_user_ksa_drill_answers(
+            user_id=user_id,
+            attempt_id=attempt_id,
+            answers_json=answers_json,
+        )
+
+    def complete_user_ksa_drill_attempt(
+        self,
+        *,
+        user_id: int,
+        attempt_id: str,
+        result_json: dict[str, object],
+    ) -> UserKSADrillAttempt | None:
+        return self.postgres_client.complete_user_ksa_drill_attempt(
+            user_id=user_id,
+            attempt_id=attempt_id,
+            result_json=result_json,
+        )
+
+    def list_user_file_filters(self, user_id: int, *, is_admin: bool):
+        return self.postgres_client.list_user_file_filters(user_id=user_id, is_admin=is_admin)
+
+    def set_user_file_filter(self, user_id: int, file_id: int, is_enabled: bool, *, is_admin: bool):
+        return self.postgres_client.set_user_file_filter(
+            user_id=user_id,
+            file_id=file_id,
+            is_enabled=is_enabled,
+            is_admin=is_admin,
+        )
+
+    def list_chat_file_filters(self, user_id: int, chat_id: str, *, is_admin: bool):
+        return self.postgres_client.list_chat_file_filters(user_id=user_id, chat_id=chat_id, is_admin=is_admin)
+
+    def set_chat_file_filter(self, user_id: int, chat_id: str, file_id: int, is_enabled: bool, *, is_admin: bool):
+        return self.postgres_client.set_chat_file_filter(
+            user_id=user_id,
+            chat_id=chat_id,
+            file_id=file_id,
+            is_enabled=is_enabled,
+            is_admin=is_admin,
+        )
 
     def list_user_tag_filters(self, user_id: int):
         return self.postgres_client.list_user_tag_filters(user_id=user_id)
@@ -249,3 +415,205 @@ class ChatRepository:
 
     def revoke_all_user_sessions(self, user_id: int, *, revoked_at) -> None:
         self.postgres_client.revoke_all_user_sessions(user_id, revoked_at=revoked_at)
+
+    def list_learning_paths(self, *, user_id: int, role: str) -> list[LearningPath]:
+        return self.postgres_client.list_learning_paths(user_id=user_id, role=role)
+
+    def get_learning_path(self, learning_path_id: str) -> LearningPath | None:
+        return self.postgres_client.get_learning_path(learning_path_id)
+
+    def create_learning_path(self, payload: dict[str, object]) -> LearningPath:
+        return self.postgres_client.create_learning_path(payload)
+
+    def update_learning_path(self, learning_path_id: str, fields: dict[str, object]) -> LearningPath | None:
+        return self.postgres_client.update_learning_path(learning_path_id, fields)
+
+    def delete_learning_path(self, learning_path_id: str) -> LearningPath | None:
+        return self.postgres_client.delete_learning_path(learning_path_id)
+
+    def list_learning_modules(self, learning_path_id: str) -> list[LearningModule]:
+        return self.postgres_client.list_learning_modules(learning_path_id)
+
+    def create_learning_module(self, payload: dict[str, object]) -> LearningModule:
+        return self.postgres_client.create_learning_module(payload)
+
+    def get_learning_module(self, module_id: str) -> LearningModule | None:
+        return self.postgres_client.get_learning_module(module_id)
+
+    def update_learning_module(self, module_id: str, fields: dict[str, object]) -> LearningModule | None:
+        return self.postgres_client.update_learning_module(module_id, fields)
+
+    def delete_learning_module(self, module_id: str) -> LearningModule | None:
+        return self.postgres_client.delete_learning_module(module_id)
+
+    def reorder_learning_modules(self, learning_path_id: str, module_orders: list[tuple[str, int]]) -> list[LearningModule]:
+        return self.postgres_client.reorder_learning_modules(learning_path_id, module_orders)
+
+    def list_learning_lessons(self, module_id: str) -> list[LearningLesson]:
+        return self.postgres_client.list_learning_lessons(module_id)
+
+    def create_learning_lesson(self, payload: dict[str, object]) -> LearningLesson:
+        return self.postgres_client.create_learning_lesson(payload)
+
+    def get_learning_lesson(self, lesson_id: str) -> LearningLesson | None:
+        return self.postgres_client.get_learning_lesson(lesson_id)
+
+    def update_learning_lesson(self, lesson_id: str, fields: dict[str, object]) -> LearningLesson | None:
+        return self.postgres_client.update_learning_lesson(lesson_id, fields)
+
+    def delete_learning_lesson(self, lesson_id: str) -> LearningLesson | None:
+        return self.postgres_client.delete_learning_lesson(lesson_id)
+
+    def reorder_learning_lessons(self, module_id: str, lesson_orders: list[tuple[str, int]]) -> list[LearningLesson]:
+        return self.postgres_client.reorder_learning_lessons(module_id, lesson_orders)
+
+    def replace_learning_path_structure(self, learning_path_id: str, modules: list[dict[str, object]]) -> list[LearningModule]:
+        return self.postgres_client.replace_learning_path_structure(learning_path_id, modules)
+
+    def replace_learning_path_allowed_files(self, learning_path_id: str, file_ids: list[int]) -> None:
+        self.postgres_client.replace_learning_path_allowed_files(learning_path_id, file_ids)
+
+    def replace_learning_path_allowed_tags(self, learning_path_id: str, tags: list[str]) -> None:
+        self.postgres_client.replace_learning_path_allowed_tags(learning_path_id, tags)
+
+    def list_learning_path_allowed_files(self, learning_path_id: str) -> list[LearningPathAllowedFile]:
+        return self.postgres_client.list_learning_path_allowed_files(learning_path_id)
+
+    def list_learning_path_allowed_tags(self, learning_path_id: str) -> list[LearningPathAllowedTag]:
+        return self.postgres_client.list_learning_path_allowed_tags(learning_path_id)
+
+    def list_user_learning_node_progress(self, *, user_id: int, learning_path_id: str) -> list[UserLearningNodeProgress]:
+        return self.postgres_client.list_user_learning_node_progress(user_id=user_id, learning_path_id=learning_path_id)
+
+    def upsert_user_learning_node_progress(
+        self,
+        *,
+        user_id: int,
+        learning_path_id: str,
+        node_id: str,
+        status: str,
+        started_at=None,
+        completed_at=None,
+    ) -> UserLearningNodeProgress:
+        return self.postgres_client.upsert_user_learning_node_progress(
+            user_id=user_id,
+            learning_path_id=learning_path_id,
+            node_id=node_id,
+            status=status,
+            started_at=started_at,
+            completed_at=completed_at,
+        )
+
+    def delete_user_learning_node_progress(
+        self,
+        *,
+        user_id: int,
+        learning_path_id: str,
+        node_id: str,
+    ) -> None:
+        self.postgres_client.delete_user_learning_node_progress(
+            user_id=user_id,
+            learning_path_id=learning_path_id,
+            node_id=node_id,
+        )
+
+    def get_diagnostic_definition(self, diagnostic_type: str) -> DiagnosticDefinition | None:
+        return self.postgres_client.get_diagnostic_definition(diagnostic_type)
+
+    def upsert_diagnostic_definition(self, *, diagnostic_type: str, title: str) -> DiagnosticDefinition:
+        return self.postgres_client.upsert_diagnostic_definition(diagnostic_type=diagnostic_type, title=title)
+
+    def get_diagnostic_version(self, *, definition_id: str, version: str) -> DiagnosticVersion | None:
+        return self.postgres_client.get_diagnostic_version(definition_id=definition_id, version=version)
+
+    def list_latest_diagnostic_versions(self) -> list[DiagnosticVersion]:
+        return self.postgres_client.list_latest_diagnostic_versions()
+
+    def get_latest_diagnostic_version(self, diagnostic_type: str) -> DiagnosticVersion | None:
+        return self.postgres_client.get_latest_diagnostic_version(diagnostic_type)
+
+    def create_diagnostic_version(
+        self,
+        *,
+        definition_id: str,
+        version: str,
+        source_document_name: str,
+        source_document_hash: str,
+        content_json: dict[str, object],
+    ) -> DiagnosticVersion:
+        return self.postgres_client.create_diagnostic_version(
+            definition_id=definition_id,
+            version=version,
+            source_document_name=source_document_name,
+            source_document_hash=source_document_hash,
+            content_json=content_json,
+        )
+
+    def update_diagnostic_version_content(
+        self,
+        *,
+        version_id: str,
+        source_document_name: str,
+        source_document_hash: str,
+        content_json: dict[str, object],
+    ) -> DiagnosticVersion | None:
+        return self.postgres_client.update_diagnostic_version_content(
+            version_id=version_id,
+            source_document_name=source_document_name,
+            source_document_hash=source_document_hash,
+            content_json=content_json,
+        )
+
+    def replace_diagnostic_version_structure(self, *, version_id: str, definition: dict[str, object]) -> None:
+        self.postgres_client.replace_diagnostic_version_structure(version_id=version_id, definition=definition)
+
+    def create_user_diagnostic_attempt(self, *, user_id: int, definition_versions: dict[str, str]) -> UserDiagnosticAttempt:
+        return self.postgres_client.create_user_diagnostic_attempt(user_id=user_id, definition_versions=definition_versions)
+
+    def get_user_diagnostic_attempt(self, *, user_id: int, attempt_id: str) -> UserDiagnosticAttempt | None:
+        return self.postgres_client.get_user_diagnostic_attempt(user_id=user_id, attempt_id=attempt_id)
+
+    def get_latest_user_diagnostic_attempt(self, *, user_id: int) -> UserDiagnosticAttempt | None:
+        return self.postgres_client.get_latest_user_diagnostic_attempt(user_id=user_id)
+
+    def list_user_diagnostic_attempts(self, *, user_id: int) -> list[UserDiagnosticAttempt]:
+        return self.postgres_client.list_user_diagnostic_attempts(user_id=user_id)
+
+    def delete_user_diagnostic_attempt(self, *, user_id: int, attempt_id: str) -> UserDiagnosticAttempt | None:
+        return self.postgres_client.delete_user_diagnostic_attempt(user_id=user_id, attempt_id=attempt_id)
+
+    def upsert_user_diagnostic_answer(
+        self,
+        *,
+        attempt_id: str,
+        diagnostic_type: str,
+        question_key: str,
+        answer_json: dict[str, object],
+    ) -> UserDiagnosticAnswer:
+        return self.postgres_client.upsert_user_diagnostic_answer(
+            attempt_id=attempt_id,
+            diagnostic_type=diagnostic_type,
+            question_key=question_key,
+            answer_json=answer_json,
+        )
+
+    def list_user_diagnostic_answers(self, *, attempt_id: str) -> list[UserDiagnosticAnswer]:
+        return self.postgres_client.list_user_diagnostic_answers(attempt_id=attempt_id)
+
+    def upsert_user_diagnostic_result(self, *, attempt_id: str, result_json: dict[str, object]) -> UserDiagnosticResult:
+        return self.postgres_client.upsert_user_diagnostic_result(attempt_id=attempt_id, result_json=result_json)
+
+    def get_user_diagnostic_result(self, *, attempt_id: str) -> UserDiagnosticResult | None:
+        return self.postgres_client.get_user_diagnostic_result(attempt_id=attempt_id)
+
+    def mark_user_diagnostic_attempt_completed(self, *, attempt_id: str) -> UserDiagnosticAttempt | None:
+        return self.postgres_client.mark_user_diagnostic_attempt_completed(attempt_id=attempt_id)
+
+    def create_learning_state_check(self, payload: dict[str, object]) -> LearningStateCheck:
+        return self.postgres_client.create_learning_state_check(payload)
+
+    def list_learning_state_checks(self, *, user_id: int, limit: int = 20) -> list[LearningStateCheck]:
+        return self.postgres_client.list_learning_state_checks(user_id=user_id, limit=limit)
+
+    def create_explanation_feedback(self, payload: dict[str, object]) -> ExplanationFeedback:
+        return self.postgres_client.create_explanation_feedback(payload)

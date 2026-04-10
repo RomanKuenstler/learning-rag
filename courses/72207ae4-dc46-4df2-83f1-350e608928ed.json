@@ -1,0 +1,262 @@
+{
+  "schema_version": 2,
+  "source_schema_version": 2,
+  "id": "72207ae4-dc46-4df2-83f1-350e608928ed",
+  "title": "Example: Learning",
+  "description": "Practical beginner path to write and reason about Python code quickly.",
+  "scope": "global",
+  "owner_user_id": null,
+  "subject": "Python",
+  "difficulty_level": "beginner",
+  "estimated_duration_minutes": 150,
+  "status": "published",
+  "allowed_file_ids": [],
+  "allowed_tags": [],
+  "chapters": [
+    {
+      "id": "5563c243-09c4-4c4b-b108-1d9178eae77f",
+      "title": "Python Basics",
+      "description": "Syntax, variables, conditionals, and loops.",
+      "order_index": 0,
+      "metadata": {
+        "learning_objectives": [
+          "Read basic Python",
+          "Write simple scripts"
+        ],
+        "migrated_from": "module"
+      }
+    },
+    {
+      "id": "a3148d0e-7dbf-4c66-96cb-de03860092d2",
+      "title": "Functions and Small Projects",
+      "description": "Reusable functions and basic problem decomposition.",
+      "order_index": 1,
+      "metadata": {
+        "learning_objectives": [
+          "Define and call functions",
+          "Structure a tiny script project"
+        ],
+        "migrated_from": "module"
+      }
+    }
+  ],
+  "branches": [],
+  "nodes": [
+    {
+      "id": "89eb215f-d930-4799-b7a8-57bf74c183e1",
+      "title": "Variables and Data Types",
+      "description": "Numbers, strings, booleans, and lists in small examples.",
+      "type": "learning_unit",
+      "chapter_id": "5563c243-09c4-4c4b-b108-1d9178eae77f",
+      "branch_id": null,
+      "required": true,
+      "prerequisites": {
+        "requires_all": [],
+        "requires_any": [],
+        "recommended": []
+      },
+      "completion_mode": "lesson_complete",
+      "estimated_duration_minutes": 50,
+      "layout": {
+        "x": 120.0,
+        "y": 120.0
+      },
+      "metadata": {
+        "objectives": [
+          "Choose the right data type",
+          "Use simple transformations"
+        ],
+        "teaching_notes": "",
+        "migrated_from": "lesson"
+      },
+      "display": {},
+      "ksa": [],
+      "unlocks": {
+        "node_ids": [],
+        "branch_ids": [],
+        "recommended_next_node_ids": []
+      },
+      "rewards": {
+        "estimated_ksa_gain": {},
+        "effort_score": null,
+        "reward_tags": []
+      },
+      "retrospective_hooks": {
+        "retrospective_after": false,
+        "review_recommended": false,
+        "recap_checkpoint_available": false
+      },
+      "ksa_hooks": {
+        "mini_assessment_available": false,
+        "recommended_reassessment_topics": [],
+        "unlocks_deeper_refinement": false
+      },
+      "remediation": {
+        "is_remediation_node": false,
+        "recommended_if_failed_node_ids": [],
+        "supports_review_for_node_ids": []
+      },
+      "adaptive_unlock": {
+        "ksa_thresholds": [],
+        "requires_branch_completion_ids": [],
+        "requires_checkpoint_node_ids": [],
+        "requires_review_recommended": false,
+        "recommended_only": false
+      }
+    },
+    {
+      "id": "6f909729-42d5-411d-bd92-b55bafeb3a71",
+      "title": "Control Flow",
+      "description": "If statements and loops for basic program logic.",
+      "type": "learning_unit",
+      "chapter_id": "5563c243-09c4-4c4b-b108-1d9178eae77f",
+      "branch_id": null,
+      "required": true,
+      "prerequisites": {
+        "requires_all": [
+          "89eb215f-d930-4799-b7a8-57bf74c183e1"
+        ],
+        "requires_any": [],
+        "recommended": []
+      },
+      "completion_mode": "lesson_complete",
+      "estimated_duration_minutes": 50,
+      "layout": {
+        "x": 300.0,
+        "y": 120.0
+      },
+      "metadata": {
+        "objectives": [
+          "Write conditional logic",
+          "Iterate with for/while"
+        ],
+        "teaching_notes": "",
+        "migrated_from": "lesson"
+      },
+      "display": {},
+      "ksa": [],
+      "unlocks": {
+        "node_ids": [],
+        "branch_ids": [],
+        "recommended_next_node_ids": []
+      },
+      "rewards": {
+        "estimated_ksa_gain": {},
+        "effort_score": null,
+        "reward_tags": []
+      },
+      "retrospective_hooks": {
+        "retrospective_after": false,
+        "review_recommended": false,
+        "recap_checkpoint_available": false
+      },
+      "ksa_hooks": {
+        "mini_assessment_available": false,
+        "recommended_reassessment_topics": [],
+        "unlocks_deeper_refinement": false
+      },
+      "remediation": {
+        "is_remediation_node": false,
+        "recommended_if_failed_node_ids": [],
+        "supports_review_for_node_ids": []
+      },
+      "adaptive_unlock": {
+        "ksa_thresholds": [],
+        "requires_branch_completion_ids": [],
+        "requires_checkpoint_node_ids": [],
+        "requires_review_recommended": false,
+        "recommended_only": false
+      }
+    },
+    {
+      "id": "cc8c1deb-9ac3-4081-b994-d043ce4e7657",
+      "title": "Functions and Parameters",
+      "description": "Build reusable code with arguments and return values.",
+      "type": "learning_unit",
+      "chapter_id": "a3148d0e-7dbf-4c66-96cb-de03860092d2",
+      "branch_id": null,
+      "required": true,
+      "prerequisites": {
+        "requires_all": [
+          "6f909729-42d5-411d-bd92-b55bafeb3a71"
+        ],
+        "requires_any": [],
+        "recommended": []
+      },
+      "completion_mode": "lesson_complete",
+      "estimated_duration_minutes": 50,
+      "layout": {
+        "x": 480.0,
+        "y": 290.0
+      },
+      "metadata": {
+        "objectives": [
+          "Write functions",
+          "Use return values effectively"
+        ],
+        "teaching_notes": "",
+        "migrated_from": "lesson"
+      },
+      "display": {},
+      "ksa": [],
+      "unlocks": {
+        "node_ids": [],
+        "branch_ids": [],
+        "recommended_next_node_ids": []
+      },
+      "rewards": {
+        "estimated_ksa_gain": {},
+        "effort_score": null,
+        "reward_tags": []
+      },
+      "retrospective_hooks": {
+        "retrospective_after": false,
+        "review_recommended": false,
+        "recap_checkpoint_available": false
+      },
+      "ksa_hooks": {
+        "mini_assessment_available": false,
+        "recommended_reassessment_topics": [],
+        "unlocks_deeper_refinement": false
+      },
+      "remediation": {
+        "is_remediation_node": false,
+        "recommended_if_failed_node_ids": [],
+        "supports_review_for_node_ids": []
+      },
+      "adaptive_unlock": {
+        "ksa_thresholds": [],
+        "requires_branch_completion_ids": [],
+        "requires_checkpoint_node_ids": [],
+        "requires_review_recommended": false,
+        "recommended_only": false
+      }
+    }
+  ],
+  "edges": [
+    {
+      "from_node_id": "6f909729-42d5-411d-bd92-b55bafeb3a71",
+      "to_node_id": "cc8c1deb-9ac3-4081-b994-d043ce4e7657",
+      "relationship": "requires_all"
+    },
+    {
+      "from_node_id": "89eb215f-d930-4799-b7a8-57bf74c183e1",
+      "to_node_id": "6f909729-42d5-411d-bd92-b55bafeb3a71",
+      "relationship": "requires_all"
+    }
+  ],
+  "entry_node_ids": [
+    "89eb215f-d930-4799-b7a8-57bf74c183e1"
+  ],
+  "completion_rules": {
+    "required_completion": "all_required_nodes",
+    "migrated_from_schema": 1
+  },
+  "visual_layout": {
+    "layout_engine": "manual",
+    "migrated_from_schema": 1
+  },
+  "metadata": {
+    "migrated_from_schema": 1
+  }
+}
