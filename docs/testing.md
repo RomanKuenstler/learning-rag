@@ -162,3 +162,20 @@ curl http://localhost:8000/api/health
 - If attachment context seems missing, inspect the retriever logs and confirm `ATTACHMENT_MAX_TOTAL_CHARS` is not overly restrictive.
 - If thinking mode fails, inspect retriever logs for the planning or draft debug entries and confirm the fallback simple response path was used.
 - If the Step 7 visuals look inconsistent, inspect the fixed composer width, sidebar padding, and modal variants first because they establish most of the reference rhythm.
+
+## Personalization Layer Tests
+
+New coverage was added for the learning personalization foundation:
+
+- `tests/test_personalization_layers_engine.py`
+
+Covered behaviors:
+
+- declared preference mapping into resolved tutor rules and custom flags
+- capability layer separation of competence vs confidence
+- targeted recompute behavior (live updates do not overwrite stable identity layer)
+- trigger-map sanity checks for reason -> group routing
+
+Run:
+
+- `pytest tests/test_personalization_layers_engine.py`

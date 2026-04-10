@@ -23,6 +23,7 @@ from services.common.models import (
     UserKSADrillAttempt,
     UserKSAProfile,
     UserLearningPreference,
+    UserLearningPersonalizationLayer,
     UserLearningProfile,
     UserDiagnosticAnswer,
     UserDiagnosticAttempt,
@@ -617,3 +618,17 @@ class ChatRepository:
 
     def create_explanation_feedback(self, payload: dict[str, object]) -> ExplanationFeedback:
         return self.postgres_client.create_explanation_feedback(payload)
+
+    def list_explanation_feedback(self, *, user_id: int, limit: int = 20) -> list[ExplanationFeedback]:
+        return self.postgres_client.list_explanation_feedback(user_id=user_id, limit=limit)
+
+    def get_user_learning_personalization_layers(self, *, user_id: int) -> UserLearningPersonalizationLayer | None:
+        return self.postgres_client.get_user_learning_personalization_layers(user_id=user_id)
+
+    def upsert_user_learning_personalization_layers(
+        self,
+        *,
+        user_id: int,
+        fields: dict[str, object],
+    ) -> UserLearningPersonalizationLayer:
+        return self.postgres_client.upsert_user_learning_personalization_layers(user_id=user_id, fields=fields)

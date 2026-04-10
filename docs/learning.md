@@ -219,3 +219,38 @@ At startup, definitions are versioned and persisted. Runtime data remains in:
 - `explanation_feedback`
 
 Scoring remains deterministic and backend-only.
+
+## Personalization Rule Engine Foundation
+
+A new resolver layer now computes stable grouped personalization outputs from existing learner data.
+
+Groups:
+
+1. `identity_context`
+2. `goal_intent`
+3. `declared_preferences`
+4. `diagnosed_learning`
+5. `capability_mastery`
+6. `live_adaptation`
+
+Each group persists:
+
+- normalized grouped snapshot
+- resolved rule set
+- per-group recompute timestamp
+- source hash + reason trace entries
+
+Storage:
+
+- `user_learning_personalization_layers`
+
+This foundation is prompt-free by design. It prepares rule inputs for later prompt/orchestration steps but does not yet generate final teaching prompts.
+
+Recompute triggers are targeted:
+
+- profile/context + personalization settings -> Group 1
+- goals add/update/delete -> Group 2
+- declared learning preferences updates -> Group 3
+- diagnostic completion (LAA/MOA/LTA) -> Group 4
+- KSA assessment/drill completion -> Group 5
+- live checks/feedback/node runtime signals -> Group 6

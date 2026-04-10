@@ -230,3 +230,29 @@ Separation intent:
 - initial onboarding assessment and deep-dive drills are separate engines
 - visualization remains top-level radar based for now
 - persistence already supports future node-splitting/shatter visualizations without schema replacement
+
+## Personalization Layer Architecture
+
+A dedicated learning personalization layer engine has been added:
+
+- `services/retriever/services/personalization_layers.py`
+
+Responsibilities:
+
+- collect source data from profile, goals, preferences, diagnostics, KSA, and live adaptation inputs
+- resolve six grouped snapshots
+- compute six resolved rule sets
+- persist grouped outputs and trace metadata
+
+Persistence model:
+
+- `UserLearningPersonalizationLayer` (`user_learning_personalization_layers`)
+
+Integration point:
+
+- `RetrieverAppService` calls targeted recompute after relevant write operations
+- recompute is fail-open (warnings logged, primary learning APIs continue)
+
+Debug access:
+
+- `GET /api/learning-profile/personalization-layers`

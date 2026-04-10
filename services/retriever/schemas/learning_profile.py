@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from datetime import date, datetime
+from typing import Any
 from typing import Literal
 
 from pydantic import BaseModel, Field, field_validator
@@ -124,3 +125,21 @@ class LearningProfileBundleRead(BaseModel):
     context: LearningProfileContextRead
     goals: list[LearningGoalRead] = Field(default_factory=list)
     diagnostics_status: Literal["not_started", "in_progress", "completed"] = "not_started"
+
+
+class PersonalizationLayerGroupRead(BaseModel):
+    group_id: str
+    snapshot: dict[str, Any] = Field(default_factory=dict)
+    resolved_rules: dict[str, Any] = Field(default_factory=dict)
+    updated_at: datetime | None = None
+    last_reasons: list[str] = Field(default_factory=list)
+
+
+class PersonalizationLayersRead(BaseModel):
+    user_id: int
+    rule_engine_version: str = "v1"
+    last_source_hashes: dict[str, str] = Field(default_factory=dict)
+    source_to_group_trace: dict[str, dict[str, Any]] = Field(default_factory=dict)
+    change_log: list[dict[str, Any]] = Field(default_factory=list)
+    layers: list[PersonalizationLayerGroupRead] = Field(default_factory=list)
+    updated_at: datetime | None = None

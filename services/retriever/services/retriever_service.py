@@ -99,6 +99,8 @@ from services.retriever.schemas.learning_profile import (
     LearningGoalUpdateRequest,
     LearningPreferencesRead,
     LearningPreferencesUpdateRequest,
+    PersonalizationLayerGroupRead,
+    PersonalizationLayersRead,
     LearningProfileBundleRead,
     LearningProfileContextRead,
     LearningProfileContextUpdateRequest,
@@ -160,6 +162,7 @@ from services.retriever.services.ksa_drills import (
     list_drill_topics,
     plan_dynamic_drill_rounds,
 )
+from services.retriever.services.personalization_layers import GROUP_COLUMNS, GROUP_ORDER, LearningPersonalizationLayerEngine
 
 RUNTIME_SETTING_KEYS = {
     "chat_history_messages_count",
@@ -316,6 +319,11 @@ class RetrieverAppService:
         self.attachment_client = deps.attachment_client
         self.auth_manager = deps.auth_manager
         self.settings = deps.settings
+        self.personalization_layer_engine = LearningPersonalizationLayerEngine(
+            self.chat_repository,
+            available_assistant_modes=self.settings.available_assistant_modes,
+            default_assistant_mode=self.settings.default_assistant_mode,
+        )
         self.course_file_parser = CourseFileParser()
         self._ksa_validation_executor = ThreadPoolExecutor(max_workers=2, thread_name_prefix="ksa-validate")
         self.courses_dir = Path(self.settings.courses_dir)
@@ -861,6 +869,7 @@ class RetrieverAppService:
     def update_personalization(self, user: UserAccount, payload: PersonalizationUpdateRequest) -> PersonalizationRead:
         for key, value in payload.model_dump().items():
             self.chat_repository.upsert_setting(user.id, key, json.dumps(str(value).strip()))
+        self._safe_recompute_personalization_layers(user=user, reasons=["personalization_updated"])
         return self.get_personalization(user)
 
     def get_learning_profile_bundle(self, user: UserAccount) -> LearningProfileBundleRead:
@@ -878,6 +887,18 @@ class RetrieverAppService:
             goals=[self._build_learning_goal_read(goal) for goal in goals],
             diagnostics_status=diagnostics_status,
         )
+
+    def get_personalization_layers(self, user: UserAccount) -> PersonalizationLayersRead:
+        if self._can_recompute_personalization_layers():
+            record = self.chat_repository.get_user_learning_personalization_layers(user_id=user.id)
+            if record is None:
+                record = self.personalization_layer_engine.recompute_for_reasons(
+                    user=user,
+                    reasons=["initial_bootstrap"],
+                    force_all=True,
+                )
+            return self._build_personalization_layers_read(record)
+        return PersonalizationLayersRead(user_id=user.id)
 
     def get_ksa_profile(self, user: UserAccount) -> KSAProfileRead:
         persisted = self.chat_repository.get_user_ksa_profile(user.id)
@@ -989,6 +1010,7 @@ class RetrieverAppService:
             assessment_version=ASSESSMENT_VERSION,
             profile_json=evaluation.profile_json,
         )
+        self._safe_recompute_personalization_layers(user=user, reasons=["ksa_updated"])
         return self._build_ksa_profile_read(
             user_id=user.id,
             profile_json=evaluation.profile_json,
@@ -1144,6 +1166,7 @@ class RetrieverAppService:
             assessment_version=DRILL_ASSESSMENT_VERSION,
             profile_json=profile_json,
         )
+        self._safe_recompute_personalization_layers(user=user, reasons=["ksa_updated"])
         return self._build_ksa_profile_read(
             user_id=user.id,
             profile_json=profile_json,
@@ -1174,6 +1197,7 @@ class RetrieverAppService:
                 "custom_preference_note": next_values["custom_preference_note"],
             },
         )
+        self._safe_recompute_personalization_layers(user=user, reasons=["learning_preferences_updated"])
         return self._build_learning_preferences_read(updated)
 
     def update_learning_context(self, user: UserAccount, payload: LearningProfileContextUpdateRequest) -> LearningProfileContextRead:
@@ -1223,6 +1247,7 @@ class RetrieverAppService:
                 "learning_context_notes": next_values["learning_context_notes"],
             },
         )
+        self._safe_recompute_personalization_layers(user=user, reasons=["learning_context_updated"])
         return self._build_learning_context_read(updated)
 
     def create_learning_goal(self, user: UserAccount, payload: LearningGoalCreateRequest) -> LearningGoalRead:
@@ -1238,6 +1263,7 @@ class RetrieverAppService:
                 "is_active": payload.is_active,
             }
         )
+        self._safe_recompute_personalization_layers(user=user, reasons=["learning_goal_updated"])
         return self._build_learning_goal_read(record)
 
     def update_learning_goal(self, user: UserAccount, goal_id: str, payload: LearningGoalUpdateRequest) -> LearningGoalRead | None:
@@ -1248,12 +1274,14 @@ class RetrieverAppService:
         updated = self.chat_repository.update_user_learning_goal(user.id, goal_id, fields)
         if updated is None:
             return None
+        self._safe_recompute_personalization_layers(user=user, reasons=["learning_goal_updated"])
         return self._build_learning_goal_read(updated)
 
     def delete_learning_goal(self, user: UserAccount, goal_id: str) -> LearningGoalRead | None:
         deleted = self.chat_repository.delete_user_learning_goal(user.id, goal_id)
         if deleted is None:
             return None
+        self._safe_recompute_personalization_layers(user=user, reasons=["learning_goal_updated"])
         return self._build_learning_goal_read(deleted)
 
     def list_diagnostic_definitions(self) -> DiagnosticCatalogRead:
@@ -1353,6 +1381,7 @@ class RetrieverAppService:
         computed = score_attempt(definitions, answers_by_type)
         persisted = self.chat_repository.upsert_user_diagnostic_result(attempt_id=attempt.id, result_json=computed)
         self.chat_repository.mark_user_diagnostic_attempt_completed(attempt_id=attempt.id)
+        self._safe_recompute_personalization_layers(user=user, reasons=["diagnostic_completed"])
         return DiagnosticResultRead(attempt_id=attempt.id, result=dict(persisted.result_json or {}))
 
     def create_learning_state_check(self, user: UserAccount, payload: LearningStateCheckCreateRequest) -> LearningStateCheckRead:
@@ -1367,6 +1396,7 @@ class RetrieverAppService:
                 "notes": payload.notes.strip(),
             }
         )
+        self._safe_recompute_personalization_layers(user=user, reasons=["learning_state_check_created"])
         return self._build_learning_state_check_read(record)
 
     def list_learning_state_checks(self, user: UserAccount, limit: int = 20) -> list[LearningStateCheckRead]:
@@ -1385,6 +1415,7 @@ class RetrieverAppService:
                 "re_explain_requested": payload.re_explain_requested,
             }
         )
+        self._safe_recompute_personalization_layers(user=user, reasons=["explanation_feedback_created"])
         return self._build_explanation_feedback_read(record)
 
     def list_learning_paths(self, user: UserAccount) -> LearningPathListResponse:
@@ -1700,6 +1731,7 @@ class RetrieverAppService:
 
         refreshed = self.chat_repository.get_learning_path(path.id)
         assert refreshed is not None
+        self._safe_recompute_personalization_layers(user=user, reasons=["learning_node_progress_updated"])
         return self._build_learning_path_read(user, refreshed)
 
     def update_learning_path(
@@ -3656,6 +3688,64 @@ class RetrieverAppService:
         if mode not in self.settings.available_assistant_modes:
             raise ValueError(f"Unsupported assistant mode: {mode}")
         return mode
+
+    def _can_recompute_personalization_layers(self) -> bool:
+        required_methods = {
+            "get_user_learning_profile",
+            "get_user_learning_preference",
+            "list_user_learning_goals",
+            "list_settings",
+            "get_latest_user_diagnostic_attempt",
+            "get_user_diagnostic_result",
+            "list_user_diagnostic_attempts",
+            "get_user_ksa_profile",
+            "get_latest_user_ksa_drill_attempt",
+            "list_user_ksa_drill_attempts",
+            "list_learning_state_checks",
+            "list_explanation_feedback",
+            "get_user_learning_personalization_layers",
+            "upsert_user_learning_personalization_layers",
+        }
+        return all(callable(getattr(self.chat_repository, method_name, None)) for method_name in required_methods)
+
+    def _safe_recompute_personalization_layers(self, *, user: UserAccount, reasons: list[str], force_all: bool = False) -> None:
+        if not self._can_recompute_personalization_layers():
+            return
+        try:
+            self.personalization_layer_engine.recompute_for_reasons(
+                user=user,
+                reasons=reasons,
+                force_all=force_all,
+            )
+        except Exception as error:
+            logger.warning("personalization layer recompute failed for user=%s reasons=%s error=%s", user.id, reasons, error)
+
+    def _build_personalization_layers_read(self, record) -> PersonalizationLayersRead:
+        if record is None:
+            return PersonalizationLayersRead(user_id=0)
+        trace = dict(getattr(record, "source_to_group_trace_json", {}) or {})
+        groups: list[PersonalizationLayerGroupRead] = []
+        for group_id in GROUP_ORDER:
+            snapshot_col, rules_col, updated_at_col = GROUP_COLUMNS[group_id]
+            group_trace = dict(trace.get(group_id) or {})
+            groups.append(
+                PersonalizationLayerGroupRead(
+                    group_id=group_id,
+                    snapshot=dict(getattr(record, snapshot_col, {}) or {}),
+                    resolved_rules=dict(getattr(record, rules_col, {}) or {}),
+                    updated_at=getattr(record, updated_at_col, None),
+                    last_reasons=[str(item) for item in list(group_trace.get("last_reasons") or [])],
+                )
+            )
+        return PersonalizationLayersRead(
+            user_id=int(getattr(record, "user_id", 0) or 0),
+            rule_engine_version=str(getattr(record, "rule_engine_version", "v1") or "v1"),
+            last_source_hashes={str(key): str(value) for key, value in dict(getattr(record, "last_source_hashes_json", {}) or {}).items()},
+            source_to_group_trace=trace,
+            change_log=list(getattr(record, "change_log_json", []) or []),
+            layers=groups,
+            updated_at=getattr(record, "updated_at", None),
+        )
 
     def _load_runtime_settings(self, user: UserAccount) -> None:
         stored_values = self._load_stored_setting_values(user)

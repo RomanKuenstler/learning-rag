@@ -73,6 +73,7 @@ from services.retriever.schemas.learning_profile import (
     LearningProfileBundleRead,
     LearningProfileContextRead,
     LearningProfileContextUpdateRequest,
+    PersonalizationLayersRead,
 )
 from services.retriever.schemas.diagnostics import (
     DiagnosticAnswerUpsertRequest,
@@ -751,6 +752,13 @@ def create_app() -> FastAPI:
         service: RetrieverAppService = Depends(get_retriever_service),
     ) -> LearningProfileBundleRead:
         return service.get_learning_profile_bundle(auth.user)
+
+    @app.get("/api/learning-profile/personalization-layers", response_model=PersonalizationLayersRead)
+    def get_personalization_layers(
+        auth: AuthContext = Depends(get_app_auth_context),
+        service: RetrieverAppService = Depends(get_retriever_service),
+    ) -> PersonalizationLayersRead:
+        return service.get_personalization_layers(auth.user)
 
     @app.get("/api/learning-profile/ksa", response_model=KSAProfileRead)
     def get_ksa_profile(

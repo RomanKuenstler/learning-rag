@@ -1,5 +1,45 @@
 # Changelog
 
+## 2026-04-10 18:35 UTC
+
+- Added a persisted learning personalization layer foundation with six grouped outputs:
+  - `identity_context`
+  - `goal_intent`
+  - `declared_preferences`
+  - `diagnosed_learning`
+  - `capability_mastery`
+  - `live_adaptation`
+- Added new model/table:
+  - SQLAlchemy model `UserLearningPersonalizationLayer`
+  - migration `20260410_0016_learning_personalization_layers.py`
+  - table `user_learning_personalization_layers` with snapshots, resolved rules, per-group update timestamps, and trace metadata.
+- Added resolver/orchestration service:
+  - `services/retriever/services/personalization_layers.py`
+  - computes grouped snapshots + resolved rules
+  - tracks source hashes and recompute reasons for debuggability.
+- Integrated targeted recomputation in `RetrieverAppService` after relevant writes:
+  - personalization updates
+  - learning context/preferences updates
+  - learning goal create/update/delete
+  - diagnostic completion
+  - KSA assessment/drill completion
+  - learning state checks
+  - explanation feedback
+  - node progress updates.
+- Added internal inspection API endpoint:
+  - `GET /api/learning-profile/personalization-layers`
+- Added repository/postgres support:
+  - get/upsert personalization layer rows
+  - list explanation feedback for live-pattern resolution.
+- Added tests:
+  - `tests/test_personalization_layers_engine.py`
+  - verifies declared preference rule mapping, capability confidence/competence separation, targeted recompute stability, and reason-map routing.
+- Updated docs:
+  - `docs/learning.md`
+  - `docs/personalization.md` (new)
+  - `docs/architecture.md`
+  - `docs/testing.md`
+
 ## 2026-04-10 13:45 UTC
 
 - Reworked LTA scoring into a channel-distribution model:

@@ -41,6 +41,7 @@ from services.common.models import (
     UserKSADrillAttempt,
     UserKSAProfile,
     UserLearningPreference,
+    UserLearningPersonalizationLayer,
     UserLearningProfile,
     UserAccount,
     UserFileSetting,
@@ -2137,6 +2138,47 @@ class PostgresClient:
         with self.session() as session:
             record = ExplanationFeedback(**payload)
             session.add(record)
+            session.flush()
+            session.refresh(record)
+            return record
+
+    def list_explanation_feedback(self, *, user_id: int, limit: int = 20) -> list[ExplanationFeedback]:
+        with self.session() as session:
+            rows = session.scalars(
+                select(ExplanationFeedback)
+                .where(ExplanationFeedback.user_id == user_id)
+                .order_by(ExplanationFeedback.created_at.desc())
+                .limit(limit)
+            )
+            return list(rows)
+
+    def get_user_learning_personalization_layers(self, *, user_id: int) -> UserLearningPersonalizationLayer | None:
+        with self.session() as session:
+            return session.scalar(
+                select(UserLearningPersonalizationLayer).where(UserLearningPersonalizationLayer.user_id == user_id)
+            )
+
+    def upsert_user_learning_personalization_layers(
+        self,
+        *,
+        user_id: int,
+        fields: dict[str, object],
+    ) -> UserLearningPersonalizationLayer:
+        with self.session() as session:
+            record = session.scalar(
+                select(UserLearningPersonalizationLayer).where(UserLearningPersonalizationLayer.user_id == user_id)
+            )
+            now = datetime.now(timezone.utc)
+            if record is None:
+                payload = {**fields, "user_id": user_id}
+                record = UserLearningPersonalizationLayer(**payload)
+                if "change_log_json" not in payload:
+                    record.change_log_json = []
+                session.add(record)
+            else:
+                for key, value in fields.items():
+                    setattr(record, key, value)
+                record.updated_at = now
             session.flush()
             session.refresh(record)
             return record

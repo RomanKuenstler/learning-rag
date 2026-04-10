@@ -745,3 +745,190 @@ How is learning going right now?
 	•	later progress/mastery
 
 That structure will make your future prompt/orchestration design much cleaner.
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+Learning page, Profile tab: all user-editable inputs
+- Left profile card/dialog: How to address, Location, Title, Date of birth, About.
+- Right profile dialog: Work Experience (job/company pairs, add/remove rows), Education (degree/institute pairs, add/remove rows), Skills (comma-separated), Interests (comma-separated).
+- Learning Context section: Current reason for learning, Additional learning context notes.
+- Learning Goals table/actions:
+- Add Goal dialog fields: Target topic, Reason for learning, Target level, Deadline (dd.mm.yyyy), Priority (low/medium/high), Notes.
+- Existing goal row editable fields: Deadline (date input), Active toggle; actions Save, Delete.
+
+Learning page, Preferences tab (excluding diagnostic)
+- 10 preference controls:
+   . Preferred pace: slow/balanced/fast.
+   . Explanation depth: concise/balanced/detailed.
+   . Examples vs theory: more_examples/balanced/more_theory.
+   . Structure preference: more_structured/balanced/more_conversational.
+   . Quiz/checkpoint frequency: low/medium/high.
+   . Encouragement level: low/balanced/high.
+   . Guidance level: step_by_step/balanced/more_independent.
+   . Recap frequency: low/medium/high.
+   . Preferred learning format: reading/dialogue/exercises/mixed.
+   . Custom note (textarea).
+
+Learning Preferences Diagnostic (LAA, MOA, LTA) scenario outputs in UI
+LAA:
+- No fixed “one-of-N final paragraph” blocks.
+- UI shows bar chart + section accordions (User needs, Learning experience, Conditions, Objectives, Skills and Interests, Attitude, Support needs, Miscellaneous).
+- Texts are assembled dynamically from templates in scoring:
+   . Dimension insights (possible): goal clarity, time pressure, structure need, feedback need, self-direction, social orientation, emotional safety, frustration sensitivity, technical affinity, practical orientation, visibility motivation.
+   . Section conditionals (possible): “Your strongest interest areas are…”, “In everyday life, you mostly rely on…”, “Your emotional learning stability is strong…/more variable…”, “External activation… can improve rhythm.”, “You benefit from clear plans…”, “Frequent feedback…”, “You prefer flexibility…”, “Visible progress… can motivate…”.
+   . Fallbacks: “Your profile shows a balanced pattern in this area.” and “These section signals can be used for adaptive learning support.”
+MOA:
+- Exactly 45 pair scenarios (top-2 motivation dimensions) with one result block each.
+- UI path: Personalized Motivation Profile accordion; it displays intro paragraphs + selected block title/text.
+- 45 scenario titles: Knowledge&Creativity, Knowledge&Purpose, Knowledge&Achievement, Knowledge&Experimentation, Knowledge&Autonomy, Knowledge&Influence, Knowledge&Security, Creativity&Purpose, Creativity&Experimentation, Creativity&Achievement, Creativity&Autonomy, Purpose&Connection, Purpose&Influence, Purpose&Status, Connection&Influence, Connection&Status, Connection&Purpose, Connection&Autonomy, Security&Achievement, Security&Connection, Security&Status, Security&Purpose, Security&Influence, Security&Autonomy, Autonomy&Creativity, Autonomy&Experimentation, Autonomy&Influence, Autonomy&Achievement, Autonomy&Purpose, Autonomy&Status, Achievement&Influence, Achievement&Status, Achievement&Experimentation, Achievement&Connection, Achievement&Creativity, Experimentation&Creativity, Experimentation&Influence, Experimentation&Connection, Experimentation&Purpose, Experimentation&Status, Experimentation&Security, Experimentation&Autonomy, Experimentation&Achievement, Experimentation&Knowledge, Influence&Status.
+LTA:
+- 11 scenarios total (4 dominant + 6 mixed + 1 balanced), each with fixed text shown in Personal Learning Type accordion.
+   . Dominant: Auditory, Visual, Kinesthetic, Reading/Writing.
+   . Mixed: Auditory–Visual, Auditory–Kinesthetic, Auditory–Reading/Writing, Visual–Kinesthetic, Visual–Reading/Writing, Kinesthetic–Reading/Writing.
+   . Balanced: Balanced profile.
+- Classification rules used in scoring:
+- balanced if max-min channel count <= 1.
+- dominant if top-second >= 2.
+- otherwise mixed.
+
+KSA Big Map topics and K/S/A classification
+K: STEM Fundamentals, Information Technology, Humanities & Social Sciences, Languages & Linguistics, Business & Commerce, Legal & Ethics, Health & Wellness.
+S: Literacy & Numeracy, Digital Craft, Strategic Execution, Operational Skills, Relational Skills, Research & Inquiry.
+A: Quantitative Reasoning, Verbal Comprehension, Spatial Visualization, Executive Function, Sensory-Perceptual, Social-Emotional Capacity, Divergent Thinking.
+
+KSA Deep Dive drill assessment: what results are produced
+User flow:
+- Enter topic text.
+- Topic classification confirmation (primary_type, optional secondary_type, type_combo, big_map_group, big_map_subdomain, detailed_topic, user_explanation).
+- 4-round generated drill; each round generates 4 questions (16 total).
+- Question kinds: recalibration, threshold, sidestep, stress_test (15s target for stress test).
+- Persisted/computed result output includes:
+- topic_updates per topic: initial_level, delta, final_level, chart_level, sub_nodes, block-level pass/fail, map decay counters.
+- drill_flow metadata, completion timestamp/version.
+- Side effects on profile:
+   . KSA levels updated.
+   . confidence adjusted.
+   . map-decay status may be set.
+   . derived learning_speed_multiplier recalculated from executive + quantitative proxies.
+- UI result surface:
+   . “Assessment Drill Attempts” table with Completed date, topic badges, total DELTA.
+   . Expandable rounds list and detailed round topic labels.
+   . Completion message: “Drill Assessment Completed… map refined…”
+
+Library: what users can do
+- View file table with status, tags, size, chunk count, type, embedded state, owner/source labels.
+- Upload files (multi-file):
+   . per-file tags (comma-separated), default tag auto-applied if empty.
+- extension/type checks, max-file limit, duplicate check.
+- Enable/disable files (per user scope/permissions).
+- Delete files (permission-gated).
+- Toggle Show other users' files to include shared/other-user files in listing.
+- Tag filtering:
+   . In library itself: tags are displayed; no inline tag-filter control there.
+   . Actual filter controls live in Preferences dialog Filter tab (global/chat scoped tag/file toggles).
+
+Preferences dialog, Personalization tab options
+- - Base style: default, professional, friendly, direct, quirky, efficient, sceptical.
+Characteristics (each: more/default/less):
+   . Warm
+   . Enthusiastic
+   . Headers and Lists
+- Custom Instructions (textarea).
+- Nickname.
+- Occupation.
+- More about you.
+
+Preferences dialog, Settings tab options
+- History Messages (number).
+- Max Similarities (number).
+- Min Similarities (number).
+- Cosine Limit (similarity_score_threshold, 0..1 step 0.01).
+
+Assistant modes and step pipelines
+Modes: simple, refine, thinking.
+- simple: 1 generation stage (single-pass answer after retrieval/context assembly).
+- refine: 2 LLM stages.
+   . Step 1: draft generation.
+   . Step 2: refine draft into final answer.
+- thinking: 3 LLM stages.
+   . Step 1: planning.
+   . Step 2: drafting.
+   . Step 3: refining.
+If thinking fails, backend falls back to simple mode.
+
+Courses page: what appears in courses table
+- Columns: Name, Scope, Owner, Status, Nodes, Modules, Lessons, Updated, Actions.
+- Toolbar filters: search, scope filter, status filter, sort.
+- Row actions: Start/Continue, archive/unarchive, edit (placeholder), delete (permission-based).
+
+Course details (DevOps Roadmap Learning Tree): how your course system works
+This course (current JSON) has:
+- 5 chapters, 3 branches, 41 nodes, 83 edges, 1 entry node.
+- Branches (“routes” in this course naming): Core Route (required), Alternative Route (optional), Optional Route (optional).
+
+System model:
+- Chapters = content grouping/progression slices.
+- Branches = parallel route tracks with required/optional semantics.
+- Nodes = executable learning/progression units.
+- Edges = dependency/recommendation graph (requires_all, requires_any, recommended, optional).
+- Entry nodes = start points.
+
+Node types supported: learning_unit, practice, quiz, checkpoint, review, milestone, capstone, unlock_gate, assessment_hook.
+
+Node completion modes: lesson_complete, practice_complete, quiz_pass, checkpoint_pass, review_complete, manual, gate_unlock, assessment_threshold.
+
+Per-node option groups available in schema:
+- prerequisites (requires_all, requires_any, recommended)
+- required flag
+- chapter_id, branch_id
+- estimated duration, layout, metadata/display
+- KSA links (dimension/topic/subtopic/start/target/weight/unlocks_assessment_check/recommends_assessment_check)
+- unlock metadata (node_ids/branch_ids/recommended_next)
+- rewards metadata
+- retrospective hooks
+- ksa hooks
+- remediation metadata
+- adaptive unlock rules (KSA thresholds, required branches/checkpoints, review requirements, recommended-only)
+
+Runtime connection to KSA:
+- Node KSA mappings drive side-panel “KSA Links”.
+- Assessment-hook and KSA hook flags feed recommendation/hook summary logic.
+- Progress/runtime states computed from dependencies and completion state (locked, available, in_progress, completed, mastered, optional_skipped, failed_needs_retry, awaiting_checkpoint).
+- UI node actions depend on runtime state: Start/Continue, Reset, Skip (optional nodes).
+
+
+
+
+
+
+
+
+
+
+Key Components for Prompt Rules
+Role/Persona: Define who the AI is (e.g., "Act as a senior copywriter").
+Clear Goal: State the objective simply and directly.
+Context & Data: Provide necessary background information, using delimiters to separate instructions from data.
+Constraints/Rules: List what not to do, such as forbidding jargon or prohibiting guesses to prevent hallucinations.
+Format: Define the output structure (e.g., bullet points, JSON, markdown table). 
+
+Best Practices for Writing Rules
+Be Specific: Instead of "write about marketing," use "write a 100-word Instagram caption for a new yoga mat".
+Use "Chain of Thought": Instruct the model to "think step by step" to improve reasoning and accuracy.
+Iterate: Refine prompts based on output. If a mistake is made, add a rule to prevent it next time.
+"Threaten" the Model: Use strict phrasing like "You MUST" or "Do not" to enforce compliance.
+Example-Driven (Few-Shot): Provide examples of desired input-output pairs. 

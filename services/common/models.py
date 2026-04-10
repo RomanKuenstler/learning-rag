@@ -651,3 +651,37 @@ class ExplanationFeedback(Base):
     feedback_text: Mapped[str] = mapped_column(Text, nullable=False, default="")
     re_explain_requested: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, server_default=func.now())
+
+
+class UserLearningPersonalizationLayer(Base):
+    __tablename__ = "user_learning_personalization_layers"
+    __table_args__ = (UniqueConstraint("user_id", name="uq_user_learning_personalization_layers_user"),)
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    user_id: Mapped[int] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True)
+    rule_engine_version: Mapped[str] = mapped_column(String(32), nullable=False, default="v1")
+    identity_context_snapshot: Mapped[dict] = mapped_column(JSON, default=dict)
+    resolved_identity_context_rules: Mapped[dict] = mapped_column(JSON, default=dict)
+    goal_intent_snapshot: Mapped[dict] = mapped_column(JSON, default=dict)
+    resolved_goal_rules: Mapped[dict] = mapped_column(JSON, default=dict)
+    declared_preferences_snapshot: Mapped[dict] = mapped_column(JSON, default=dict)
+    resolved_declared_tutor_rules: Mapped[dict] = mapped_column(JSON, default=dict)
+    diagnosed_learning_snapshot: Mapped[dict] = mapped_column(JSON, default=dict)
+    resolved_diagnostic_rules: Mapped[dict] = mapped_column(JSON, default=dict)
+    capability_mastery_snapshot: Mapped[dict] = mapped_column(JSON, default=dict)
+    resolved_capability_rules: Mapped[dict] = mapped_column(JSON, default=dict)
+    live_adaptation_snapshot: Mapped[dict] = mapped_column(JSON, default=dict)
+    resolved_live_adaptation_rules: Mapped[dict] = mapped_column(JSON, default=dict)
+    last_source_hashes_json: Mapped[dict] = mapped_column(JSON, default=dict)
+    source_to_group_trace_json: Mapped[dict] = mapped_column(JSON, default=dict)
+    change_log_json: Mapped[list[dict]] = mapped_column(JSON, default=list)
+    identity_context_updated_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    goal_intent_updated_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    declared_preferences_updated_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    diagnosed_learning_updated_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    capability_mastery_updated_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    live_adaptation_updated_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, server_default=func.now())
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, server_default=func.now(), onupdate=func.now()
+    )
