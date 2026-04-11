@@ -53,6 +53,7 @@ from services.retriever.schemas.learning import (
     LearningNodeContextListResponse,
     LearningNodeContextRead,
     LearningNodeExecutionAttemptRead,
+    LearningNodeExecutionAttemptListResponse,
     LearningNodeExecutionCompleteResponse,
     LearningNodeExecutionStartResponse,
     LearningNodeExecutionSubmitRequest,
@@ -649,11 +650,17 @@ def create_app() -> FastAPI:
     def start_learning_node_execution(
         learning_path_id: str,
         node_id: str,
+        force_new_attempt: bool = Query(default=False),
         auth: AuthContext = Depends(get_app_auth_context),
         service: RetrieverAppService = Depends(get_retriever_service),
     ) -> LearningNodeExecutionStartResponse:
         try:
-            record = service.start_learning_node_execution(auth.user, learning_path_id, node_id)
+            record = service.start_learning_node_execution(
+                auth.user,
+                learning_path_id,
+                node_id,
+                force_new_attempt=force_new_attempt,
+            )
         except ValueError as error:
             raise HTTPException(status_code=422, detail=str(error)) from error
         if record is None:
@@ -676,6 +683,23 @@ def create_app() -> FastAPI:
             raise HTTPException(status_code=404, detail="Execution attempt not found")
         return record
 
+    @app.get(
+        "/api/learning-paths/{learning_path_id}/nodes/{node_id}/execution/attempts",
+        response_model=LearningNodeExecutionAttemptListResponse,
+        responses={404: {"model": ErrorResponse}},
+    )
+    def list_learning_node_execution_attempts(
+        learning_path_id: str,
+        node_id: str,
+        limit: int = Query(default=20, ge=1, le=100),
+        auth: AuthContext = Depends(get_app_auth_context),
+        service: RetrieverAppService = Depends(get_retriever_service),
+    ) -> LearningNodeExecutionAttemptListResponse:
+        record = service.list_learning_node_execution_attempts(auth.user, learning_path_id, node_id, limit=limit)
+        if record is None:
+            raise HTTPException(status_code=404, detail="Learning path not found")
+        return record
+
     @app.put(
         "/api/learning-paths/{learning_path_id}/nodes/{node_id}/execution/attempts/{attempt_id}/responses",
         response_model=LearningNodeExecutionAttemptRead,
@@ -691,6 +715,36 @@ def create_app() -> FastAPI:
     ) -> LearningNodeExecutionAttemptRead:
         try:
             record = service.submit_learning_node_execution(auth.user, learning_path_id, node_id, attempt_id, payload)
+        except ValueError as error:
+            raise HTTPException(status_code=422, detail=str(error)) from error
+        if record is None:
+            raise HTTPException(status_code=404, detail="Execution attempt not found")
+        return record
+
+    @app.post(
+        "/api/learning-paths/{learning_path_id}/nodes/{node_id}/execution/attempts/{attempt_id}/uploads",
+        response_model=LearningNodeExecutionAttemptRead,
+        responses={404: {"model": ErrorResponse}, 422: {"model": ErrorResponse}},
+    )
+    async def upload_learning_node_execution_files(
+        learning_path_id: str,
+        node_id: str,
+        attempt_id: str,
+        files: list[UploadFile] = File(...),
+        task_id: str | None = Form(default=None),
+        auth: AuthContext = Depends(get_app_auth_context),
+        service: RetrieverAppService = Depends(get_retriever_service),
+    ) -> LearningNodeExecutionAttemptRead:
+        uploads = [(file.filename or "upload.bin", await file.read()) for file in files]
+        try:
+            record = service.upload_learning_node_execution_files(
+                auth.user,
+                learning_path_id,
+                node_id,
+                attempt_id,
+                uploads,
+                task_id=task_id,
+            )
         except ValueError as error:
             raise HTTPException(status_code=422, detail=str(error)) from error
         if record is None:

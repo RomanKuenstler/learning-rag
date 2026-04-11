@@ -107,6 +107,9 @@ It implements modular execution logic for:
 
 - `assessment_hook`
 - `quiz`
+- `practice`
+- `checkpoint`
+- `capstone`
 - `unlock_gate`
 - `milestone`
 
@@ -115,11 +118,14 @@ Key architecture points:
 - runtime generation is on-demand (at node start), not pre-generated
 - generated artifacts and results are persisted (`user_learning_node_execution_attempts`)
 - execution consumes persisted user node context + current KSA/profile state
+- start flow is resumable by default and supports repeat attempts via `force_new_attempt=true`
 - completion updates flow back into node progress and KSA profile refinement
+- upload-capable tasks persist artifact references and extracted summaries on the attempt payload
+- checkpoint/capstone scoring combines deterministic MC scoring, LLM rubric scoring, and KSA drill scoring
 
 Current non-goal:
 
-- execution services for `learning_unit`, `practice`, `checkpoint`, `review`, and `capstone`.
+- execution services for `learning_unit` and `review`.
 
 ## Course File Bootstrap Layer
 

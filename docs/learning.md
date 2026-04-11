@@ -39,38 +39,58 @@ Non-goal in this step:
 
 - no node-type-specific execution/prompt behavior yet (`learning_unit`, `practice`, `quiz`, etc. execution remains separate)
 
-## Node-Type Execution Layer (assessment_hook, quiz, unlock_gate, milestone)
+## Node-Type Execution Layer (assessment_hook, quiz, practice, checkpoint, capstone, unlock_gate, milestone)
 
 Node execution is now supported via runtime attempts for:
 
 - `assessment_hook`
 - `quiz`
+- `practice`
+- `checkpoint`
+- `capstone`
 - `unlock_gate`
 - `milestone`
 
 API:
 
-- `POST /api/learning-paths/{learning_path_id}/nodes/{node_id}/execution/start`
+- `POST /api/learning-paths/{learning_path_id}/nodes/{node_id}/execution/start?force_new_attempt=true|false`
 - `GET /api/learning-paths/{learning_path_id}/nodes/{node_id}/execution/latest`
+- `GET /api/learning-paths/{learning_path_id}/nodes/{node_id}/execution/attempts`
 - `PUT /api/learning-paths/{learning_path_id}/nodes/{node_id}/execution/attempts/{attempt_id}/responses`
+- `POST /api/learning-paths/{learning_path_id}/nodes/{node_id}/execution/attempts/{attempt_id}/uploads`
 - `POST /api/learning-paths/{learning_path_id}/nodes/{node_id}/execution/attempts/{attempt_id}/complete`
 
 Runtime generation model:
 
-- `assessment_hook` and `quiz` generate packages only on `start`.
+- runtime-generated node types generate packages only on `start`.
 - generated packages are persisted per user/node attempt.
+- `start` resumes active attempts by default and `force_new_attempt=true` creates a new attempt while preserving history.
 - completion and scoring are persisted on `complete`.
 
 Behavior:
 
 - `assessment_hook`: LLM-assisted selection of 8-16 targeted topics, 4-archetype round generation per topic, full-round completion requirement, result-linked KSA refinement.
 - `quiz`: backward node-window resolution, package with 12 MC/SC + 3 deep-dive rounds + 2 free-text questions, deterministic MC scoring, LLM free-text evaluation, persisted pass/fail result.
+- `practice`: 3-5 mixed application tasks (scenario free-text + upload-based practical tasks), rubric-based evaluation, required-task completion checks, and threshold-based completion.
+- `checkpoint`: mixed validation package with exact composition (10 MC/SC, 3 free-text quiz, 5 scenario practice, 4 deep-dive drill rounds), component-aware scoring, threshold + minimum-component pass logic.
+- `capstone`: larger integrative package with exact composition (24 MC/SC, 8 free-text quiz, 8 scenario practice, 8 deep-dive drill rounds), stricter threshold + component minima.
 - `unlock_gate`: structural requirement checks and auto-completion when requirements are met.
 - `milestone`: structural precursor checks and auto-completion when requirements are met.
 
+KSA-aware calibration:
+
+- generation prompts and deterministic fallbacks use a `difficulty_profile` derived from node context + KSA profile/drill signals.
+- package payloads persist this calibration snapshot for debugging/reproducibility.
+
+Upload-based practice/checkpoint/capstone support:
+
+- direct per-attempt uploads are supported via the execution upload endpoint.
+- uploaded files are stored in `data/uploads/<username>/node-execution/<attempt_id>/...`.
+- attempt responses persist artifact references + extracted summaries (not full binary payloads).
+
 Current non-goal:
 
-- `learning_unit`, `practice`, `checkpoint`, `review`, and `capstone` node execution logic.
+- `learning_unit` and `review` node execution logic.
 
 ## Learning Page Tabs
 

@@ -56,6 +56,7 @@ from services.retriever.schemas.chat import (
 )
 from services.retriever.schemas.learning import (
     LearningNodeExecutionAttemptRead,
+    LearningNodeExecutionAttemptListResponse,
     LearningNodeExecutionCompleteResponse,
     LearningNodeExecutionStartResponse,
     LearningNodeExecutionSubmitRequest,
@@ -226,6 +227,8 @@ LEARNING_CONTEXT_DEFAULTS = {
     "learning_context_notes": "",
 }
 
+ASYNC_HEAVY_NODE_TYPES = {"assessment_hook", "checkpoint", "capstone"}
+
 SUPPORTED_ROLES = {"admin", "user", "student"}
 EXAMPLE_LEARNING_PATH_TITLE = "Example: Docker Fundamentals"
 EXAMPLE_LEARNING_PATH_TITLE_SECOND = "Example: Python Learning Sprint"
@@ -336,9 +339,12 @@ class RetrieverAppService:
         self.node_execution_service = LearningNodeExecutionService(
             self.chat_repository,
             llm_invoke=self.llm_client.invoke,
+            prompts_dir=self.prompt_builder.prompts_dir,
         )
         self.course_file_parser = CourseFileParser()
         self._ksa_validation_executor = ThreadPoolExecutor(max_workers=2, thread_name_prefix="ksa-validate")
+        self._node_execution_executor = ThreadPoolExecutor(max_workers=2, thread_name_prefix="node-exec")
+        self.data_dir = Path(self.settings.data_dir)
         self.courses_dir = Path(self.settings.courses_dir)
         self.courses_dir.mkdir(parents=True, exist_ok=True)
         if self.auth_manager is not None:
@@ -1690,6 +1696,8 @@ class RetrieverAppService:
         user: UserAccount,
         learning_path_id: str,
         node_id: str,
+        *,
+        force_new_attempt: bool = False,
     ) -> LearningNodeExecutionStartResponse | None:
         path = self.chat_repository.get_learning_path(learning_path_id)
         if path is None or not self._can_view_learning_path(user, path):
@@ -1703,13 +1711,33 @@ class RetrieverAppService:
         if context_record is None:
             raise ValueError("Node context is not available for execution")
         node_context = dict(context_record.context or {})
-        result = self.node_execution_service.start(
-            user=user,
-            learning_path=path,
-            definition=definition,
-            node=node,
-            node_context=node_context,
-        )
+        if node.type in ASYNC_HEAVY_NODE_TYPES:
+            result = self.node_execution_service.start_placeholder(
+                user=user,
+                learning_path=path,
+                definition=definition,
+                node=node,
+                node_context=node_context,
+                force_new_attempt=force_new_attempt,
+            )
+            attempt_id = str(result.attempt.id)
+            self._node_execution_executor.submit(
+                self._run_async_node_generation_job,
+                user.id,
+                path.id,
+                node.id,
+                attempt_id,
+                node_context,
+            )
+        else:
+            result = self.node_execution_service.start(
+                user=user,
+                learning_path=path,
+                definition=definition,
+                node=node,
+                node_context=node_context,
+                force_new_attempt=force_new_attempt,
+            )
         self._safe_recompute_personalization_layers(user=user, reasons=["learning_node_progress_updated"])
         self._safe_recompute_user_node_contexts_for_available_nodes(
             user=user,
@@ -1740,6 +1768,27 @@ class RetrieverAppService:
             return None
         return self._build_learning_node_execution_attempt_read(attempt)
 
+    def list_learning_node_execution_attempts(
+        self,
+        user: UserAccount,
+        learning_path_id: str,
+        node_id: str,
+        *,
+        limit: int = 20,
+    ) -> LearningNodeExecutionAttemptListResponse | None:
+        path = self.chat_repository.get_learning_path(learning_path_id)
+        if path is None or not self._can_view_learning_path(user, path):
+            return None
+        attempts = self.chat_repository.list_user_learning_node_execution_attempts(
+            user_id=user.id,
+            learning_path_id=learning_path_id,
+            node_id=node_id,
+            limit=max(1, min(limit, 100)),
+        )
+        return LearningNodeExecutionAttemptListResponse(
+            attempts=[self._build_learning_node_execution_attempt_read(item) for item in attempts]
+        )
+
     def submit_learning_node_execution(
         self,
         user: UserAccount,
@@ -1761,6 +1810,79 @@ class RetrieverAppService:
         if attempt.learning_path_id != learning_path_id or attempt.node_id != node_id:
             raise ValueError("Attempt does not belong to this node")
         return self._build_learning_node_execution_attempt_read(attempt)
+
+    def upload_learning_node_execution_files(
+        self,
+        user: UserAccount,
+        learning_path_id: str,
+        node_id: str,
+        attempt_id: str,
+        uploads: list[tuple[str, bytes]],
+        *,
+        task_id: str | None = None,
+    ) -> LearningNodeExecutionAttemptRead | None:
+        path = self.chat_repository.get_learning_path(learning_path_id)
+        if path is None or not self._can_view_learning_path(user, path):
+            return None
+        attempt = self.chat_repository.get_user_learning_node_execution_attempt(user_id=user.id, attempt_id=attempt_id)
+        if attempt is None:
+            return None
+        if attempt.learning_path_id != learning_path_id or attempt.node_id != node_id:
+            raise ValueError("Attempt does not belong to this node")
+        if attempt.status not in {"in_progress"}:
+            raise ValueError("Only active execution attempts can receive uploads")
+        if not uploads:
+            raise ValueError("No files uploaded")
+        if len(uploads) > self.settings.attachment_max_files:
+            raise ValueError(f"Maximum {self.settings.attachment_max_files} files allowed per upload")
+
+        max_bytes = self.settings.upload_max_file_size_mb * 1024 * 1024
+        validated: list[tuple[str, bytes]] = []
+        for file_name, content in uploads:
+            safe_name = Path(file_name).name
+            if safe_name != file_name:
+                raise ValueError(f"Invalid file name: {file_name}")
+            suffix = Path(safe_name).suffix.lower()
+            if suffix not in self.settings.attachment_allowed_extension_set:
+                raise ValueError(f"Unsupported attachment type: {suffix or safe_name}")
+            if len(content) > max_bytes:
+                raise ValueError(f"File exceeds {self.settings.upload_max_file_size_mb} MB limit: {safe_name}")
+            validated.append((safe_name, content))
+
+        processed = self.attachment_client.process_files(validated)
+        if not processed:
+            raise ValueError("Uploaded files could not be processed")
+        storage_dir = self.data_dir / "uploads" / user.username / "node-execution" / attempt_id
+        storage_dir.mkdir(parents=True, exist_ok=True)
+
+        uploaded_artifacts: list[dict[str, object]] = []
+        for idx, (safe_name, content) in enumerate(validated):
+            target_name = f"{datetime.now(timezone.utc).strftime('%Y%m%dT%H%M%S%f')}-{idx}-{safe_name}"
+            target_path = storage_dir / target_name
+            target_path.write_bytes(content)
+            relative_path = str(target_path.relative_to(self.data_dir))
+            processed_item = processed[idx] if idx < len(processed) else {}
+            uploaded_artifacts.append(
+                {
+                    "task_id": (task_id or "").strip() or None,
+                    "file_name": safe_name,
+                    "stored_relative_path": relative_path,
+                    "size_bytes": len(content),
+                    "type": str(processed_item.get("type") or ""),
+                    "extraction_method": str(processed_item.get("extraction_method") or ""),
+                    "quality": dict(processed_item.get("quality") or {}),
+                    "extracted_content": str(processed_item.get("content") or ""),
+                    "uploaded_at": datetime.now(timezone.utc).isoformat(),
+                }
+            )
+        updated = self.node_execution_service.submit_responses(
+            user=user,
+            attempt_id=attempt_id,
+            responses={"uploaded_artifacts": uploaded_artifacts},
+        )
+        if updated is None:
+            return None
+        return self._build_learning_node_execution_attempt_read(updated)
 
     def complete_learning_node_execution(
         self,
@@ -3955,7 +4077,36 @@ class RetrieverAppService:
             updated_at=record.updated_at,
         )
 
+    def _build_learning_node_execution_attempt_sections_progress(self, package: dict[str, object], responses: dict[str, object]) -> dict[str, object]:
+        mc_questions = list(package.get("mc_questions") or [])
+        mc_answers = dict(responses.get("mc_answers") or {})
+        free_text_questions = list(
+            package.get("free_text_questions")
+            or package.get("free_text_quiz_questions")
+            or package.get("review_prompts")
+            or []
+        )
+        free_text_answers = dict(responses.get("free_text_answers") or {})
+        scenario_questions = list(package.get("scenario_practice_questions") or package.get("tasks") or [])
+        scenario_answers = dict(responses.get("scenario_answers") or responses.get("task_answers") or {})
+        drill_rounds = list(package.get("deep_dive_rounds") or package.get("rounds") or [])
+        deep_dive_answers = dict(responses.get("deep_dive_answers") or {})
+        uploaded_artifacts = list(responses.get("uploaded_artifacts") or [])
+        return {
+            "mc": {"total": len(mc_questions), "answered": len(mc_answers)},
+            "free_text": {"total": len(free_text_questions), "answered": len(free_text_answers)},
+            "scenario": {"total": len(scenario_questions), "answered": len(scenario_answers)},
+            "drill": {"total_rounds": len(drill_rounds), "answered_items": len(deep_dive_answers)},
+            "uploads": {"count": len(uploaded_artifacts)},
+        }
+
     def _build_learning_node_execution_attempt_read(self, record) -> LearningNodeExecutionAttemptRead:
+        package = dict(record.package_json or {})
+        responses = dict(record.responses_json or {})
+        result = dict(record.result_json or {})
+        status = str(record.status or "")
+        is_active = bool(status in {"in_progress", "generating"} and record.completed_at is None)
+        is_resumable = bool(status == "in_progress" and record.completed_at is None)
         return LearningNodeExecutionAttemptRead(
             attempt_id=record.id,
             user_id=record.user_id,
@@ -3964,16 +4115,60 @@ class RetrieverAppService:
             node_type=record.node_type,
             status=record.status,
             generation_reason=record.generation_reason,
-            package=dict(record.package_json or {}),
-            responses=dict(record.responses_json or {}),
-            result=dict(record.result_json or {}),
+            package=package,
+            responses=responses,
+            result=result,
             context_snapshot=dict(record.context_snapshot_json or {}),
             source_node_window=list(record.source_node_window_json or []),
+            is_resumable=is_resumable,
+            is_active=is_active,
+            attempt_closed_reason=str(result.get("attempt_closed_reason") or "").strip() or None,
+            package_sections_progress=self._build_learning_node_execution_attempt_sections_progress(package, responses),
             started_at=record.started_at,
             completed_at=record.completed_at,
             created_at=record.created_at,
             updated_at=record.updated_at,
         )
+
+    def _run_async_node_generation_job(
+        self,
+        user_id: int,
+        learning_path_id: str,
+        node_id: str,
+        attempt_id: str,
+        node_context: dict[str, object],
+    ) -> None:
+        try:
+            user = self.chat_repository.get_user_by_id(user_id)
+            path = self.chat_repository.get_learning_path(learning_path_id)
+            if user is None or path is None:
+                logger.warning(
+                    "Async node generation skipped due to missing user/path",
+                    extra={"user_id": user_id, "learning_path_id": learning_path_id, "node_id": node_id, "attempt_id": attempt_id},
+                )
+                return
+            definition = self._course_definition_from_learning_path(path)
+            node_by_id = {item.id: item for item in definition.nodes}
+            node = node_by_id.get(node_id)
+            if node is None:
+                logger.warning(
+                    "Async node generation skipped due to missing node",
+                    extra={"learning_path_id": learning_path_id, "node_id": node_id, "attempt_id": attempt_id},
+                )
+                return
+            self.node_execution_service.finalize_started_attempt_generation(
+                user=user,
+                attempt_id=attempt_id,
+                learning_path=path,
+                definition=definition,
+                node=node,
+                node_context=dict(node_context or {}),
+            )
+        except Exception:
+            logger.exception(
+                "Async node generation job failed",
+                extra={"user_id": user_id, "learning_path_id": learning_path_id, "node_id": node_id, "attempt_id": attempt_id},
+            )
 
     def _resolve_assistant_mode(self, assistant_mode: str | None) -> str:
         mode = (assistant_mode or self.settings.default_assistant_mode).strip().lower()

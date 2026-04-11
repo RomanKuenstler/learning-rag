@@ -37,8 +37,16 @@ Each attempt stores:
 - responses
 - evaluation result
 - node context snapshot used at generation time
-- source node window (for quiz)
+- source node window/scope metadata
 - status/timestamps
+
+Execution semantics:
+
+- runtime node packages are generated only on explicit `start`.
+- default `start` resumes an active attempt for that user/path/node.
+- `force_new_attempt=true` starts a new attempt and marks the previous active attempt as superseded.
+- users can inspect attempt history through `GET /api/learning-paths/{learning_path_id}/nodes/{node_id}/execution/attempts`.
+- upload-based tasks are attached to attempts through `POST /api/learning-paths/{learning_path_id}/nodes/{node_id}/execution/attempts/{attempt_id}/uploads`.
 
 This enables resumability, reproducible scoring/completion decisions, and later analytics.
 

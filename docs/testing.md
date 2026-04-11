@@ -207,6 +207,10 @@ Covered behaviors:
 
 - assessment_hook runtime package generation includes 8-16 topics and per-topic archetype rounds
 - quiz runtime package shape includes 12 MC/SC, 3 deep-dive rounds, and 2 free-text items
+- practice runtime package shape includes 3-5 mixed tasks
+- checkpoint runtime package shape includes 10 MC/SC, 3 free-text quiz items, 5 scenario items, and 4 deep-dive rounds
+- capstone runtime package shape includes 24 MC/SC, 8 free-text quiz items, 8 scenario items, and 8 deep-dive rounds
+- active-attempt resume behavior and `force_new_attempt` repeat behavior
 - unlock_gate structural requirement checks can auto-complete when satisfied
 
 Recommended focused run:

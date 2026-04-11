@@ -1,5 +1,41 @@
 # Changelog
 
+## 2026-04-11 01:05 UTC
+
+- Extended node execution runtime layer with full support for:
+  - `practice`
+  - `checkpoint`
+  - `capstone`
+- Added resumable/repeatable start semantics:
+  - `POST /api/learning-paths/{learning_path_id}/nodes/{node_id}/execution/start?force_new_attempt=true|false`
+  - default start resumes active attempt
+  - `force_new_attempt=true` creates a new attempt and supersedes previous active attempt.
+- Added attempt history endpoint:
+  - `GET /api/learning-paths/{learning_path_id}/nodes/{node_id}/execution/attempts`
+- Added per-attempt upload endpoint for practical tasks:
+  - `POST /api/learning-paths/{learning_path_id}/nodes/{node_id}/execution/attempts/{attempt_id}/uploads`
+  - validates extension/size with existing attachment policy
+  - stores binaries under `data/uploads/<username>/node-execution/<attempt_id>/...`
+  - persists artifact references + extracted summaries in attempt responses.
+- Added KSA-aware difficulty calibration profile in runtime package generation for all runtime-generated node types in this layer.
+- Implemented new package/evaluation behaviors:
+  - `practice`: 3-5 mixed scenario/upload tasks with rubric scoring and required-task completion checks.
+  - `checkpoint`: exact mixed package (10 MC/SC, 3 free-text quiz, 5 scenario, 4 deep-dive rounds) with component-aware pass logic.
+  - `capstone`: exact larger mixed package (24 MC/SC, 8 free-text quiz, 8 scenario, 8 deep-dive rounds) with stricter pass logic.
+- Extended execution attempt read schema with:
+  - `is_resumable`
+  - `is_active`
+  - `attempt_closed_reason`
+  - `package_sections_progress`.
+- Updated tests:
+  - `tests/test_node_execution_service.py`
+  - added coverage for practice/checkpoint/capstone package composition and resume/repeat semantics.
+- Updated docs:
+  - `docs/learning.md`
+  - `docs/courses.md`
+  - `docs/architecture.md`
+  - `docs/testing.md`
+
 ## 2026-04-10 23:10 UTC
 
 - Implemented node-type execution layer for:

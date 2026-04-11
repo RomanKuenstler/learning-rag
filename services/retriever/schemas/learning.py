@@ -362,6 +362,10 @@ class LearningNodeExecutionAttemptRead(BaseModel):
     result: dict[str, object] = Field(default_factory=dict)
     context_snapshot: dict[str, object] = Field(default_factory=dict)
     source_node_window: list[str] = Field(default_factory=list)
+    is_resumable: bool = False
+    is_active: bool = False
+    attempt_closed_reason: str | None = None
+    package_sections_progress: dict[str, object] = Field(default_factory=dict)
     started_at: datetime
     completed_at: datetime | None = None
     created_at: datetime
@@ -382,6 +386,10 @@ class LearningNodeExecutionCompleteResponse(BaseModel):
     attempt: LearningNodeExecutionAttemptRead
     node_completed: bool = False
     node_status: str = "in_progress"
+
+
+class LearningNodeExecutionAttemptListResponse(BaseModel):
+    attempts: list[LearningNodeExecutionAttemptRead] = Field(default_factory=list)
 
 
 class LearningModuleCreateRequest(BaseModel):

@@ -1,0 +1,285 @@
+{
+  "schema_version": 2,
+  "source_schema_version": 2,
+  "id": "smoke-node-exec-anna",
+  "title": "Smoke Node Execution Anna",
+  "description": "Local smoke path for node execution",
+  "scope": "user",
+  "owner_user_id": 3,
+  "subject": "DevOps",
+  "difficulty_level": "intermediate",
+  "estimated_duration_minutes": null,
+  "status": "published",
+  "allowed_file_ids": [],
+  "allowed_tags": [],
+  "chapters": [
+    {
+      "id": "ch-1",
+      "title": "Smoke",
+      "description": "Smoke chapter",
+      "order_index": 0,
+      "metadata": {}
+    }
+  ],
+  "branches": [
+    {
+      "id": "br-1",
+      "title": "Main",
+      "description": "Main branch",
+      "required": true,
+      "metadata": {}
+    }
+  ],
+  "nodes": [
+    {
+      "id": "smoke-assessment",
+      "title": "Smoke Assessment Hook",
+      "description": "Assess prior operations knowledge including monitoring, alerting, incident response, and release controls.",
+      "type": "assessment_hook",
+      "chapter_id": "ch-1",
+      "branch_id": "br-1",
+      "required": true,
+      "prerequisites": {
+        "requires_all": [],
+        "requires_any": [],
+        "recommended": []
+      },
+      "completion_mode": "assessment_threshold",
+      "estimated_duration_minutes": 20,
+      "layout": {
+        "x": 0.0,
+        "y": 0.0
+      },
+      "metadata": {
+        "topics": [
+          "monitoring",
+          "incident response",
+          "release safety"
+        ],
+        "goals": [
+          "validate operational readiness"
+        ]
+      },
+      "display": {},
+      "ksa": [],
+      "unlocks": {
+        "node_ids": [],
+        "branch_ids": [],
+        "recommended_next_node_ids": []
+      },
+      "rewards": {
+        "estimated_ksa_gain": {},
+        "effort_score": null,
+        "reward_tags": []
+      },
+      "retrospective_hooks": {
+        "retrospective_after": false,
+        "review_recommended": false,
+        "recap_checkpoint_available": false
+      },
+      "ksa_hooks": {
+        "mini_assessment_available": false,
+        "recommended_reassessment_topics": [],
+        "unlocks_deeper_refinement": false
+      },
+      "remediation": {
+        "is_remediation_node": false,
+        "recommended_if_failed_node_ids": [],
+        "supports_review_for_node_ids": []
+      },
+      "adaptive_unlock": {
+        "ksa_thresholds": [],
+        "requires_branch_completion_ids": [],
+        "requires_checkpoint_node_ids": [],
+        "requires_review_recommended": false,
+        "recommended_only": false
+      }
+    },
+    {
+      "id": "smoke-quiz",
+      "title": "Smoke Quiz",
+      "description": "Validate foundational DevOps knowledge before moving forward.",
+      "type": "quiz",
+      "chapter_id": "ch-1",
+      "branch_id": "br-1",
+      "required": true,
+      "prerequisites": {
+        "requires_all": [],
+        "requires_any": [],
+        "recommended": []
+      },
+      "completion_mode": "quiz_pass",
+      "estimated_duration_minutes": 25,
+      "layout": {
+        "x": 0.0,
+        "y": 0.0
+      },
+      "metadata": {
+        "topics": [
+          "ci/cd",
+          "containers",
+          "infrastructure as code"
+        ],
+        "goals": [
+          "demonstrate baseline understanding"
+        ]
+      },
+      "display": {},
+      "ksa": [],
+      "unlocks": {
+        "node_ids": [],
+        "branch_ids": [],
+        "recommended_next_node_ids": []
+      },
+      "rewards": {
+        "estimated_ksa_gain": {},
+        "effort_score": null,
+        "reward_tags": []
+      },
+      "retrospective_hooks": {
+        "retrospective_after": false,
+        "review_recommended": false,
+        "recap_checkpoint_available": false
+      },
+      "ksa_hooks": {
+        "mini_assessment_available": false,
+        "recommended_reassessment_topics": [],
+        "unlocks_deeper_refinement": false
+      },
+      "remediation": {
+        "is_remediation_node": false,
+        "recommended_if_failed_node_ids": [],
+        "supports_review_for_node_ids": []
+      },
+      "adaptive_unlock": {
+        "ksa_thresholds": [],
+        "requires_branch_completion_ids": [],
+        "requires_checkpoint_node_ids": [],
+        "requires_review_recommended": false,
+        "recommended_only": false
+      }
+    },
+    {
+      "id": "smoke-gate",
+      "title": "Smoke Unlock Gate",
+      "description": "Structural gate",
+      "type": "unlock_gate",
+      "chapter_id": "ch-1",
+      "branch_id": "br-1",
+      "required": true,
+      "prerequisites": {
+        "requires_all": [],
+        "requires_any": [],
+        "recommended": []
+      },
+      "completion_mode": "gate_unlock",
+      "estimated_duration_minutes": 5,
+      "layout": {
+        "x": 0.0,
+        "y": 0.0
+      },
+      "metadata": {},
+      "display": {},
+      "ksa": [],
+      "unlocks": {
+        "node_ids": [],
+        "branch_ids": [],
+        "recommended_next_node_ids": []
+      },
+      "rewards": {
+        "estimated_ksa_gain": {},
+        "effort_score": null,
+        "reward_tags": []
+      },
+      "retrospective_hooks": {
+        "retrospective_after": false,
+        "review_recommended": false,
+        "recap_checkpoint_available": false
+      },
+      "ksa_hooks": {
+        "mini_assessment_available": false,
+        "recommended_reassessment_topics": [],
+        "unlocks_deeper_refinement": false
+      },
+      "remediation": {
+        "is_remediation_node": false,
+        "recommended_if_failed_node_ids": [],
+        "supports_review_for_node_ids": []
+      },
+      "adaptive_unlock": {
+        "ksa_thresholds": [],
+        "requires_branch_completion_ids": [],
+        "requires_checkpoint_node_ids": [],
+        "requires_review_recommended": false,
+        "recommended_only": false
+      }
+    },
+    {
+      "id": "smoke-milestone",
+      "title": "Smoke Milestone",
+      "description": "Structural milestone",
+      "type": "milestone",
+      "chapter_id": "ch-1",
+      "branch_id": "br-1",
+      "required": true,
+      "prerequisites": {
+        "requires_all": [],
+        "requires_any": [],
+        "recommended": []
+      },
+      "completion_mode": "manual",
+      "estimated_duration_minutes": 5,
+      "layout": {
+        "x": 0.0,
+        "y": 0.0
+      },
+      "metadata": {},
+      "display": {},
+      "ksa": [],
+      "unlocks": {
+        "node_ids": [],
+        "branch_ids": [],
+        "recommended_next_node_ids": []
+      },
+      "rewards": {
+        "estimated_ksa_gain": {},
+        "effort_score": null,
+        "reward_tags": []
+      },
+      "retrospective_hooks": {
+        "retrospective_after": false,
+        "review_recommended": false,
+        "recap_checkpoint_available": false
+      },
+      "ksa_hooks": {
+        "mini_assessment_available": false,
+        "recommended_reassessment_topics": [],
+        "unlocks_deeper_refinement": false
+      },
+      "remediation": {
+        "is_remediation_node": false,
+        "recommended_if_failed_node_ids": [],
+        "supports_review_for_node_ids": []
+      },
+      "adaptive_unlock": {
+        "ksa_thresholds": [],
+        "requires_branch_completion_ids": [],
+        "requires_checkpoint_node_ids": [],
+        "requires_review_recommended": false,
+        "recommended_only": false
+      }
+    }
+  ],
+  "edges": [],
+  "entry_node_ids": [
+    "smoke-assessment",
+    "smoke-quiz",
+    "smoke-gate",
+    "smoke-milestone"
+  ],
+  "completion_rules": {
+    "required_completion": "all_required_nodes"
+  },
+  "visual_layout": {},
+  "metadata": {}
+}

@@ -196,6 +196,26 @@ class RepoStub:
         self.attempts[attempt.id] = attempt
         return attempt
 
+    def get_latest_user_learning_node_execution_attempt(self, *, user_id: int, learning_path_id: str, node_id: str):
+        candidates = [
+            attempt
+            for attempt in self.attempts.values()
+            if attempt.user_id == user_id and attempt.learning_path_id == learning_path_id and attempt.node_id == node_id
+        ]
+        if not candidates:
+            return None
+        candidates.sort(key=lambda item: item.created_at, reverse=True)
+        return candidates[0]
+
+    def list_user_learning_node_execution_attempts(self, *, user_id: int, learning_path_id: str, node_id: str, limit: int = 20):
+        candidates = [
+            attempt
+            for attempt in self.attempts.values()
+            if attempt.user_id == user_id and attempt.learning_path_id == learning_path_id and attempt.node_id == node_id
+        ]
+        candidates.sort(key=lambda item: item.created_at, reverse=True)
+        return candidates[:limit]
+
     def get_user_learning_node_execution_attempt(self, *, user_id: int, attempt_id: str):
         attempt = self.attempts.get(attempt_id)
         if attempt is None or attempt.user_id != user_id:
@@ -293,3 +313,97 @@ def test_unlock_gate_start_auto_completes_when_prereqs_met() -> None:
     result = service.start(user=_user(), learning_path=_path(), definition=definition, node=node, node_context=_context())
     assert result.auto_completed is True
     assert repo.progress["n3"] == "completed"
+
+
+def test_resume_and_force_new_attempt_semantics() -> None:
+    repo = RepoStub()
+    service = LearningNodeExecutionService(repo, llm_invoke=llm_stub)  # type: ignore[arg-type]
+    definition = _definition()
+    node = next(item for item in definition.nodes if item.id == "n2")
+
+    first = service.start(user=_user(), learning_path=_path(), definition=definition, node=node, node_context=_context())
+    resumed = service.start(user=_user(), learning_path=_path(), definition=definition, node=node, node_context=_context())
+    repeated = service.start(
+        user=_user(),
+        learning_path=_path(),
+        definition=definition,
+        node=node,
+        node_context=_context(),
+        force_new_attempt=True,
+    )
+
+    assert first.attempt.id == resumed.attempt.id
+    assert repeated.attempt.id != first.attempt.id
+    old = repo.get_user_learning_node_execution_attempt(user_id=7, attempt_id=first.attempt.id)
+    assert old is not None
+    assert old.status == "superseded"
+
+
+def test_practice_start_generates_3_to_5_tasks() -> None:
+    repo = RepoStub()
+    service = LearningNodeExecutionService(repo, llm_invoke=llm_stub)  # type: ignore[arg-type]
+    definition = _definition()
+    practice = CourseNodeDefinition.model_validate(
+        {
+            **next(item.model_dump() for item in definition.nodes if item.id == "n2"),
+            "id": "n-practice",
+            "type": "practice",
+            "completion_mode": "practice_complete",
+            "prerequisites": {"requires_all": ["n1"], "requires_any": [], "recommended": []},
+        }
+    )
+    definition = definition.model_copy(update={"nodes": [definition.nodes[0], practice, definition.nodes[2]], "entry_node_ids": ["n1"]})
+    repo.progress["n-practice"] = "available"
+
+    result = service.start(user=_user(), learning_path=_path(), definition=definition, node=practice, node_context=_context())
+    tasks = list(result.attempt.package_json.get("tasks") or [])
+    assert 3 <= len(tasks) <= 5
+
+
+def test_checkpoint_start_composition_counts() -> None:
+    repo = RepoStub()
+    service = LearningNodeExecutionService(repo, llm_invoke=llm_stub)  # type: ignore[arg-type]
+    definition = _definition()
+    checkpoint = CourseNodeDefinition.model_validate(
+        {
+            **next(item.model_dump() for item in definition.nodes if item.id == "n2"),
+            "id": "n-checkpoint",
+            "type": "checkpoint",
+            "completion_mode": "checkpoint_pass",
+            "prerequisites": {"requires_all": ["n1"], "requires_any": [], "recommended": []},
+        }
+    )
+    definition = definition.model_copy(update={"nodes": [definition.nodes[0], checkpoint, definition.nodes[2]], "entry_node_ids": ["n1"]})
+    repo.progress["n-checkpoint"] = "available"
+
+    result = service.start(user=_user(), learning_path=_path(), definition=definition, node=checkpoint, node_context=_context())
+    package = dict(result.attempt.package_json or {})
+    assert len(list(package.get("mc_questions") or [])) == 10
+    assert len(list(package.get("free_text_quiz_questions") or [])) == 3
+    assert len(list(package.get("scenario_practice_questions") or [])) == 5
+    assert len(list(package.get("deep_dive_rounds") or [])) == 4
+
+
+def test_capstone_start_composition_counts() -> None:
+    repo = RepoStub()
+    service = LearningNodeExecutionService(repo, llm_invoke=llm_stub)  # type: ignore[arg-type]
+    definition = _definition()
+    capstone = CourseNodeDefinition.model_validate(
+        {
+            **next(item.model_dump() for item in definition.nodes if item.id == "n2"),
+            "id": "n-capstone",
+            "type": "capstone",
+            "completion_mode": "checkpoint_pass",
+            "prerequisites": {"requires_all": ["n1"], "requires_any": [], "recommended": []},
+            "metadata": {"global_final": True},
+        }
+    )
+    definition = definition.model_copy(update={"nodes": [definition.nodes[0], capstone, definition.nodes[2]], "entry_node_ids": ["n1"]})
+    repo.progress["n-capstone"] = "available"
+
+    result = service.start(user=_user(), learning_path=_path(), definition=definition, node=capstone, node_context=_context())
+    package = dict(result.attempt.package_json or {})
+    assert len(list(package.get("mc_questions") or [])) == 24
+    assert len(list(package.get("free_text_quiz_questions") or [])) == 8
+    assert len(list(package.get("scenario_practice_questions") or [])) == 8
+    assert len(list(package.get("deep_dive_rounds") or [])) == 8
