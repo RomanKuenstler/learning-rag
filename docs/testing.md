@@ -212,7 +212,28 @@ Covered behaviors:
 - capstone runtime package shape includes 24 MC/SC, 8 free-text quiz items, 8 scenario items, and 8 deep-dive rounds
 - active-attempt resume behavior and `force_new_attempt` repeat behavior
 - unlock_gate structural requirement checks can auto-complete when satisfied
+- learning_unit runtime plan generation includes phased structure, niveau hypothesis, and mini-topic lesson briefs
+- review runtime generation includes bounded review scope, topic aggregation, and structured recap plan
 
 Recommended focused run:
 
 - `pytest tests/test_node_execution_service.py`
+
+Additional focused checks:
+
+- `pytest tests/test_node_context_engine.py`
+
+Smoke validation (manual, API):
+
+1. Start a `learning_unit` node and verify package fields:
+   - `context_summary`
+   - `learner_niveau_hypothesis`
+   - `phase_flow`
+   - `mini_topic_lessons`
+   - `recap_plan`
+2. Start a `review` node and verify package fields:
+   - `review_scope_summary`
+   - `topic_aggregation`
+   - `content_aware_recap_summary`
+   - `recap_structure`
+   - `interaction_hooks`

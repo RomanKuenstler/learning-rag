@@ -346,3 +346,39 @@ Recompute triggers are targeted:
 - diagnostic completion (LAA/MOA/LTA) -> Group 4
 - KSA assessment/drill completion -> Group 5
 - live checks/feedback/node runtime signals -> Group 6
+
+## Learning Unit And Review Runtime Plans
+
+`learning_unit` and `review` now generate persisted runtime **plan packages** on node start.
+
+`learning_unit` package now includes:
+
+- context summary (course/branch, previous topics, target topics, next topics, KSA/drill signals)
+- learner niveau hypothesis with user-confirmable self-positioning step
+- topic self-explanation step (`high_level` and `why_it_matters`)
+- phase flow (`phase_1`..`phase_6`) with mini-topic lesson plan briefs
+- recap plan briefs (not full final lesson monologues)
+- interaction hooks (`questions`, `explanation_rating`, `reexplanation`, `node_feedback`)
+
+`review` package now includes:
+
+- backward review scope until last `review|checkpoint|milestone|unlock_gate`
+- learning-unit-emphasized topic aggregation
+- content-aware recap summary and recap goals
+- structured recap steps with interaction hooks
+
+For both node types:
+
+- generation happens only on start
+- package persists per user/path/node attempt
+- active attempts are resumable
+- forced new attempts preserve history
+- KSA big map + drill signals are used for calibration
+
+Prompt files used for this layer:
+
+- `prompts/learning-node-learning-unit-topic-extraction.md`
+- `prompts/learning-node-learning-unit-niveau-estimation.md`
+- `prompts/learning-node-learning-unit-lesson-plan-generation.md`
+- `prompts/learning-node-review-topic-aggregation.md`
+- `prompts/learning-node-review-recap-plan-generation.md`

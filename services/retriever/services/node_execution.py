@@ -501,6 +501,29 @@ class LearningNodeExecutionService:
                     started_at=now,
                     completed_at=None,
                 )
+        elif node.type == "learning_unit":
+            result_json = self._evaluate_learning_unit(responses=responses, package=package)
+            node_completed = bool(result_json.get("passed"))
+            if node_completed:
+                node_completed = self._complete_node_progress(
+                    user=user,
+                    learning_path=learning_path,
+                    definition=definition,
+                    node=node,
+                    score=float(result_json.get("overall_score") or 0.0),
+                    gate_unlocked=True,
+                )
+                node_status = "completed" if node_completed else "in_progress"
+            else:
+                node_status = "failed_needs_retry"
+                self.repository.upsert_user_learning_node_progress(
+                    user_id=user.id,
+                    learning_path_id=learning_path.id,
+                    node_id=node.id,
+                    status="failed_needs_retry",
+                    started_at=now,
+                    completed_at=None,
+                )
         elif node.type == "review":
             result_json = self._evaluate_review(user=user, responses=responses, package=package)
             node_completed = bool(result_json.get("passed"))
@@ -624,6 +647,12 @@ class LearningNodeExecutionService:
             mapping.setdefault(node.id, set()).update(node.prerequisites.requires_any)
         return mapping
 
+    def _build_outgoing_map(self, definition: CourseDefinition) -> dict[str, list[str]]:
+        mapping: dict[str, list[str]] = {node.id: [] for node in definition.nodes}
+        for edge in definition.edges:
+            mapping.setdefault(edge.from_node_id, []).append(edge.to_node_id)
+        return mapping
+
     def _collect_ancestors(self, *, definition: CourseDefinition, node_id: str) -> list[str]:
         parents = self._build_hard_prev_map(definition)
         seen: set[str] = set()
@@ -638,15 +667,18 @@ class LearningNodeExecutionService:
             stack.extend(list(parents.get(current, set())))
         return ordered
 
-    def _practice_source_window(self, *, definition: CourseDefinition, node: CourseNodeDefinition) -> list[str]:
-        node_by_id = {item.id: item for item in definition.nodes}
-        ancestors = self._collect_ancestors(definition=definition, node_id=node.id)
-        return [item for item in ancestors if node_by_id.get(item) and node_by_id[item].type in {"learning_unit", "quiz"}]
-
-    def _checkpoint_source_window(self, *, definition: CourseDefinition, node: CourseNodeDefinition) -> list[str]:
+    def _collect_boundary_window(
+        self,
+        *,
+        definition: CourseDefinition,
+        node: CourseNodeDefinition,
+        boundary_types: set[str],
+        include_current: bool = True,
+    ) -> tuple[list[str], list[str]]:
         parents = self._build_hard_prev_map(definition)
         node_by_id = {item.id: item for item in definition.nodes}
-        window: list[str] = [node.id]
+        window: list[str] = [node.id] if include_current else []
+        boundaries: list[str] = []
         seen = {node.id}
         stack = list(parents.get(node.id, set()))
         while stack:
@@ -654,11 +686,26 @@ class LearningNodeExecutionService:
             if parent_id in seen:
                 continue
             seen.add(parent_id)
-            window.append(parent_id)
             parent_node = node_by_id.get(parent_id)
-            if parent_node and parent_node.type in CHECKPOINT_BOUNDARY_NODE_TYPES:
+            if parent_node and parent_node.type in boundary_types:
+                boundaries.append(parent_id)
                 continue
+            window.append(parent_id)
             stack.extend(list(parents.get(parent_id, set())))
+        return window, sorted(set(boundaries))
+
+    def _practice_source_window(self, *, definition: CourseDefinition, node: CourseNodeDefinition) -> list[str]:
+        node_by_id = {item.id: item for item in definition.nodes}
+        ancestors = self._collect_ancestors(definition=definition, node_id=node.id)
+        return [item for item in ancestors if node_by_id.get(item) and node_by_id[item].type in {"learning_unit", "quiz"}]
+
+    def _checkpoint_source_window(self, *, definition: CourseDefinition, node: CourseNodeDefinition) -> list[str]:
+        window, _ = self._collect_boundary_window(
+            definition=definition,
+            node=node,
+            boundary_types=CHECKPOINT_BOUNDARY_NODE_TYPES,
+            include_current=True,
+        )
         return window
 
     def _capstone_scope_window(self, *, definition: CourseDefinition, node: CourseNodeDefinition) -> list[str]:
@@ -681,22 +728,127 @@ class LearningNodeExecutionService:
         return dedup
 
     def _review_source_window(self, *, definition: CourseDefinition, node: CourseNodeDefinition) -> list[str]:
-        parents = self._build_hard_prev_map(definition)
-        window: list[str] = [node.id]
-        seen = {node.id}
-        stack = list(parents.get(node.id, set()))
-        node_by_id = {item.id: item for item in definition.nodes}
-        while stack:
-            parent_id = stack.pop()
-            if parent_id in seen:
-                continue
-            seen.add(parent_id)
-            window.append(parent_id)
-            parent_node = node_by_id.get(parent_id)
-            if parent_node and parent_node.type in REVIEW_BOUNDARY_NODE_TYPES:
-                continue
-            stack.extend(list(parents.get(parent_id, set())))
+        window, _ = self._collect_boundary_window(
+            definition=definition,
+            node=node,
+            boundary_types=REVIEW_BOUNDARY_NODE_TYPES,
+            include_current=False,
+        )
         return window
+
+    def _direct_neighbor_nodes(
+        self,
+        *,
+        definition: CourseDefinition,
+        node: CourseNodeDefinition,
+    ) -> tuple[list[CourseNodeDefinition], list[CourseNodeDefinition]]:
+        hard_prev = self._build_hard_prev_map(definition)
+        outgoing = self._build_outgoing_map(definition)
+        node_by_id = {item.id: item for item in definition.nodes}
+        previous = [node_by_id[item_id] for item_id in sorted(hard_prev.get(node.id, set())) if item_id in node_by_id]
+        nxt = [node_by_id[item_id] for item_id in sorted(set(outgoing.get(node.id, []))) if item_id in node_by_id]
+        return previous, nxt
+
+    def _node_topic_snapshot(self, node: CourseNodeDefinition) -> dict[str, Any]:
+        topics = _norm_list(node.metadata.get("topics"))
+        goals = _norm_list(node.metadata.get("goals"))
+        concepts = _norm_list(node.metadata.get("concepts"))
+        ksa_links = [item.model_dump() for item in node.ksa]
+        return {
+            "node_id": node.id,
+            "node_title": node.title,
+            "node_type": node.type,
+            "topics": topics,
+            "goals": goals,
+            "concepts": concepts,
+            "ksa_links": ksa_links,
+            "difficulty": str(node.metadata.get("difficulty") or node.metadata.get("difficulty_level") or ""),
+            "description": str(node.description or ""),
+        }
+
+    def _topic_tokenize(self, values: list[str]) -> set[str]:
+        out: set[str] = set()
+        for raw in values:
+            text = str(raw or "").strip().lower().replace("/", " ").replace("_", " ")
+            for token in re.split(r"[^a-z0-9]+", text):
+                token = token.strip()
+                if len(token) >= 3:
+                    out.add(token)
+        return out
+
+    def _extract_drill_signals(self, *, user: UserAccount, topic_tokens: set[str], limit: int = 40) -> dict[str, Any]:
+        attempts = list(self.repository.list_user_ksa_drill_attempts(user_id=user.id, limit=limit) or [])
+        related: list[dict[str, Any]] = []
+        for item in attempts:
+            result_json = dict(getattr(item, "result_json", {}) or {})
+            score = _to_float(result_json.get("overall_score"), -1.0)
+            topic_keys = [str(x).strip().lower() for x in list(result_json.get("selected_topic_keys") or []) if str(x).strip()]
+            topic_blob = " ".join(topic_keys)
+            if topic_tokens and not any(token in topic_blob for token in topic_tokens):
+                continue
+            related.append(
+                {
+                    "attempt_id": str(getattr(item, "id", "")),
+                    "status": str(getattr(item, "status", "")),
+                    "selected_topic_keys": topic_keys[:20],
+                    "overall_score": None if score < 0 else round(score, 4),
+                    "completed_at": str(getattr(item, "completed_at", "") or ""),
+                }
+            )
+        scores = [float(x["overall_score"]) for x in related if x.get("overall_score") is not None]
+        return {
+            "related_attempts_count": len(related),
+            "average_related_score": round(sum(scores) / float(len(scores) or 1), 4) if scores else None,
+            "recent_related_attempts": related[:8],
+        }
+
+    def _collect_ksa_levels(self, *, profile_json: dict[str, Any], topics: list[str]) -> list[dict[str, Any]]:
+        tokens = self._topic_tokenize(topics)
+        levels: list[dict[str, Any]] = []
+        for section in ("knowledge", "skills", "abilities"):
+            source = dict(profile_json.get(section) or {})
+            for key, value in source.items():
+                text = str(key).replace("_", " ").lower()
+                if tokens and not any(token in text for token in tokens):
+                    continue
+                levels.append(
+                    {
+                        "group": section,
+                        "topic": str(key),
+                        "level": round(_to_float(value, 0.0), 4),
+                    }
+                )
+        return levels
+
+    def _derive_topic_strengths(
+        self,
+        *,
+        levels: list[dict[str, Any]],
+        target_topics: list[str],
+        previous_topics: list[str],
+    ) -> dict[str, Any]:
+        sorted_levels = sorted(levels, key=lambda item: float(item.get("level") or 0.0), reverse=True)
+        strong = sorted_levels[:6]
+        weak = sorted(sorted_levels, key=lambda item: float(item.get("level") or 0.0))[:6]
+        bridge = [
+            str(item.get("topic") or "").replace("_", " ")
+            for item in strong
+            if str(item.get("topic") or "").strip()
+        ][:5]
+        risk = [
+            str(item.get("topic") or "").replace("_", " ")
+            for item in weak
+            if str(item.get("topic") or "").strip()
+        ][:5]
+        if not bridge:
+            bridge = _first_items(previous_topics, target_topics, limit=5)
+        if not risk:
+            risk = _first_items(target_topics, limit=5)
+        return {
+            "strong_topics_for_bridging": bridge,
+            "weak_topics_for_scaffolding": risk,
+            "topic_level_snapshot": sorted_levels[:20],
+        }
 
     def _build_runtime_package_for_node(
         self,
@@ -750,6 +902,14 @@ class LearningNodeExecutionService:
             )
         if node.type == "review":
             return self._build_review_package(
+                user=user,
+                learning_path=learning_path,
+                definition=definition,
+                node=node,
+                node_context=node_context,
+            )
+        if node.type == "learning_unit":
+            return self._build_learning_unit_package(
                 user=user,
                 learning_path=learning_path,
                 definition=definition,
@@ -1434,7 +1594,16 @@ class LearningNodeExecutionService:
         node_context: dict[str, Any],
     ) -> dict[str, Any]:
         source_window = self._review_source_window(definition=definition, node=node)
+        _, boundary_nodes = self._collect_boundary_window(
+            definition=definition,
+            node=node,
+            boundary_types=REVIEW_BOUNDARY_NODE_TYPES,
+            include_current=False,
+        )
         topics = self._topic_candidates_from_nodes(definition=definition, node_ids=source_window, node_context=node_context)
+        node_by_id = {item.id: item for item in definition.nodes}
+        scope_nodes = [node_by_id[item_id] for item_id in source_window if item_id in node_by_id]
+        learning_unit_nodes = [item for item in scope_nodes if item.type == "learning_unit"]
         difficulty_profile = self._build_difficulty_profile(
             user=user,
             node=node,
@@ -1442,46 +1611,458 @@ class LearningNodeExecutionService:
             node_context=node_context,
             source_node_window=source_window,
         )
-        prompt = self._load_prompt(
-            "learning-node-review-package-generation.md",
-            "Return strict JSON object with mc_questions (exactly 6) and review_prompts (exactly 4). "
-            "mc question shape: id,type(single|multiple),question,options,correct_answers,topic,explanation. "
-            "review prompt shape: id,question,topic,rubric(array 3..6). "
-            "Keep this focused on consolidation and transfer with KSA-aware difficulty."
+        profile = self.repository.get_user_ksa_profile(user.id)
+        profile_json = dict(profile.profile_json or {}) if profile else {}
+        topic_tokens = self._topic_tokenize(topics)
+        drill_signals = self._extract_drill_signals(user=user, topic_tokens=topic_tokens)
+        level_snapshot = self._collect_ksa_levels(profile_json=profile_json, topics=topics)
+        strengths = self._derive_topic_strengths(levels=level_snapshot, target_topics=topics, previous_topics=topics)
+        topic_agg_prompt = self._load_prompt(
+            "learning-node-review-topic-aggregation.md",
+            "Return strict JSON object with grouped_topics (array) and key_themes (array). "
+            "Each grouped_topics item must include topic, importance(high|medium|low), source_node_ids(array), related_ksa(array), reinforcement_priority(0..1)."
         )
-        payload = {
+        topic_payload = {
             "course": {"id": learning_path.id, "subject": learning_path.subject, "difficulty": learning_path.difficulty_level},
             "node": {"id": node.id, "title": node.title, "description": node.description, "metadata": dict(node.metadata or {})},
             "source_node_window": source_window,
+            "boundary_nodes": boundary_nodes,
+            "scope_nodes": [self._node_topic_snapshot(item) for item in scope_nodes],
+            "learning_unit_scope_nodes": [self._node_topic_snapshot(item) for item in learning_unit_nodes],
             "topics": topics,
             "difficulty_profile": difficulty_profile,
             "ksa_context": dict(node_context.get("ksa_context") or {}),
+            "drill_signals": drill_signals,
+            "topic_strengths": strengths,
         }
-        parsed: dict[str, Any] = {}
+        topic_aggregation: dict[str, Any] = {}
         try:
-            raw = self.llm_invoke([("system", prompt), ("user", json.dumps(payload, ensure_ascii=False))])
-            parsed = _extract_json_object(raw)
+            raw = self.llm_invoke([("system", topic_agg_prompt), ("user", json.dumps(topic_payload, ensure_ascii=False))])
+            topic_aggregation = _extract_json_object(raw)
         except Exception:
-            parsed = {}
+            grouped = []
+            for idx, topic in enumerate(_first_items(topics, limit=18), start=1):
+                grouped.append(
+                    {
+                        "topic": topic,
+                        "importance": "high" if idx <= 6 else ("medium" if idx <= 12 else "low"),
+                        "source_node_ids": source_window[:4],
+                        "related_ksa": [],
+                        "reinforcement_priority": 0.8 if idx <= 6 else 0.5,
+                    }
+                )
+            topic_aggregation = {
+                "grouped_topics": grouped,
+                "key_themes": _first_items(topics, limit=8),
+            }
 
-        mc_questions = [dict(item) for item in list(parsed.get("mc_questions") or []) if isinstance(item, dict)]
-        review_prompts = [dict(item) for item in list(parsed.get("review_prompts") or []) if isinstance(item, dict)]
-        mc_questions = self._fill_mc_questions(mc_questions=mc_questions, topics=topics, count=6)
-        review_prompts = self._fill_text_questions(
-            questions=review_prompts,
-            topics=topics,
-            count=4,
-            prefix="review-ft",
-            stem="Reflect on and improve your approach for",
+        recap_prompt = self._load_prompt(
+            "learning-node-review-recap-plan-generation.md",
+            "Return strict JSON object with recap_goal, content_aware_recap_summary, recap_steps(array), key_takeaways(array), likely_questions(array). "
+            "Each recap_steps item includes step_id,title,focus_topics(array),brief,goal,interaction_hooks(array)."
         )
+        recap_payload = {
+            "course": {"id": learning_path.id, "title": learning_path.title, "subject": learning_path.subject},
+            "node": {"id": node.id, "title": node.title, "description": node.description},
+            "topic_aggregation": topic_aggregation,
+            "difficulty_profile": difficulty_profile,
+            "strengths": strengths,
+            "drill_signals": drill_signals,
+        }
+        recap_plan: dict[str, Any] = {}
+        try:
+            raw = self.llm_invoke([("system", recap_prompt), ("user", json.dumps(recap_payload, ensure_ascii=False))])
+            recap_plan = _extract_json_object(raw)
+        except Exception:
+            grouped_topics = [dict(item) for item in list(topic_aggregation.get("grouped_topics") or []) if isinstance(item, dict)]
+            focus_topics = [str(item.get("topic") or "").strip() for item in grouped_topics if str(item.get("topic") or "").strip()]
+            recap_plan = {
+                "recap_goal": "Consolidate core topics and prepare for upcoming validations.",
+                "content_aware_recap_summary": {
+                    "what_was_learned": _first_items(focus_topics, limit=8),
+                    "what_to_reinforce": _first_items(strengths.get("weak_topics_for_scaffolding") or [], focus_topics, limit=6),
+                    "upcoming_validation_preparation": list(node_context.get("next_node_context", {}).get("upcoming_validation_node_ids") or []),
+                },
+                "recap_steps": [
+                    {
+                        "step_id": "review-intro",
+                        "title": "Review Introduction",
+                        "focus_topics": _first_items(focus_topics, limit=4),
+                        "brief": "Reconnect major concepts and establish recap objectives.",
+                        "goal": "Orientation",
+                        "interaction_hooks": ["questions", "reclarification_request"],
+                    },
+                    {
+                        "step_id": "review-reinforcement",
+                        "title": "Targeted Reinforcement",
+                        "focus_topics": _first_items(strengths.get("weak_topics_for_scaffolding") or [], focus_topics, limit=6),
+                        "brief": "Reinforce weak points and connect them to stronger known areas.",
+                        "goal": "Remediation",
+                        "interaction_hooks": ["questions", "feedback_rating"],
+                    },
+                    {
+                        "step_id": "review-close",
+                        "title": "Review Summary",
+                        "focus_topics": _first_items(focus_topics, limit=5),
+                        "brief": "Summarize and prepare for next assessment-oriented nodes.",
+                        "goal": "Readiness",
+                        "interaction_hooks": ["questions", "feedback_rating", "reclarification_request"],
+                    },
+                ],
+                "key_takeaways": _first_items(focus_topics, limit=7),
+                "likely_questions": _first_items(focus_topics, limit=4),
+            }
+
+        grouped_topics = [dict(item) for item in list(topic_aggregation.get("grouped_topics") or []) if isinstance(item, dict)]
+        review_scope_summary = {
+            "included_node_ids": source_window,
+            "boundary_node_ids": boundary_nodes,
+            "included_learning_unit_node_ids": [item.id for item in learning_unit_nodes],
+            "why_included": "Backward hard-dependency traversal until last review/checkpoint/milestone/unlock_gate boundaries.",
+            "key_themes": list(topic_aggregation.get("key_themes") or []),
+        }
+        interaction_hooks = {
+            "supports_questions": True,
+            "supports_recap_feedback_rating": True,
+            "supports_reclarification_requests": True,
+        }
         return {
             "node_type": "review",
             "difficulty_profile": difficulty_profile,
             "source_node_window": source_window,
-            "important_topics": topics[:24],
-            "mc_questions": mc_questions,
-            "review_prompts": review_prompts,
+            "important_topics": topics[:32],
+            "review_scope_summary": review_scope_summary,
+            "topic_aggregation": {
+                "grouped_topics": grouped_topics,
+                "learning_unit_emphasis_topics": _first_items(
+                    [str(item.get("topic") or "") for item in grouped_topics if isinstance(item, dict)],
+                    limit=12,
+                ),
+            },
+            "content_aware_recap_summary": dict(recap_plan.get("content_aware_recap_summary") or {}),
+            "recap_goal": str(recap_plan.get("recap_goal") or "").strip(),
+            "recap_structure": {
+                "introduction": {
+                    "title": "Review Introduction",
+                    "brief": "Set review scope and expected outcomes.",
+                },
+                "mini_recaps": [dict(item) for item in list(recap_plan.get("recap_steps") or []) if isinstance(item, dict)],
+                "summary": {
+                    "key_takeaways": list(recap_plan.get("key_takeaways") or []),
+                    "likely_questions": list(recap_plan.get("likely_questions") or []),
+                },
+            },
+            "interaction_hooks": interaction_hooks,
+            "drill_signals": drill_signals,
+            "topic_strengths": strengths,
             "review_pass_threshold": float(node.metadata.get("review_pass_threshold") or 0.6),
+            "review_mode": "structured_recap_plan",
+        }
+
+    def _build_learning_unit_package(
+        self,
+        *,
+        user: UserAccount,
+        learning_path: LearningPath,
+        definition: CourseDefinition,
+        node: CourseNodeDefinition,
+        node_context: dict[str, Any],
+    ) -> dict[str, Any]:
+        previous_nodes, next_nodes = self._direct_neighbor_nodes(definition=definition, node=node)
+        target_snapshot = self._node_topic_snapshot(node)
+        previous_snapshots = [self._node_topic_snapshot(item) for item in previous_nodes]
+        next_snapshots = [self._node_topic_snapshot(item) for item in next_nodes]
+
+        previous_topics = _first_items(*[list(item.get("topics") or []) for item in previous_snapshots], limit=20)
+        target_topics = _first_items(
+            list(target_snapshot.get("topics") or []),
+            list(target_snapshot.get("goals") or []),
+            list(target_snapshot.get("concepts") or []),
+            limit=24,
+        )
+        next_topics = _first_items(*[list(item.get("topics") or []) for item in next_snapshots], limit=20)
+
+        source_window = _first_items(
+            [item.id for item in previous_nodes],
+            [node.id],
+            [item.id for item in next_nodes],
+            limit=24,
+        )
+        difficulty_profile = self._build_difficulty_profile(
+            user=user,
+            node=node,
+            learning_path=learning_path,
+            node_context=node_context,
+            source_node_window=source_window,
+        )
+        profile = self.repository.get_user_ksa_profile(user.id)
+        profile_json = dict(profile.profile_json or {}) if profile else {}
+        topic_tokens = self._topic_tokenize(previous_topics + target_topics + next_topics)
+        drill_signals = self._extract_drill_signals(user=user, topic_tokens=topic_tokens)
+        level_snapshot = self._collect_ksa_levels(profile_json=profile_json, topics=target_topics + previous_topics + next_topics)
+        strengths = self._derive_topic_strengths(
+            levels=level_snapshot,
+            target_topics=target_topics,
+            previous_topics=previous_topics,
+        )
+        personalization = self.repository.get_user_learning_personalization_layers(user_id=user.id)
+        personalization_snapshot = {
+            "resolved_declared_tutor_rules": dict(getattr(personalization, "resolved_declared_tutor_rules", {}) or {}),
+            "resolved_diagnostic_rules": dict(getattr(personalization, "resolved_diagnostic_rules", {}) or {}),
+            "resolved_live_adaptation_rules": dict(getattr(personalization, "resolved_live_adaptation_rules", {}) or {}),
+        }
+
+        topic_prompt = self._load_prompt(
+            "learning-node-learning-unit-topic-extraction.md",
+            "Return strict JSON object with mini_topics(array). Each item includes title, focus, objective, related_target_topics(array), estimated_complexity(low|medium|high), ksa_links(array), likely_difficulty_points(array)."
+        )
+        topic_payload = {
+            "course": {"id": learning_path.id, "title": learning_path.title, "subject": learning_path.subject},
+            "node": target_snapshot,
+            "previous_nodes": previous_snapshots,
+            "next_nodes": next_snapshots,
+            "target_topics": target_topics,
+            "difficulty_profile": difficulty_profile,
+            "topic_strengths": strengths,
+            "drill_signals": drill_signals,
+        }
+        mini_topic_plan: dict[str, Any] = {}
+        try:
+            raw = self.llm_invoke([("system", topic_prompt), ("user", json.dumps(topic_payload, ensure_ascii=False))])
+            mini_topic_plan = _extract_json_object(raw)
+        except Exception:
+            mini_topics = []
+            for idx, topic in enumerate(_first_items(target_topics, limit=6), start=1):
+                mini_topics.append(
+                    {
+                        "title": f"Mini Topic {idx}: {topic}",
+                        "focus": topic,
+                        "objective": f"Understand and apply {topic} confidently.",
+                        "related_target_topics": [topic],
+                        "estimated_complexity": "medium",
+                        "ksa_links": list(target_snapshot.get("ksa_links") or [])[:3],
+                        "likely_difficulty_points": _first_items(strengths.get("weak_topics_for_scaffolding") or [], [topic], limit=3),
+                    }
+                )
+            mini_topic_plan = {"mini_topics": mini_topics}
+
+        niveau_prompt = self._load_prompt(
+            "learning-node-learning-unit-niveau-estimation.md",
+            "Return strict JSON object with estimated_level, confidence_0_1, rationale, assumed_known_topics(array), likely_gaps(array), support_intensity(low|medium|high), abstraction_level(concrete|balanced|abstract)."
+        )
+        niveau_payload = {
+            "difficulty_profile": difficulty_profile,
+            "target_topics": target_topics,
+            "topic_strengths": strengths,
+            "drill_signals": drill_signals,
+            "personalization_snapshot": personalization_snapshot,
+            "prior_completion_ratio": dict(node_context.get("prior_node_context") or {}).get("prior_required_completion_ratio"),
+        }
+        niveau: dict[str, Any] = {}
+        try:
+            raw = self.llm_invoke([("system", niveau_prompt), ("user", json.dumps(niveau_payload, ensure_ascii=False))])
+            niveau = _extract_json_object(raw)
+        except Exception:
+            niveau = {
+                "estimated_level": "intermediate",
+                "confidence_0_1": 0.68,
+                "rationale": "Derived from KSA profile, related drill outcomes, and node difficulty.",
+                "assumed_known_topics": _first_items(previous_topics, strengths.get("strong_topics_for_bridging") or [], limit=6),
+                "likely_gaps": _first_items(strengths.get("weak_topics_for_scaffolding") or [], target_topics, limit=6),
+                "support_intensity": "medium",
+                "abstraction_level": "balanced",
+            }
+
+        lesson_prompt = self._load_prompt(
+            "learning-node-learning-unit-lesson-plan-generation.md",
+            "Return strict JSON object with node_structure_preview, lesson_steps(array), recap_plan, and interaction_hooks. "
+            "lesson_steps items include mini_topic_title, intro_brief, lesson_goal, explanation_requirements(array), explanation_constraints(array), teaching_brief, prior_assumptions(array), expected_difficulty_points(array), ksa_links(array), style_hints(array)."
+        )
+        lesson_payload = {
+            "course": {"id": learning_path.id, "title": learning_path.title, "subject": learning_path.subject},
+            "node": target_snapshot,
+            "mini_topics": list(mini_topic_plan.get("mini_topics") or []),
+            "niveau": niveau,
+            "difficulty_profile": difficulty_profile,
+            "topic_strengths": strengths,
+            "previous_topics": previous_topics,
+            "target_topics": target_topics,
+            "next_topics": next_topics,
+            "personalization_snapshot": personalization_snapshot,
+        }
+        lesson_plan: dict[str, Any] = {}
+        try:
+            raw = self.llm_invoke([("system", lesson_prompt), ("user", json.dumps(lesson_payload, ensure_ascii=False))])
+            lesson_plan = _extract_json_object(raw)
+        except Exception:
+            mini_topics = [dict(item) for item in list(mini_topic_plan.get("mini_topics") or []) if isinstance(item, dict)]
+            lessons = []
+            for idx, mini in enumerate(mini_topics, start=1):
+                title = str(mini.get("title") or f"Mini Topic {idx}").strip()
+                lessons.append(
+                    {
+                        "step_id": f"mini-topic-{idx}",
+                        "mini_topic_title": title,
+                        "intro_brief": str(mini.get("focus") or ""),
+                        "lesson_goal": str(mini.get("objective") or ""),
+                        "explanation_requirements": ["clear_definition", "practical_example", "bridge_to_known_topic"],
+                        "explanation_constraints": ["avoid_full-depth-dump", "keep_focus_on_target_topic"],
+                        "teaching_brief": f"Teach {title} using concise, scaffolded explanation with bridge analogies.",
+                        "prior_assumptions": _first_items(previous_topics, limit=3),
+                        "expected_difficulty_points": _first_items(
+                            list(mini.get("likely_difficulty_points") or []),
+                            strengths.get("weak_topics_for_scaffolding") or [],
+                            limit=4,
+                        ),
+                        "ksa_links": list(mini.get("ksa_links") or [])[:4],
+                        "style_hints": ["stepwise", "example-driven", "confirm-understanding"],
+                    }
+                )
+            lesson_plan = {
+                "node_structure_preview": {
+                    "phases": [
+                        "phase_1_intro",
+                        "phase_2_niveau_confirmation",
+                        "phase_3_self_explanation",
+                        "phase_4_structure_preview",
+                        "phase_5_mini_topic_lessons",
+                        "phase_6_node_recap",
+                    ]
+                },
+                "lesson_steps": lessons,
+                "recap_plan": {
+                    "recap_goals": ["consolidate_core_topics", "prepare_for_next_topics"],
+                    "key_topics_to_summarize": _first_items(target_topics, limit=8),
+                    "most_important_takeaways": _first_items(target_topics, strengths.get("strong_topics_for_bridging") or [], limit=6),
+                    "likely_questions": _first_items(target_topics, next_topics, limit=4),
+                },
+                "interaction_hooks": {
+                    "supports_questions_per_lesson": True,
+                    "supports_explanation_rating": True,
+                    "supports_reexplanation_request": True,
+                    "supports_node_feedback": True,
+                },
+            }
+
+        lesson_steps = [dict(item) for item in list(lesson_plan.get("lesson_steps") or []) if isinstance(item, dict)]
+        if not lesson_steps:
+            mini_topics = [dict(item) for item in list(mini_topic_plan.get("mini_topics") or []) if isinstance(item, dict)]
+            for idx, mini in enumerate(mini_topics, start=1):
+                lesson_steps.append(
+                    {
+                        "step_id": f"mini-topic-{idx}",
+                        "mini_topic_title": str(mini.get("title") or f"Mini Topic {idx}").strip(),
+                        "intro_brief": str(mini.get("focus") or "").strip(),
+                        "lesson_goal": str(mini.get("objective") or "").strip(),
+                        "explanation_requirements": ["clear_definition", "practical_example", "check_understanding"],
+                        "explanation_constraints": ["avoid_overload", "stay_topic_scoped"],
+                        "teaching_brief": f"Teach {str(mini.get('title') or f'Mini Topic {idx}')}.",
+                        "prior_assumptions": _first_items(previous_topics, limit=3),
+                        "expected_difficulty_points": _first_items(
+                            list(mini.get("likely_difficulty_points") or []),
+                            strengths.get("weak_topics_for_scaffolding") or [],
+                            limit=4,
+                        ),
+                        "ksa_links": list(mini.get("ksa_links") or [])[:4],
+                        "style_hints": ["stepwise", "example-driven"],
+                    }
+                )
+            lesson_plan["lesson_steps"] = lesson_steps
+
+        context_summary = {
+            "course_summary": {
+                "course_id": learning_path.id,
+                "course_title": learning_path.title,
+                "course_subject": learning_path.subject,
+                "course_goal_hint": str(learning_path.description or ""),
+                "branch_context": dict(node_context.get("chapter_branch_context") or {}),
+            },
+            "previous_node_topics": previous_snapshots,
+            "target_node_topics": target_snapshot,
+            "next_node_topics": next_snapshots,
+            "relevant_ksa_state": {
+                "topic_level_snapshot": strengths.get("topic_level_snapshot") or [],
+                "drill_signals": drill_signals,
+            },
+            "related_strong_topics": list(strengths.get("strong_topics_for_bridging") or []),
+            "related_weak_topics": list(strengths.get("weak_topics_for_scaffolding") or []),
+        }
+        learner_niveau_hypothesis = {
+            "estimated_level": str(niveau.get("estimated_level") or "intermediate"),
+            "confidence_0_1": _to_float(niveau.get("confidence_0_1"), 0.65),
+            "rationale": str(niveau.get("rationale") or ""),
+            "assumed_known_topics": _norm_list(niveau.get("assumed_known_topics")),
+            "likely_gaps": _norm_list(niveau.get("likely_gaps")),
+            "support_intensity": str(niveau.get("support_intensity") or "medium"),
+            "abstraction_level": str(niveau.get("abstraction_level") or "balanced"),
+        }
+
+        phase_flow = {
+            "phase_1_introduction": {
+                "title": "Introduction to node and topics",
+                "tasks": [
+                    "introduce_node_scope",
+                    "frame_course_relevance",
+                    "list_target_topics",
+                ],
+            },
+            "phase_2_niveau_estimation": {
+                "title": "Show estimated learner niveau",
+                "tasks": ["show_estimated_level", "allow_confirm_or_edit"],
+                "user_confirmable_self_positioning_step": {
+                    "prompt": "Does this estimated level match your current comfort? You can confirm or adjust.",
+                    "response_key": "niveau_self_positioning",
+                },
+            },
+            "phase_3_user_self_explanation": {
+                "title": "Ask user for high-level explanation",
+                "tasks": ["high_level_topic_explanation", "why_topic_matters_explanation"],
+                "response_keys": ["user_high_level_explanation", "user_importance_explanation"],
+            },
+            "phase_4_structure_preview": {
+                "title": "Show planned structure",
+                "tasks": ["display_node_structure_preview", "preview_mini_topic_lesson_steps"],
+                "node_structure_preview": dict(lesson_plan.get("node_structure_preview") or {}),
+            },
+            "phase_5_mini_topic_lessons": {
+                "title": "Mini-topic lessons",
+                "lessons": lesson_steps,
+            },
+            "phase_6_node_recap": {
+                "title": "Node recap",
+                "recap_plan": dict(lesson_plan.get("recap_plan") or {}),
+                "tasks": ["summarize_core_topics", "open_questions", "collect_node_feedback"],
+            },
+        }
+
+        interaction_hooks = dict(lesson_plan.get("interaction_hooks") or {})
+        if not interaction_hooks:
+            interaction_hooks = {
+                "supports_questions_per_lesson": True,
+                "supports_explanation_rating": True,
+                "supports_reexplanation_request": True,
+                "supports_node_feedback": True,
+            }
+        return {
+            "node_type": "learning_unit",
+            "difficulty_profile": difficulty_profile,
+            "source_node_window": source_window,
+            "context_summary": context_summary,
+            "learner_niveau_hypothesis": learner_niveau_hypothesis,
+            "user_confirmable_self_positioning_step": phase_flow["phase_2_niveau_estimation"]["user_confirmable_self_positioning_step"],
+            "topic_self_explanation_step": {
+                "prompt_high_level": "Please explain this topic in your own words at a high level.",
+                "prompt_why_it_matters": "Why does this topic matter in real usage?",
+            },
+            "node_structure_preview": dict(lesson_plan.get("node_structure_preview") or {}),
+            "mini_topic_lessons": lesson_steps,
+            "recap_plan": dict(lesson_plan.get("recap_plan") or {}),
+            "interaction_hooks": interaction_hooks,
+            "phase_flow": phase_flow,
+            "drill_signals": drill_signals,
+            "topic_strengths": strengths,
+            "personalization_snapshot": personalization_snapshot,
+            "runtime_plan_mode": "structured_plan_only",
         }
 
     def _fill_mc_questions(self, *, mc_questions: list[dict[str, Any]], topics: list[str], count: int) -> list[dict[str, Any]]:
@@ -2071,6 +2652,41 @@ class LearningNodeExecutionService:
         }
 
     def _evaluate_review(self, *, user: UserAccount, responses: dict[str, Any], package: dict[str, Any]) -> dict[str, Any]:
+        review_mode = str(package.get("review_mode") or "")
+        if review_mode == "structured_recap_plan":
+            recap_feedback = str(dict(responses.get("node_feedback") or {}).get("text") or responses.get("recap_feedback") or "").strip()
+            rating_raw = dict(responses.get("node_feedback") or {}).get("rating") or responses.get("recap_rating")
+            rating = _to_float(rating_raw, 0.0)
+            asked_questions = list(responses.get("questions") or [])
+            viewed_steps = list(dict(responses.get("phase_progress") or {}).keys())
+            required_steps = [
+                "phase_1_introduction",
+                "phase_2_grouped_recaps",
+                "phase_3_summary_and_feedback",
+            ]
+            completion_ratio = float(len([step for step in viewed_steps if step in required_steps])) / float(len(required_steps) or 1)
+            engagement_score = min(
+                1.0,
+                (completion_ratio * 0.55)
+                + (0.25 if recap_feedback else 0.0)
+                + (0.10 if asked_questions else 0.0)
+                + (min(5.0, max(0.0, rating)) / 5.0 * 0.10),
+            )
+            threshold = float(package.get("review_pass_threshold") or 0.6)
+            passed = engagement_score >= threshold
+            return {
+                "evaluation_type": "review",
+                "review_mode": review_mode,
+                "required_steps": required_steps,
+                "viewed_steps": viewed_steps,
+                "questions_count": len(asked_questions),
+                "feedback_present": bool(recap_feedback),
+                "rating": rating if rating > 0 else None,
+                "overall_score": round(engagement_score, 4),
+                "pass_threshold": threshold,
+                "passed": passed,
+            }
+
         mc_eval = self._score_mc_questions(
             mc_questions=[dict(item) for item in list(package.get("mc_questions") or [])],
             responses=responses,
@@ -2095,6 +2711,51 @@ class LearningNodeExecutionService:
             "review_prompt_evaluation": review_eval,
             "required_complete": required_complete,
             "overall_score": round(overall_score, 4),
+            "pass_threshold": threshold,
+            "passed": passed,
+        }
+
+    def _evaluate_learning_unit(self, *, responses: dict[str, Any], package: dict[str, Any]) -> dict[str, Any]:
+        phase_flow = dict(package.get("phase_flow") or {})
+        phase_progress = dict(responses.get("phase_progress") or {})
+        completed_steps = [key for key in phase_progress.keys() if key in phase_flow]
+        required_phases = [
+            "phase_1_introduction",
+            "phase_2_niveau_estimation",
+            "phase_3_user_self_explanation",
+            "phase_4_structure_preview",
+            "phase_5_mini_topic_lessons",
+            "phase_6_node_recap",
+        ]
+        completed_required = [step for step in required_phases if step in completed_steps]
+        ratio = float(len(completed_required)) / float(len(required_phases) or 1)
+        niveau_response = dict(responses.get("niveau_self_positioning") or {})
+        self_expl = str(responses.get("user_high_level_explanation") or "").strip()
+        importance = str(responses.get("user_importance_explanation") or "").strip()
+        hooks = dict(responses.get("interaction_feedback") or {})
+
+        signal_bonus = 0.0
+        if niveau_response:
+            signal_bonus += 0.1
+        if self_expl:
+            signal_bonus += 0.1
+        if importance:
+            signal_bonus += 0.1
+        if hooks:
+            signal_bonus += 0.05
+        overall = min(1.0, ratio * 0.65 + signal_bonus)
+        threshold = float(package.get("learning_unit_complete_threshold") or 0.6)
+        passed = overall >= threshold
+        return {
+            "evaluation_type": "learning_unit",
+            "required_phases": required_phases,
+            "completed_phases": completed_required,
+            "phase_completion_ratio": round(ratio, 4),
+            "niveau_self_positioning_present": bool(niveau_response),
+            "self_explanation_present": bool(self_expl),
+            "importance_explanation_present": bool(importance),
+            "interaction_feedback_present": bool(hooks),
+            "overall_score": round(overall, 4),
             "pass_threshold": threshold,
             "passed": passed,
         }

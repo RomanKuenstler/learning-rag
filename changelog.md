@@ -1,5 +1,20 @@
 # Changelog
 
+## 2026-04-11 18:35 UTC
+
+- Added structured runtime plan generation for `learning_unit` execution:
+  - course/branch + previous/target/next topic context capture
+  - KSA/drill + personalization-informed niveau hypothesis
+  - phase-based node plan (`phase_1`..`phase_6`)
+  - mini-topic lesson briefs and recap plan briefs
+  - persisted interaction hooks for questions, explanation rating, re-explanation, and node feedback
+- Refactored `review` runtime generation to structured recap-plan mode:
+  - bounded backward scope until `review|checkpoint|milestone|unlock_gate`
+  - learning-unit-emphasized topic aggregation
+  - recap goals, mini-recap steps, and summary/takeaway plan persistence
+- Externalized additional generation prompts to `prompts/learning-node-*.md` for easy tuning.
+- Extended node execution tests with `learning_unit` and recap-mode `review` assertions.
+
 ## 2026-04-11 01:05 UTC
 
 - Extended node execution runtime layer with full support for:

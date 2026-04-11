@@ -319,3 +319,20 @@ Integration point:
 Debug access:
 
 - `GET /api/learning-profile/personalization-layers`
+
+## Learning Node Execution Architecture (Plan-First)
+
+`LearningNodeExecutionService` now supports plan-first runtime generation for `learning_unit` and `review`.
+
+Key points:
+
+- generation is on-demand at node start (no pre-generation at import time)
+- package persistence remains in `user_learning_node_execution_attempts`
+- package shape is node-type-specific and includes structured planning artifacts
+- KSA/drill and personalization snapshots are injected as calibration signals
+- resume/repeat semantics stay consistent with existing node execution behavior
+
+Prompt sources:
+
+- node-generation/evaluation prompts are externalized under `prompts/learning-node-*.md`
+- runtime loader reads prompt files directly from disk for easy iteration

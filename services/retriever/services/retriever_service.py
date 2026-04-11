@@ -4092,12 +4092,23 @@ class RetrieverAppService:
         drill_rounds = list(package.get("deep_dive_rounds") or package.get("rounds") or [])
         deep_dive_answers = dict(responses.get("deep_dive_answers") or {})
         uploaded_artifacts = list(responses.get("uploaded_artifacts") or [])
+        phase_flow = dict(package.get("phase_flow") or {})
+        phase_progress = dict(responses.get("phase_progress") or {})
+        recap_steps = list(dict(package.get("recap_structure") or {}).get("mini_recaps") or [])
         return {
             "mc": {"total": len(mc_questions), "answered": len(mc_answers)},
             "free_text": {"total": len(free_text_questions), "answered": len(free_text_answers)},
             "scenario": {"total": len(scenario_questions), "answered": len(scenario_answers)},
             "drill": {"total_rounds": len(drill_rounds), "answered_items": len(deep_dive_answers)},
             "uploads": {"count": len(uploaded_artifacts)},
+            "learning_phases": {
+                "total": len(phase_flow),
+                "completed": len([key for key in phase_progress.keys() if key in phase_flow]),
+            },
+            "review_steps": {
+                "total": len(recap_steps),
+                "acknowledged": len(list(responses.get("recap_step_feedback") or [])),
+            },
         }
 
     def _build_learning_node_execution_attempt_read(self, record) -> LearningNodeExecutionAttemptRead:

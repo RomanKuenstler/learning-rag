@@ -153,6 +153,19 @@ class RepoStub:
             },
             updated_at=now,
         )
+        self.drill_attempts = [
+            SimpleNamespace(
+                id="drill-1",
+                status="completed",
+                result_json={"overall_score": 0.72, "selected_topic_keys": ["digital-craft__ci_cd"]},
+                completed_at=now,
+            )
+        ]
+        self.personalization = SimpleNamespace(
+            resolved_declared_tutor_rules={"response_length": "balanced"},
+            resolved_diagnostic_rules={"support_intensity": "medium"},
+            resolved_live_adaptation_rules={},
+        )
 
     def list_user_learning_node_progress(self, *, user_id: int, learning_path_id: str):
         _ = (user_id, learning_path_id)
@@ -166,6 +179,14 @@ class RepoStub:
     def get_user_ksa_profile(self, user_id: int):
         _ = user_id
         return self.profile
+
+    def list_user_ksa_drill_attempts(self, *, user_id: int, limit: int = 25):
+        _ = (user_id, limit)
+        return list(self.drill_attempts)
+
+    def get_user_learning_personalization_layers(self, *, user_id: int):
+        _ = user_id
+        return self.personalization
 
     def upsert_user_ksa_profile(self, *, user_id: int, has_assessment: bool, assessment_version: str, profile_json: dict):
         _ = (user_id, has_assessment, assessment_version)
@@ -246,6 +267,114 @@ def llm_stub(messages: list[tuple[str, str]]) -> str:
         return json_dumps({"topics": topics})
     if "mc_questions" in text and "free_text_questions" in text:
         return json_dumps({})
+    if "mini_topics" in text:
+        return json_dumps(
+            {
+                "mini_topics": [
+                    {
+                        "title": "Linux Service Basics",
+                        "focus": "systemd units",
+                        "objective": "Understand service lifecycle management.",
+                        "related_target_topics": ["linux", "operations"],
+                        "estimated_complexity": "medium",
+                        "ksa_links": [{"dimension": "S", "topic": "digital_craft"}],
+                        "likely_difficulty_points": ["service dependencies"],
+                    },
+                    {
+                        "title": "Observability Intro",
+                        "focus": "logs and metrics",
+                        "objective": "Differentiate telemetry types and use cases.",
+                        "related_target_topics": ["observability"],
+                        "estimated_complexity": "medium",
+                        "ksa_links": [{"dimension": "K", "topic": "information_technology"}],
+                        "likely_difficulty_points": ["signal interpretation"],
+                    },
+                ]
+            }
+        )
+    if "estimated_level" in text and "support_intensity" in text:
+        return json_dumps(
+            {
+                "estimated_level": "intermediate",
+                "confidence_0_1": 0.7,
+                "rationale": "KSA and drill outcomes indicate stable baseline knowledge.",
+                "assumed_known_topics": ["linux fundamentals"],
+                "likely_gaps": ["observability signal interpretation"],
+                "support_intensity": "medium",
+                "abstraction_level": "balanced",
+            }
+        )
+    if "node_structure_preview" in text and "lesson_steps" in text:
+        return json_dumps(
+            {
+                "node_structure_preview": {"phases": ["phase_1_intro", "phase_2_niveau", "phase_3_self_explain", "phase_4_preview", "phase_5_lessons", "phase_6_recap"]},
+                "lesson_steps": [
+                    {
+                        "step_id": "mini-topic-1",
+                        "mini_topic_title": "Linux Service Basics",
+                        "intro_brief": "Services orchestrate runtime behavior.",
+                        "lesson_goal": "Control and diagnose service lifecycle.",
+                        "explanation_requirements": ["definition", "example"],
+                        "explanation_constraints": ["no giant dump"],
+                        "teaching_brief": "Use practical workflow examples.",
+                        "prior_assumptions": ["linux fundamentals"],
+                        "expected_difficulty_points": ["dependency order"],
+                        "ksa_links": [{"dimension": "S", "topic": "digital_craft"}],
+                        "style_hints": ["stepwise"],
+                    }
+                ],
+                "recap_plan": {
+                    "recap_goals": ["consolidate"],
+                    "key_topics_to_summarize": ["systemd units"],
+                    "most_important_takeaways": ["service lifecycle"],
+                    "likely_questions": ["How to debug failures?"],
+                },
+                "interaction_hooks": {
+                    "supports_questions_per_lesson": True,
+                    "supports_explanation_rating": True,
+                    "supports_reexplanation_request": True,
+                    "supports_node_feedback": True,
+                },
+            }
+        )
+    if "grouped_topics" in text and "reinforcement_priority" in text:
+        return json_dumps(
+            {
+                "grouped_topics": [
+                    {
+                        "topic": "linux services",
+                        "importance": "high",
+                        "source_node_ids": ["n1"],
+                        "related_ksa": [{"dimension": "S", "topic": "digital_craft"}],
+                        "reinforcement_priority": 0.9,
+                    }
+                ],
+                "key_themes": ["operations fundamentals"],
+            }
+        )
+    if "content_aware_recap_summary" in text and "recap_steps" in text:
+        return json_dumps(
+            {
+                "recap_goal": "Consolidate recent fundamentals before validation.",
+                "content_aware_recap_summary": {
+                    "what_was_learned": ["linux services"],
+                    "what_to_reinforce": ["failure diagnosis"],
+                    "upcoming_validation_preparation": ["quiz readiness"],
+                },
+                "recap_steps": [
+                    {
+                        "step_id": "review-1",
+                        "title": "Services recap",
+                        "focus_topics": ["linux services"],
+                        "brief": "Refresh key lifecycle operations.",
+                        "goal": "consolidation",
+                        "interaction_hooks": ["questions", "feedback_rating"],
+                    }
+                ],
+                "key_takeaways": ["service lifecycle mastery"],
+                "likely_questions": ["How to troubleshoot startup issues?"],
+            }
+        )
     return json_dumps(
         {
             "questions": [
@@ -407,3 +536,47 @@ def test_capstone_start_composition_counts() -> None:
     assert len(list(package.get("free_text_quiz_questions") or [])) == 8
     assert len(list(package.get("scenario_practice_questions") or [])) == 8
     assert len(list(package.get("deep_dive_rounds") or [])) == 8
+
+
+def test_learning_unit_start_generates_structured_runtime_plan() -> None:
+    repo = RepoStub()
+    service = LearningNodeExecutionService(repo, llm_invoke=llm_stub)  # type: ignore[arg-type]
+    definition = _definition()
+    node = next(item for item in definition.nodes if item.id == "n1")
+    repo.progress["n1"] = "available"
+
+    result = service.start(user=_user(), learning_path=_path(), definition=definition, node=node, node_context=_context())
+    package = dict(result.attempt.package_json or {})
+    assert package.get("node_type") == "learning_unit"
+    assert "context_summary" in package
+    assert "learner_niveau_hypothesis" in package
+    assert "phase_flow" in package
+    assert len(list(package.get("mini_topic_lessons") or [])) >= 1
+    assert package.get("runtime_plan_mode") == "structured_plan_only"
+
+
+def test_review_start_generates_structured_recap_plan() -> None:
+    repo = RepoStub()
+    service = LearningNodeExecutionService(repo, llm_invoke=llm_stub)  # type: ignore[arg-type]
+    definition = _definition()
+    review = CourseNodeDefinition.model_validate(
+        {
+            **next(item.model_dump() for item in definition.nodes if item.id == "n2"),
+            "id": "n-review",
+            "type": "review",
+            "completion_mode": "lesson_complete",
+            "prerequisites": {"requires_all": ["n1"], "requires_any": [], "recommended": []},
+        }
+    )
+    definition = definition.model_copy(update={"nodes": [definition.nodes[0], review, definition.nodes[2]], "entry_node_ids": ["n1"]})
+    repo.progress["n-review"] = "available"
+    repo.progress["n1"] = "completed"
+
+    result = service.start(user=_user(), learning_path=_path(), definition=definition, node=review, node_context=_context())
+    package = dict(result.attempt.package_json or {})
+    assert package.get("node_type") == "review"
+    assert package.get("review_mode") == "structured_recap_plan"
+    assert "review_scope_summary" in package
+    assert "topic_aggregation" in package
+    assert "recap_structure" in package
+    assert "interaction_hooks" in package

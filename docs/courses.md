@@ -230,3 +230,12 @@ Not included yet:
 - retrospective graph generation
 - AI-generated branch authoring
 - full in-node assessment engine execution for all node types
+
+## Runtime Node Plans
+
+Node start execution now includes structured-plan runtime generation for:
+
+- `learning_unit`: phased teaching-plan package with mini-topic lesson briefs and recap plan.
+- `review`: recap/remediation plan package over the bounded backward review window.
+
+These plans are persisted per attempt and designed for later delivery orchestration, questions, and feedback handling.
