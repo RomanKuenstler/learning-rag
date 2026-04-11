@@ -179,3 +179,36 @@ Covered behaviors:
 Run:
 
 - `pytest tests/test_personalization_layers_engine.py`
+
+## User Node Context Layer Tests
+
+New coverage for persistent per-user node-context generation:
+
+- `tests/test_node_context_engine.py`
+
+Covered behaviors:
+
+- start-node context generation
+- non-start-node prior dependency/context generation
+- prior completed-node aggregation into assumptions
+- node-relevant KSA linking and readiness shape output
+
+Recommended focused run:
+
+- `pytest tests/test_node_context_engine.py`
+
+## Node Execution Layer Tests
+
+Coverage for step-specific node execution behavior:
+
+- `tests/test_node_execution_service.py`
+
+Covered behaviors:
+
+- assessment_hook runtime package generation includes 8-16 topics and per-topic archetype rounds
+- quiz runtime package shape includes 12 MC/SC, 3 deep-dive rounds, and 2 free-text items
+- unlock_gate structural requirement checks can auto-complete when satisfied
+
+Recommended focused run:
+
+- `pytest tests/test_node_execution_service.py`

@@ -382,6 +382,62 @@ class UserLearningNodeProgress(Base):
     )
 
 
+class UserLearningNodeContext(Base):
+    __tablename__ = "user_learning_node_contexts"
+    __table_args__ = (
+        UniqueConstraint("user_id", "learning_path_id", "node_id", name="uq_user_learning_node_contexts_user_path_node"),
+    )
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    user_id: Mapped[int] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True)
+    learning_path_id: Mapped[str] = mapped_column(
+        ForeignKey("learning_paths.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    node_id: Mapped[str] = mapped_column(String(128), nullable=False, index=True)
+    node_type: Mapped[str] = mapped_column(String(32), nullable=False, default="")
+    generation_reason: Mapped[str] = mapped_column(String(64), nullable=False, default="on_demand")
+    context_json: Mapped[dict] = mapped_column(JSON, default=dict)
+    course_context_json: Mapped[dict] = mapped_column(JSON, default=dict)
+    chapter_branch_context_json: Mapped[dict] = mapped_column(JSON, default=dict)
+    prior_node_context_json: Mapped[dict] = mapped_column(JSON, default=dict)
+    target_node_context_json: Mapped[dict] = mapped_column(JSON, default=dict)
+    next_node_context_json: Mapped[dict] = mapped_column(JSON, default=dict)
+    ksa_context_json: Mapped[dict] = mapped_column(JSON, default=dict)
+    readiness_context_json: Mapped[dict] = mapped_column(JSON, default=dict)
+    derived_assumptions_json: Mapped[dict] = mapped_column(JSON, default=dict)
+    source_hash: Mapped[str] = mapped_column(String(128), nullable=False, default="")
+    generated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, server_default=func.now())
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, server_default=func.now())
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, server_default=func.now(), onupdate=func.now()
+    )
+
+
+class UserLearningNodeExecutionAttempt(Base):
+    __tablename__ = "user_learning_node_execution_attempts"
+
+    id: Mapped[str] = mapped_column(String(128), primary_key=True, default=lambda: str(uuid.uuid4()))
+    user_id: Mapped[int] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True)
+    learning_path_id: Mapped[str] = mapped_column(
+        ForeignKey("learning_paths.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    node_id: Mapped[str] = mapped_column(String(128), nullable=False, index=True)
+    node_type: Mapped[str] = mapped_column(String(32), nullable=False, default="")
+    status: Mapped[str] = mapped_column(String(32), nullable=False, default="in_progress")
+    generation_reason: Mapped[str] = mapped_column(String(64), nullable=False, default="on_start")
+    package_json: Mapped[dict] = mapped_column(JSON, default=dict)
+    responses_json: Mapped[dict] = mapped_column(JSON, default=dict)
+    result_json: Mapped[dict] = mapped_column(JSON, default=dict)
+    context_snapshot_json: Mapped[dict] = mapped_column(JSON, default=dict)
+    source_node_window_json: Mapped[list[str]] = mapped_column(JSON, default=list)
+    started_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, server_default=func.now())
+    completed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, server_default=func.now())
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, server_default=func.now(), onupdate=func.now()
+    )
+
+
 class UserLearningPreference(Base):
     __tablename__ = "user_learning_preferences"
     __table_args__ = (UniqueConstraint("user_id", name="uq_user_learning_preferences_user"),)

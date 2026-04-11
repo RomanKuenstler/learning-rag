@@ -324,6 +324,66 @@ class LearningNodeProgressUpdateRequest(BaseModel):
     evidence: dict[str, object] = Field(default_factory=dict)
 
 
+class LearningNodeContextRead(BaseModel):
+    user_id: int
+    learning_path_id: str
+    node_id: str
+    node_type: str = ""
+    generation_reason: str = ""
+    source_hash: str = ""
+    generated_at: datetime | None = None
+    course_context: dict[str, object] = Field(default_factory=dict)
+    chapter_branch_context: dict[str, object] = Field(default_factory=dict)
+    prior_node_context: dict[str, object] = Field(default_factory=dict)
+    target_node_context: dict[str, object] = Field(default_factory=dict)
+    next_node_context: dict[str, object] = Field(default_factory=dict)
+    ksa_context: dict[str, object] = Field(default_factory=dict)
+    readiness_context: dict[str, object] = Field(default_factory=dict)
+    derived_assumptions: dict[str, object] = Field(default_factory=dict)
+    context: dict[str, object] = Field(default_factory=dict)
+    created_at: datetime
+    updated_at: datetime
+
+
+class LearningNodeContextListResponse(BaseModel):
+    contexts: list[LearningNodeContextRead] = Field(default_factory=list)
+
+
+class LearningNodeExecutionAttemptRead(BaseModel):
+    attempt_id: str
+    user_id: int
+    learning_path_id: str
+    node_id: str
+    node_type: str
+    status: str
+    generation_reason: str
+    package: dict[str, object] = Field(default_factory=dict)
+    responses: dict[str, object] = Field(default_factory=dict)
+    result: dict[str, object] = Field(default_factory=dict)
+    context_snapshot: dict[str, object] = Field(default_factory=dict)
+    source_node_window: list[str] = Field(default_factory=list)
+    started_at: datetime
+    completed_at: datetime | None = None
+    created_at: datetime
+    updated_at: datetime
+
+
+class LearningNodeExecutionStartResponse(BaseModel):
+    attempt: LearningNodeExecutionAttemptRead
+    auto_completed: bool = False
+    completion_reason: str = ""
+
+
+class LearningNodeExecutionSubmitRequest(BaseModel):
+    responses: dict[str, object] = Field(default_factory=dict)
+
+
+class LearningNodeExecutionCompleteResponse(BaseModel):
+    attempt: LearningNodeExecutionAttemptRead
+    node_completed: bool = False
+    node_status: str = "in_progress"
+
+
 class LearningModuleCreateRequest(BaseModel):
     title: str = Field(min_length=1, max_length=255)
     description: str = Field(default="", max_length=12000)

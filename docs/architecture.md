@@ -64,6 +64,63 @@ Future learning chat support is prepared through:
 - `chats.chat_type` (`normal|gpt|learning`)
 - `chats.learning_path_id` nullable foreign key
 
+## User Node Context Generation Layer
+
+A reusable node-context engine was added in:
+
+- `services/retriever/services/node_context.py`
+
+Responsibilities:
+
+- load graph structure for a course/node
+- resolve prior dependency completion and covered-topic summaries
+- resolve target node metadata and immediate successor lookahead
+- match node-relevant KSA profile/drill data
+- infer structured readiness context
+- persist grouped context snapshots for reuse
+
+Persistence + access:
+
+- ORM model/table: `UserLearningNodeContext` / `user_learning_node_contexts`
+- repository/postgres upsert/list/get/delete methods
+- API reads:
+  - `GET /api/learning-paths/{learning_path_id}/nodes/{node_id}/context`
+  - `GET /api/learning-paths/{learning_path_id}/node-contexts/available`
+
+Recompute strategy:
+
+- targeted recompute on node progress updates
+- user-wide available-node recompute on KSA updates
+- path-level invalidation when skilltree structure changes
+
+Current non-goal:
+
+- this layer does not execute node-type teaching logic yet; it only prepares structured context for later execution stages.
+
+## Node Execution Services Layer
+
+A dedicated node execution module is available in:
+
+- `services/retriever/services/node_execution.py`
+
+It implements modular execution logic for:
+
+- `assessment_hook`
+- `quiz`
+- `unlock_gate`
+- `milestone`
+
+Key architecture points:
+
+- runtime generation is on-demand (at node start), not pre-generated
+- generated artifacts and results are persisted (`user_learning_node_execution_attempts`)
+- execution consumes persisted user node context + current KSA/profile state
+- completion updates flow back into node progress and KSA profile refinement
+
+Current non-goal:
+
+- execution services for `learning_unit`, `practice`, `checkpoint`, `review`, and `capstone`.
+
 ## Course File Bootstrap Layer
 
 Course/path definitions are represented as declarative JSON files in `courses/`.

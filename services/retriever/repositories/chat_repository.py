@@ -18,6 +18,8 @@ from services.common.models import (
     RetrievalLog,
     SettingRecord,
     UserLearningGoal,
+    UserLearningNodeContext,
+    UserLearningNodeExecutionAttempt,
     UserLearningNodeProgress,
     UserKSAAssessmentAttempt,
     UserKSADrillAttempt,
@@ -516,6 +518,100 @@ class ChatRepository:
             user_id=user_id,
             learning_path_id=learning_path_id,
             node_id=node_id,
+        )
+
+    def get_user_learning_node_context(
+        self,
+        *,
+        user_id: int,
+        learning_path_id: str,
+        node_id: str,
+    ) -> UserLearningNodeContext | None:
+        return self.postgres_client.get_user_learning_node_context(
+            user_id=user_id,
+            learning_path_id=learning_path_id,
+            node_id=node_id,
+        )
+
+    def list_user_learning_node_contexts(
+        self,
+        *,
+        user_id: int,
+        learning_path_id: str | None = None,
+    ) -> list[UserLearningNodeContext]:
+        return self.postgres_client.list_user_learning_node_contexts(
+            user_id=user_id,
+            learning_path_id=learning_path_id,
+        )
+
+    def upsert_user_learning_node_context(
+        self,
+        *,
+        user_id: int,
+        learning_path_id: str,
+        node_id: str,
+        fields: dict[str, object],
+    ) -> UserLearningNodeContext:
+        return self.postgres_client.upsert_user_learning_node_context(
+            user_id=user_id,
+            learning_path_id=learning_path_id,
+            node_id=node_id,
+            fields=fields,
+        )
+
+    def delete_user_learning_node_contexts_for_path(self, *, learning_path_id: str) -> int:
+        return self.postgres_client.delete_user_learning_node_contexts_for_path(learning_path_id=learning_path_id)
+
+    def create_user_learning_node_execution_attempt(self, payload: dict[str, object]) -> UserLearningNodeExecutionAttempt:
+        return self.postgres_client.create_user_learning_node_execution_attempt(payload)
+
+    def get_user_learning_node_execution_attempt(
+        self,
+        *,
+        user_id: int,
+        attempt_id: str,
+    ) -> UserLearningNodeExecutionAttempt | None:
+        return self.postgres_client.get_user_learning_node_execution_attempt(user_id=user_id, attempt_id=attempt_id)
+
+    def get_latest_user_learning_node_execution_attempt(
+        self,
+        *,
+        user_id: int,
+        learning_path_id: str,
+        node_id: str,
+    ) -> UserLearningNodeExecutionAttempt | None:
+        return self.postgres_client.get_latest_user_learning_node_execution_attempt(
+            user_id=user_id,
+            learning_path_id=learning_path_id,
+            node_id=node_id,
+        )
+
+    def list_user_learning_node_execution_attempts(
+        self,
+        *,
+        user_id: int,
+        learning_path_id: str,
+        node_id: str,
+        limit: int = 20,
+    ) -> list[UserLearningNodeExecutionAttempt]:
+        return self.postgres_client.list_user_learning_node_execution_attempts(
+            user_id=user_id,
+            learning_path_id=learning_path_id,
+            node_id=node_id,
+            limit=limit,
+        )
+
+    def update_user_learning_node_execution_attempt(
+        self,
+        *,
+        user_id: int,
+        attempt_id: str,
+        fields: dict[str, object],
+    ) -> UserLearningNodeExecutionAttempt | None:
+        return self.postgres_client.update_user_learning_node_execution_attempt(
+            user_id=user_id,
+            attempt_id=attempt_id,
+            fields=fields,
         )
 
     def get_diagnostic_definition(self, diagnostic_type: str) -> DiagnosticDefinition | None:

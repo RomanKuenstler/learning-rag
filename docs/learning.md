@@ -1,5 +1,77 @@
 # Learning And Courses
 
+## User Node Context Foundation (Step)
+
+The backend now persists a per-user, per-course-node context snapshot that is generated before node execution.
+
+Endpoints:
+
+- `GET /api/learning-paths/{learning_path_id}/nodes/{node_id}/context`
+- `GET /api/learning-paths/{learning_path_id}/node-contexts/available`
+
+Persisted sections per node context:
+
+- `course_context`
+- `chapter_branch_context`
+- `prior_node_context`
+- `target_node_context`
+- `next_node_context`
+- `ksa_context`
+- `readiness_context`
+- `derived_assumptions`
+
+Generation behavior:
+
+- supports start nodes and non-start nodes
+- resolves prior dependency chain and completed relevant nodes
+- aggregates covered topics/goals/concepts from completed relevant nodes
+- resolves immediate lookahead (successors + near validations)
+- links node-relevant KSA state and related drill attempts
+- computes structured readiness flags (`likely_ready`, scaffold/review signals, support intensity)
+
+Recompute and invalidation behavior:
+
+- recomputes on node progress updates
+- recomputes on KSA profile/drill updates
+- invalidates cached node contexts for a course when course structure changes
+
+Non-goal in this step:
+
+- no node-type-specific execution/prompt behavior yet (`learning_unit`, `practice`, `quiz`, etc. execution remains separate)
+
+## Node-Type Execution Layer (assessment_hook, quiz, unlock_gate, milestone)
+
+Node execution is now supported via runtime attempts for:
+
+- `assessment_hook`
+- `quiz`
+- `unlock_gate`
+- `milestone`
+
+API:
+
+- `POST /api/learning-paths/{learning_path_id}/nodes/{node_id}/execution/start`
+- `GET /api/learning-paths/{learning_path_id}/nodes/{node_id}/execution/latest`
+- `PUT /api/learning-paths/{learning_path_id}/nodes/{node_id}/execution/attempts/{attempt_id}/responses`
+- `POST /api/learning-paths/{learning_path_id}/nodes/{node_id}/execution/attempts/{attempt_id}/complete`
+
+Runtime generation model:
+
+- `assessment_hook` and `quiz` generate packages only on `start`.
+- generated packages are persisted per user/node attempt.
+- completion and scoring are persisted on `complete`.
+
+Behavior:
+
+- `assessment_hook`: LLM-assisted selection of 8-16 targeted topics, 4-archetype round generation per topic, full-round completion requirement, result-linked KSA refinement.
+- `quiz`: backward node-window resolution, package with 12 MC/SC + 3 deep-dive rounds + 2 free-text questions, deterministic MC scoring, LLM free-text evaluation, persisted pass/fail result.
+- `unlock_gate`: structural requirement checks and auto-completion when requirements are met.
+- `milestone`: structural precursor checks and auto-completion when requirements are met.
+
+Current non-goal:
+
+- `learning_unit`, `practice`, `checkpoint`, `review`, and `capstone` node execution logic.
+
 ## Learning Page Tabs
 
 The Learning page now contains:

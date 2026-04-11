@@ -55,6 +55,12 @@ from services.retriever.schemas.chat import (
     SystemServiceStatusRead,
 )
 from services.retriever.schemas.learning import (
+    LearningNodeExecutionAttemptRead,
+    LearningNodeExecutionCompleteResponse,
+    LearningNodeExecutionStartResponse,
+    LearningNodeExecutionSubmitRequest,
+    LearningNodeContextListResponse,
+    LearningNodeContextRead,
     LearningNodeProgressUpdateRequest,
     LearningLessonCreateRequest,
     LearningLessonRead,
@@ -162,6 +168,8 @@ from services.retriever.services.ksa_drills import (
     list_drill_topics,
     plan_dynamic_drill_rounds,
 )
+from services.retriever.services.node_context import LearningNodeContextEngine
+from services.retriever.services.node_execution import LearningNodeExecutionService
 from services.retriever.services.personalization_layers import GROUP_COLUMNS, GROUP_ORDER, LearningPersonalizationLayerEngine
 
 RUNTIME_SETTING_KEYS = {
@@ -323,6 +331,11 @@ class RetrieverAppService:
             self.chat_repository,
             available_assistant_modes=self.settings.available_assistant_modes,
             default_assistant_mode=self.settings.default_assistant_mode,
+        )
+        self.node_context_engine = LearningNodeContextEngine(self.chat_repository)
+        self.node_execution_service = LearningNodeExecutionService(
+            self.chat_repository,
+            llm_invoke=self.llm_client.invoke,
         )
         self.course_file_parser = CourseFileParser()
         self._ksa_validation_executor = ThreadPoolExecutor(max_workers=2, thread_name_prefix="ksa-validate")
@@ -1011,6 +1024,7 @@ class RetrieverAppService:
             profile_json=evaluation.profile_json,
         )
         self._safe_recompute_personalization_layers(user=user, reasons=["ksa_updated"])
+        self._safe_recompute_user_node_contexts_for_user(user=user, reason="ksa_updated")
         return self._build_ksa_profile_read(
             user_id=user.id,
             profile_json=evaluation.profile_json,
@@ -1167,6 +1181,7 @@ class RetrieverAppService:
             profile_json=profile_json,
         )
         self._safe_recompute_personalization_layers(user=user, reasons=["ksa_updated"])
+        self._safe_recompute_user_node_contexts_for_user(user=user, reason="ksa_updated")
         return self._build_ksa_profile_read(
             user_id=user.id,
             profile_json=profile_json,
@@ -1530,6 +1545,10 @@ class RetrieverAppService:
                     enforce_owner=True,
                 )
                 self._write_course_file_for_path(upserted.id)
+                self._safe_invalidate_user_node_contexts_for_path(
+                    learning_path_id=upserted.id,
+                    reason="course_imported",
+                )
                 results.append(
                     CourseImportFileResultRead(
                         file_name=file_name,
@@ -1598,6 +1617,186 @@ class RetrieverAppService:
         if record is None or not self._can_view_learning_path(user, record):
             return None
         return self._build_learning_path_read(user, record)
+
+    def get_learning_node_context(
+        self,
+        user: UserAccount,
+        learning_path_id: str,
+        node_id: str,
+        *,
+        refresh: bool = False,
+    ) -> LearningNodeContextRead | None:
+        path = self.chat_repository.get_learning_path(learning_path_id)
+        if path is None or not self._can_view_learning_path(user, path):
+            return None
+        definition = self._course_definition_from_learning_path(path)
+        if node_id not in {node.id for node in definition.nodes}:
+            raise ValueError(f"Unknown node_id '{node_id}'")
+        record = None
+        if not refresh:
+            record = self.chat_repository.get_user_learning_node_context(
+                user_id=user.id,
+                learning_path_id=learning_path_id,
+                node_id=node_id,
+            )
+        if record is None:
+            record = self._safe_recompute_user_node_context(
+                user=user,
+                path=path,
+                definition=definition,
+                node_id=node_id,
+                reason="on_demand_refresh" if refresh else "on_demand",
+            )
+        if record is None:
+            return None
+        return self._build_learning_node_context_read(record)
+
+    def list_available_learning_node_contexts(
+        self,
+        user: UserAccount,
+        learning_path_id: str,
+        *,
+        refresh: bool = False,
+    ) -> LearningNodeContextListResponse | None:
+        path = self.chat_repository.get_learning_path(learning_path_id)
+        if path is None or not self._can_view_learning_path(user, path):
+            return None
+        if refresh:
+            self._safe_recompute_user_node_contexts_for_available_nodes(
+                user=user,
+                path=path,
+                reason="on_demand_available_refresh",
+            )
+        records = self.chat_repository.list_user_learning_node_contexts(
+            user_id=user.id,
+            learning_path_id=learning_path_id,
+        )
+        if not refresh and not records:
+            self._safe_recompute_user_node_contexts_for_available_nodes(
+                user=user,
+                path=path,
+                reason="on_demand_available",
+            )
+            records = self.chat_repository.list_user_learning_node_contexts(
+                user_id=user.id,
+                learning_path_id=learning_path_id,
+            )
+        return LearningNodeContextListResponse(
+            contexts=[self._build_learning_node_context_read(item) for item in records]
+        )
+
+    def start_learning_node_execution(
+        self,
+        user: UserAccount,
+        learning_path_id: str,
+        node_id: str,
+    ) -> LearningNodeExecutionStartResponse | None:
+        path = self.chat_repository.get_learning_path(learning_path_id)
+        if path is None or not self._can_view_learning_path(user, path):
+            return None
+        definition = self._course_definition_from_learning_path(path)
+        node_by_id = {node.id: node for node in definition.nodes}
+        node = node_by_id.get(node_id)
+        if node is None:
+            raise ValueError(f"Unknown node_id '{node_id}'")
+        context_record = self.get_learning_node_context(user, learning_path_id, node_id, refresh=True)
+        if context_record is None:
+            raise ValueError("Node context is not available for execution")
+        node_context = dict(context_record.context or {})
+        result = self.node_execution_service.start(
+            user=user,
+            learning_path=path,
+            definition=definition,
+            node=node,
+            node_context=node_context,
+        )
+        self._safe_recompute_personalization_layers(user=user, reasons=["learning_node_progress_updated"])
+        self._safe_recompute_user_node_contexts_for_available_nodes(
+            user=user,
+            path=path,
+            reason="node_execution_started",
+        )
+        return LearningNodeExecutionStartResponse(
+            attempt=self._build_learning_node_execution_attempt_read(result.attempt),
+            auto_completed=result.auto_completed,
+            completion_reason=result.completion_reason,
+        )
+
+    def get_latest_learning_node_execution(
+        self,
+        user: UserAccount,
+        learning_path_id: str,
+        node_id: str,
+    ) -> LearningNodeExecutionAttemptRead | None:
+        path = self.chat_repository.get_learning_path(learning_path_id)
+        if path is None or not self._can_view_learning_path(user, path):
+            return None
+        attempt = self.chat_repository.get_latest_user_learning_node_execution_attempt(
+            user_id=user.id,
+            learning_path_id=learning_path_id,
+            node_id=node_id,
+        )
+        if attempt is None:
+            return None
+        return self._build_learning_node_execution_attempt_read(attempt)
+
+    def submit_learning_node_execution(
+        self,
+        user: UserAccount,
+        learning_path_id: str,
+        node_id: str,
+        attempt_id: str,
+        payload: LearningNodeExecutionSubmitRequest,
+    ) -> LearningNodeExecutionAttemptRead | None:
+        path = self.chat_repository.get_learning_path(learning_path_id)
+        if path is None or not self._can_view_learning_path(user, path):
+            return None
+        attempt = self.node_execution_service.submit_responses(
+            user=user,
+            attempt_id=attempt_id,
+            responses=dict(payload.responses or {}),
+        )
+        if attempt is None:
+            return None
+        if attempt.learning_path_id != learning_path_id or attempt.node_id != node_id:
+            raise ValueError("Attempt does not belong to this node")
+        return self._build_learning_node_execution_attempt_read(attempt)
+
+    def complete_learning_node_execution(
+        self,
+        user: UserAccount,
+        learning_path_id: str,
+        node_id: str,
+        attempt_id: str,
+    ) -> LearningNodeExecutionCompleteResponse | None:
+        path = self.chat_repository.get_learning_path(learning_path_id)
+        if path is None or not self._can_view_learning_path(user, path):
+            return None
+        definition = self._course_definition_from_learning_path(path)
+        node_by_id = {node.id: node for node in definition.nodes}
+        node = node_by_id.get(node_id)
+        if node is None:
+            raise ValueError(f"Unknown node_id '{node_id}'")
+        result = self.node_execution_service.complete(
+            user=user,
+            learning_path=path,
+            definition=definition,
+            node=node,
+            attempt_id=attempt_id,
+        )
+        if result is None:
+            return None
+        self._safe_recompute_personalization_layers(user=user, reasons=["learning_node_progress_updated", "ksa_updated"])
+        self._safe_recompute_user_node_contexts_for_available_nodes(
+            user=user,
+            path=path,
+            reason="node_execution_completed",
+        )
+        return LearningNodeExecutionCompleteResponse(
+            attempt=self._build_learning_node_execution_attempt_read(result.attempt),
+            node_completed=result.node_completed,
+            node_status=result.node_status,
+        )
 
     def update_learning_node_progress(
         self,
@@ -1732,6 +1931,11 @@ class RetrieverAppService:
         refreshed = self.chat_repository.get_learning_path(path.id)
         assert refreshed is not None
         self._safe_recompute_personalization_layers(user=user, reasons=["learning_node_progress_updated"])
+        self._safe_recompute_user_node_contexts_for_available_nodes(
+            user=user,
+            path=refreshed,
+            reason="learning_node_progress_updated",
+        )
         return self._build_learning_path_read(user, refreshed)
 
     def update_learning_path(
@@ -1765,6 +1969,10 @@ class RetrieverAppService:
         refreshed = self.chat_repository.get_learning_path(updated.id)
         assert refreshed is not None
         self._write_course_file_for_path(refreshed.id)
+        self._safe_invalidate_user_node_contexts_for_path(
+            learning_path_id=refreshed.id,
+            reason="learning_path_updated",
+        )
         return self._build_learning_path_read(user, refreshed)
 
     def delete_learning_path(self, user: UserAccount, learning_path_id: str) -> LearningPathRead | None:
@@ -1776,6 +1984,10 @@ class RetrieverAppService:
         if deleted is None:
             return None
         self._delete_course_file_for_course_id(learning_path_id)
+        self._safe_invalidate_user_node_contexts_for_path(
+            learning_path_id=learning_path_id,
+            reason="learning_path_deleted",
+        )
         return self._build_learning_path_read(user, deleted)
 
     def create_learning_module(
@@ -1800,6 +2012,10 @@ class RetrieverAppService:
         )
         self._sync_skilltree_from_linear_path(learning_path_id)
         self._write_course_file_for_path(learning_path_id)
+        self._safe_invalidate_user_node_contexts_for_path(
+            learning_path_id=learning_path_id,
+            reason="module_created",
+        )
         return self._build_learning_module_read(module, lessons=[])
 
     def update_learning_module(
@@ -1830,6 +2046,10 @@ class RetrieverAppService:
         lessons = self.chat_repository.list_learning_lessons(updated.id)
         self._sync_skilltree_from_linear_path(learning_path.id)
         self._write_course_file_for_path(learning_path.id)
+        self._safe_invalidate_user_node_contexts_for_path(
+            learning_path_id=learning_path.id,
+            reason="module_updated",
+        )
         return self._build_learning_module_read(updated, lessons=lessons)
 
     def delete_learning_module(self, user: UserAccount, module_id: str) -> LearningModuleRead | None:
@@ -1845,6 +2065,10 @@ class RetrieverAppService:
             return None
         self._sync_skilltree_from_linear_path(learning_path.id)
         self._write_course_file_for_path(learning_path.id)
+        self._safe_invalidate_user_node_contexts_for_path(
+            learning_path_id=learning_path.id,
+            reason="module_deleted",
+        )
         return self._build_learning_module_read(deleted, lessons=[])
 
     def reorder_learning_modules(
@@ -1865,6 +2089,10 @@ class RetrieverAppService:
         }
         self._sync_skilltree_from_linear_path(learning_path_id)
         self._write_course_file_for_path(learning_path_id)
+        self._safe_invalidate_user_node_contexts_for_path(
+            learning_path_id=learning_path_id,
+            reason="modules_reordered",
+        )
         return [self._build_learning_module_read(module, lessons=lessons_by_module.get(module.id, [])) for module in modules]
 
     def create_learning_lesson(
@@ -1893,6 +2121,10 @@ class RetrieverAppService:
         )
         self._sync_skilltree_from_linear_path(learning_path.id)
         self._write_course_file_for_path(learning_path.id)
+        self._safe_invalidate_user_node_contexts_for_path(
+            learning_path_id=learning_path.id,
+            reason="lesson_created",
+        )
         return self._build_learning_lesson_read(lesson)
 
     def update_learning_lesson(
@@ -1925,6 +2157,10 @@ class RetrieverAppService:
             return None
         self._sync_skilltree_from_linear_path(learning_path.id)
         self._write_course_file_for_path(learning_path.id)
+        self._safe_invalidate_user_node_contexts_for_path(
+            learning_path_id=learning_path.id,
+            reason="lesson_updated",
+        )
         return self._build_learning_lesson_read(updated)
 
     def delete_learning_lesson(self, user: UserAccount, lesson_id: str) -> LearningLessonRead | None:
@@ -1943,6 +2179,10 @@ class RetrieverAppService:
             return None
         self._sync_skilltree_from_linear_path(learning_path.id)
         self._write_course_file_for_path(learning_path.id)
+        self._safe_invalidate_user_node_contexts_for_path(
+            learning_path_id=learning_path.id,
+            reason="lesson_deleted",
+        )
         return self._build_learning_lesson_read(deleted)
 
     def reorder_learning_lessons(
@@ -1962,6 +2202,10 @@ class RetrieverAppService:
         lessons = self.chat_repository.reorder_learning_lessons(module_id, lesson_orders)
         self._sync_skilltree_from_linear_path(learning_path.id)
         self._write_course_file_for_path(learning_path.id)
+        self._safe_invalidate_user_node_contexts_for_path(
+            learning_path_id=learning_path.id,
+            reason="lessons_reordered",
+        )
         return [self._build_learning_lesson_read(lesson) for lesson in lessons]
 
     def send_message(
@@ -2409,6 +2653,10 @@ class RetrieverAppService:
                     target_learning_path_id=target_course_id,
                 )
                 self._write_course_file_for_path(upserted.id)
+                self._safe_invalidate_user_node_contexts_for_path(
+                    learning_path_id=upserted.id,
+                    reason="course_bootstrap_sync",
+                )
                 canonical_file_name = self.course_file_parser.safe_file_name(upserted.id, upserted.title)
                 if path.name != canonical_file_name:
                     path.unlink(missing_ok=True)
@@ -2472,6 +2720,10 @@ class RetrieverAppService:
         self.chat_repository.replace_learning_path_structure(existing.id, modules_payload)
         self.chat_repository.replace_learning_path_allowed_files(existing.id, definition.allowed_file_ids)
         self.chat_repository.replace_learning_path_allowed_tags(existing.id, definition.allowed_tags)
+        self._safe_invalidate_user_node_contexts_for_path(
+            learning_path_id=existing.id,
+            reason="course_definition_upserted",
+        )
         refreshed = self.chat_repository.get_learning_path(existing.id)
         if refreshed is None:
             raise ValueError(f"Learning path not found after upsert: {existing.id}")
@@ -3681,6 +3933,48 @@ class RetrieverAppService:
             updated_at=path.updated_at,
         )
 
+    def _build_learning_node_context_read(self, record) -> LearningNodeContextRead:
+        return LearningNodeContextRead(
+            user_id=record.user_id,
+            learning_path_id=record.learning_path_id,
+            node_id=record.node_id,
+            node_type=record.node_type,
+            generation_reason=record.generation_reason,
+            source_hash=record.source_hash,
+            generated_at=record.generated_at,
+            context=dict(record.context_json or {}),
+            course_context=dict(record.course_context_json or {}),
+            chapter_branch_context=dict(record.chapter_branch_context_json or {}),
+            prior_node_context=dict(record.prior_node_context_json or {}),
+            target_node_context=dict(record.target_node_context_json or {}),
+            next_node_context=dict(record.next_node_context_json or {}),
+            ksa_context=dict(record.ksa_context_json or {}),
+            readiness_context=dict(record.readiness_context_json or {}),
+            derived_assumptions=dict(record.derived_assumptions_json or {}),
+            created_at=record.created_at,
+            updated_at=record.updated_at,
+        )
+
+    def _build_learning_node_execution_attempt_read(self, record) -> LearningNodeExecutionAttemptRead:
+        return LearningNodeExecutionAttemptRead(
+            attempt_id=record.id,
+            user_id=record.user_id,
+            learning_path_id=record.learning_path_id,
+            node_id=record.node_id,
+            node_type=record.node_type,
+            status=record.status,
+            generation_reason=record.generation_reason,
+            package=dict(record.package_json or {}),
+            responses=dict(record.responses_json or {}),
+            result=dict(record.result_json or {}),
+            context_snapshot=dict(record.context_snapshot_json or {}),
+            source_node_window=list(record.source_node_window_json or []),
+            started_at=record.started_at,
+            completed_at=record.completed_at,
+            created_at=record.created_at,
+            updated_at=record.updated_at,
+        )
+
     def _resolve_assistant_mode(self, assistant_mode: str | None) -> str:
         mode = (assistant_mode or self.settings.default_assistant_mode).strip().lower()
         if not mode:
@@ -3707,6 +4001,101 @@ class RetrieverAppService:
             "upsert_user_learning_personalization_layers",
         }
         return all(callable(getattr(self.chat_repository, method_name, None)) for method_name in required_methods)
+
+    def _can_compute_user_node_contexts(self) -> bool:
+        required_methods = {
+            "list_user_learning_node_progress",
+            "upsert_user_learning_node_context",
+            "list_user_learning_node_contexts",
+            "delete_user_learning_node_contexts_for_path",
+            "get_user_ksa_profile",
+            "list_user_ksa_drill_attempts",
+        }
+        return all(callable(getattr(self.chat_repository, method_name, None)) for method_name in required_methods)
+
+    def _safe_recompute_user_node_context(
+        self,
+        *,
+        user: UserAccount,
+        path: LearningPath,
+        definition: CourseDefinition,
+        node_id: str,
+        reason: str,
+    ):
+        if not self._can_compute_user_node_contexts():
+            return None
+        try:
+            return self.node_context_engine.recompute_for_node(
+                user_id=user.id,
+                learning_path=path,
+                definition=definition,
+                node_id=node_id,
+                generation_reason=reason,
+            )
+        except Exception as error:
+            logger.warning(
+                "node context recompute failed for user=%s path=%s node=%s reason=%s error=%s",
+                user.id,
+                path.id,
+                node_id,
+                reason,
+                error,
+            )
+            return None
+
+    def _safe_recompute_user_node_contexts_for_available_nodes(
+        self,
+        *,
+        user: UserAccount,
+        path: LearningPath,
+        reason: str,
+    ) -> None:
+        if not self._can_compute_user_node_contexts():
+            return
+        try:
+            definition = self._course_definition_from_learning_path(path)
+            self.node_context_engine.recompute_for_available_nodes(
+                user_id=user.id,
+                learning_path=path,
+                definition=definition,
+                generation_reason=reason,
+            )
+        except Exception as error:
+            logger.warning(
+                "node context recompute for available nodes failed user=%s path=%s reason=%s error=%s",
+                user.id,
+                path.id,
+                reason,
+                error,
+            )
+
+    def _safe_recompute_user_node_contexts_for_user(self, *, user: UserAccount, reason: str) -> None:
+        if not self._can_compute_user_node_contexts():
+            return
+        paths = self.chat_repository.list_learning_paths(user_id=user.id, role=user.role)
+        for path in paths:
+            if not self._can_view_learning_path(user, path):
+                continue
+            self._safe_recompute_user_node_contexts_for_available_nodes(user=user, path=path, reason=reason)
+
+    def _safe_invalidate_user_node_contexts_for_path(self, *, learning_path_id: str, reason: str) -> None:
+        if not self._can_compute_user_node_contexts():
+            return
+        try:
+            deleted = self.chat_repository.delete_user_learning_node_contexts_for_path(learning_path_id=learning_path_id)
+            logger.info(
+                "node context invalidated for path=%s reason=%s deleted_rows=%s",
+                learning_path_id,
+                reason,
+                deleted,
+            )
+        except Exception as error:
+            logger.warning(
+                "node context invalidation failed for path=%s reason=%s error=%s",
+                learning_path_id,
+                reason,
+                error,
+            )
 
     def _safe_recompute_personalization_layers(self, *, user: UserAccount, reasons: list[str], force_all: bool = False) -> None:
         if not self._can_recompute_personalization_layers():

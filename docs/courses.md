@@ -1,5 +1,47 @@
 # Courses And Skilltree Schema
 
+## Persistent User Node Context
+
+A dedicated user-node-context layer now precomputes graph + learner state for each node.
+
+Persistence model:
+
+- table: `user_learning_node_contexts`
+- unique key: `(user_id, learning_path_id, node_id)`
+- stores grouped sections and an aggregate context payload
+- stores `source_hash`, `generation_reason`, and `generated_at` for traceability
+
+Context categories:
+
+- course-level context
+- chapter/branch placement context
+- backward-looking prior-node coverage context
+- targeted-node local metadata context
+- forward-looking successor/checkpoint context
+- related KSA capability/drill context
+- readiness and derived assumption context
+
+Design goal:
+
+- later node-type handlers can consume one stable context object without repeating graph traversal and KSA matching.
+
+## Node Execution Attempts
+
+Node runtime execution now persists attempt artifacts in:
+
+- `user_learning_node_execution_attempts`
+
+Each attempt stores:
+
+- generated runtime package
+- responses
+- evaluation result
+- node context snapshot used at generation time
+- source node window (for quiz)
+- status/timestamps
+
+This enables resumability, reproducible scoring/completion decisions, and later analytics.
+
 ## Overview
 
 Courses are represented as graph-based skilltrees (`schema_version: 2`).

@@ -1,5 +1,71 @@
 # Changelog
 
+## 2026-04-10 23:10 UTC
+
+- Implemented node-type execution layer for:
+  - `assessment_hook`
+  - `quiz`
+  - `unlock_gate`
+  - `milestone`
+- Added migration:
+  - `20260410_0018_learning_node_execution_attempts.py`
+  - table `user_learning_node_execution_attempts` for runtime package/response/result persistence.
+- Added execution service:
+  - `services/retriever/services/node_execution.py`
+  - on-demand runtime generation on node start
+  - modular execution/evaluation flow per supported node type.
+- Added API contracts/endpoints:
+  - `POST /api/learning-paths/{learning_path_id}/nodes/{node_id}/execution/start`
+  - `GET /api/learning-paths/{learning_path_id}/nodes/{node_id}/execution/latest`
+  - `PUT /api/learning-paths/{learning_path_id}/nodes/{node_id}/execution/attempts/{attempt_id}/responses`
+  - `POST /api/learning-paths/{learning_path_id}/nodes/{node_id}/execution/attempts/{attempt_id}/complete`
+- Added schema support for node execution attempts/responses/results in `services/retriever/schemas/learning.py`.
+- Extended repository/postgres layer with create/get/list/update methods for node execution attempts.
+- Updated dynamic drill archetype generation to support variable round counts (not fixed to 4 rounds / 16 questions).
+- Added tests:
+  - `tests/test_node_execution_service.py`
+  - validates assessment_hook topic/round generation, quiz package composition, and unlock_gate auto-completion behavior.
+- Updated docs:
+  - `docs/learning.md`
+  - `docs/courses.md`
+  - `docs/architecture.md`
+  - `docs/testing.md`
+
+## 2026-04-10 22:20 UTC
+
+- Added persistent per-user node context foundation for skilltree courses.
+- Added migration:
+  - `20260410_0017_user_learning_node_contexts.py`
+  - table `user_learning_node_contexts` with grouped context snapshots, `source_hash`, generation reason/timestamp, and per-user+path+node uniqueness.
+- Added node-context generation service:
+  - `services/retriever/services/node_context.py`
+  - computes and persists:
+    - `course_context`
+    - `chapter_branch_context`
+    - `prior_node_context`
+    - `target_node_context`
+    - `next_node_context`
+    - `ksa_context`
+    - `readiness_context`
+    - `derived_assumptions`
+- Added repository/postgres support:
+  - get/list/upsert node context rows
+  - invalidate node contexts by learning path.
+- Added API endpoints:
+  - `GET /api/learning-paths/{learning_path_id}/nodes/{node_id}/context`
+  - `GET /api/learning-paths/{learning_path_id}/node-contexts/available`
+- Integrated recomputation/invalidation triggers in `RetrieverAppService`:
+  - recompute available-node contexts after node progress updates
+  - recompute user contexts after KSA assessment/drill completion
+  - invalidate path contexts on learning path/module/lesson/course-structure updates.
+- Added tests:
+  - `tests/test_node_context_engine.py` (start-node and non-start-node context generation, KSA linkage, readiness shape).
+- Updated docs:
+  - `docs/learning.md`
+  - `docs/courses.md`
+  - `docs/architecture.md`
+  - `docs/testing.md`
+
 ## 2026-04-10 18:35 UTC
 
 - Added a persisted learning personalization layer foundation with six grouped outputs:

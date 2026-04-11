@@ -50,6 +50,12 @@ from services.retriever.schemas.learning import (
     CourseImportResponse,
     CourseListResponse,
     CourseTemplateResponse,
+    LearningNodeContextListResponse,
+    LearningNodeContextRead,
+    LearningNodeExecutionAttemptRead,
+    LearningNodeExecutionCompleteResponse,
+    LearningNodeExecutionStartResponse,
+    LearningNodeExecutionSubmitRequest,
     LearningNodeProgressUpdateRequest,
     LearningLessonCreateRequest,
     LearningLessonRead,
@@ -598,6 +604,118 @@ def create_app() -> FastAPI:
         if updated is None:
             raise HTTPException(status_code=404, detail="Learning path or node not found")
         return updated
+
+    @app.get(
+        "/api/learning-paths/{learning_path_id}/nodes/{node_id}/context",
+        response_model=LearningNodeContextRead,
+        responses={404: {"model": ErrorResponse}, 422: {"model": ErrorResponse}},
+    )
+    def get_learning_node_context(
+        learning_path_id: str,
+        node_id: str,
+        refresh: bool = Query(default=False),
+        auth: AuthContext = Depends(get_app_auth_context),
+        service: RetrieverAppService = Depends(get_retriever_service),
+    ) -> LearningNodeContextRead:
+        try:
+            record = service.get_learning_node_context(auth.user, learning_path_id, node_id, refresh=refresh)
+        except ValueError as error:
+            raise HTTPException(status_code=422, detail=str(error)) from error
+        if record is None:
+            raise HTTPException(status_code=404, detail="Learning path or node context not found")
+        return record
+
+    @app.get(
+        "/api/learning-paths/{learning_path_id}/node-contexts/available",
+        response_model=LearningNodeContextListResponse,
+        responses={404: {"model": ErrorResponse}},
+    )
+    def list_available_learning_node_contexts(
+        learning_path_id: str,
+        refresh: bool = Query(default=False),
+        auth: AuthContext = Depends(get_app_auth_context),
+        service: RetrieverAppService = Depends(get_retriever_service),
+    ) -> LearningNodeContextListResponse:
+        record = service.list_available_learning_node_contexts(auth.user, learning_path_id, refresh=refresh)
+        if record is None:
+            raise HTTPException(status_code=404, detail="Learning path not found")
+        return record
+
+    @app.post(
+        "/api/learning-paths/{learning_path_id}/nodes/{node_id}/execution/start",
+        response_model=LearningNodeExecutionStartResponse,
+        responses={404: {"model": ErrorResponse}, 422: {"model": ErrorResponse}},
+    )
+    def start_learning_node_execution(
+        learning_path_id: str,
+        node_id: str,
+        auth: AuthContext = Depends(get_app_auth_context),
+        service: RetrieverAppService = Depends(get_retriever_service),
+    ) -> LearningNodeExecutionStartResponse:
+        try:
+            record = service.start_learning_node_execution(auth.user, learning_path_id, node_id)
+        except ValueError as error:
+            raise HTTPException(status_code=422, detail=str(error)) from error
+        if record is None:
+            raise HTTPException(status_code=404, detail="Learning path or node not found")
+        return record
+
+    @app.get(
+        "/api/learning-paths/{learning_path_id}/nodes/{node_id}/execution/latest",
+        response_model=LearningNodeExecutionAttemptRead,
+        responses={404: {"model": ErrorResponse}},
+    )
+    def get_latest_learning_node_execution(
+        learning_path_id: str,
+        node_id: str,
+        auth: AuthContext = Depends(get_app_auth_context),
+        service: RetrieverAppService = Depends(get_retriever_service),
+    ) -> LearningNodeExecutionAttemptRead:
+        record = service.get_latest_learning_node_execution(auth.user, learning_path_id, node_id)
+        if record is None:
+            raise HTTPException(status_code=404, detail="Execution attempt not found")
+        return record
+
+    @app.put(
+        "/api/learning-paths/{learning_path_id}/nodes/{node_id}/execution/attempts/{attempt_id}/responses",
+        response_model=LearningNodeExecutionAttemptRead,
+        responses={404: {"model": ErrorResponse}, 422: {"model": ErrorResponse}},
+    )
+    def submit_learning_node_execution_responses(
+        learning_path_id: str,
+        node_id: str,
+        attempt_id: str,
+        payload: LearningNodeExecutionSubmitRequest,
+        auth: AuthContext = Depends(get_app_auth_context),
+        service: RetrieverAppService = Depends(get_retriever_service),
+    ) -> LearningNodeExecutionAttemptRead:
+        try:
+            record = service.submit_learning_node_execution(auth.user, learning_path_id, node_id, attempt_id, payload)
+        except ValueError as error:
+            raise HTTPException(status_code=422, detail=str(error)) from error
+        if record is None:
+            raise HTTPException(status_code=404, detail="Execution attempt not found")
+        return record
+
+    @app.post(
+        "/api/learning-paths/{learning_path_id}/nodes/{node_id}/execution/attempts/{attempt_id}/complete",
+        response_model=LearningNodeExecutionCompleteResponse,
+        responses={404: {"model": ErrorResponse}, 422: {"model": ErrorResponse}},
+    )
+    def complete_learning_node_execution(
+        learning_path_id: str,
+        node_id: str,
+        attempt_id: str,
+        auth: AuthContext = Depends(get_app_auth_context),
+        service: RetrieverAppService = Depends(get_retriever_service),
+    ) -> LearningNodeExecutionCompleteResponse:
+        try:
+            record = service.complete_learning_node_execution(auth.user, learning_path_id, node_id, attempt_id)
+        except ValueError as error:
+            raise HTTPException(status_code=422, detail=str(error)) from error
+        if record is None:
+            raise HTTPException(status_code=404, detail="Execution attempt not found")
+        return record
 
     @app.patch("/api/learning-paths/{learning_path_id}", response_model=LearningPathRead, responses={404: {"model": ErrorResponse}, 403: {"model": ErrorResponse}})
     def update_learning_path(
