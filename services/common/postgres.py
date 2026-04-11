@@ -27,6 +27,7 @@ from services.common.models import (
     GPTChatSession,
     GPTRecord,
     LearningLesson,
+    LearningNodeSession,
     LearningModule,
     LearningStateCheck,
     LearningPath,
@@ -1820,6 +1821,203 @@ class PostgresClient:
                     UserLearningNodeProgress.node_id == node_id,
                 )
             )
+
+    def list_learning_node_sessions(
+        self,
+        *,
+        user_id: int,
+        archived: bool = False,
+        include_deleted: bool = False,
+    ) -> list[LearningNodeSession]:
+        with self.session() as session:
+            stmt = (
+                select(LearningNodeSession)
+                .where(
+                    LearningNodeSession.user_id == user_id,
+                    LearningNodeSession.is_archived.is_(archived),
+                )
+                .order_by(LearningNodeSession.updated_at.desc(), LearningNodeSession.created_at.desc())
+            )
+            if not include_deleted:
+                stmt = stmt.where(LearningNodeSession.is_deleted.is_(False))
+            rows = session.scalars(stmt)
+            return list(rows)
+
+    def get_learning_node_session(
+        self,
+        *,
+        user_id: int,
+        session_id: str,
+    ) -> LearningNodeSession | None:
+        with self.session() as session:
+            return session.scalar(
+                select(LearningNodeSession).where(
+                    LearningNodeSession.id == session_id,
+                    LearningNodeSession.user_id == user_id,
+                )
+            )
+
+    def get_learning_node_session_by_node(
+        self,
+        *,
+        user_id: int,
+        learning_path_id: str,
+        node_id: str,
+    ) -> LearningNodeSession | None:
+        with self.session() as session:
+            return session.scalar(
+                select(LearningNodeSession).where(
+                    LearningNodeSession.user_id == user_id,
+                    LearningNodeSession.learning_path_id == learning_path_id,
+                    LearningNodeSession.node_id == node_id,
+                )
+            )
+
+    def ensure_learning_node_session(
+        self,
+        *,
+        user_id: int,
+        learning_path_id: str,
+        node_id: str,
+        node_type: str,
+        route_path: str,
+    ) -> LearningNodeSession:
+        with self.session() as session:
+            record = session.scalar(
+                select(LearningNodeSession).where(
+                    LearningNodeSession.user_id == user_id,
+                    LearningNodeSession.learning_path_id == learning_path_id,
+                    LearningNodeSession.node_id == node_id,
+                )
+            )
+            now = datetime.now(timezone.utc)
+            if record is None:
+                record = LearningNodeSession(
+                    user_id=user_id,
+                    learning_path_id=learning_path_id,
+                    node_id=node_id,
+                    node_type=node_type,
+                    route_path=route_path,
+                    status="created",
+                    is_archived=False,
+                    is_deleted=False,
+                )
+                session.add(record)
+            else:
+                record.node_type = node_type
+                record.route_path = route_path
+                record.is_archived = False
+                record.is_deleted = False
+                record.updated_at = now
+            session.flush()
+            session.refresh(record)
+            return record
+
+    def set_learning_node_session_archived(
+        self,
+        *,
+        user_id: int,
+        session_id: str,
+        is_archived: bool,
+    ) -> LearningNodeSession | None:
+        with self.session() as session:
+            record = session.scalar(
+                select(LearningNodeSession).where(
+                    LearningNodeSession.id == session_id,
+                    LearningNodeSession.user_id == user_id,
+                )
+            )
+            if record is None:
+                return None
+            record.is_archived = is_archived
+            record.updated_at = datetime.now(timezone.utc)
+            session.flush()
+            session.refresh(record)
+            return record
+
+    def set_learning_node_session_deleted(
+        self,
+        *,
+        user_id: int,
+        session_id: str,
+        is_deleted: bool,
+    ) -> LearningNodeSession | None:
+        with self.session() as session:
+            record = session.scalar(
+                select(LearningNodeSession).where(
+                    LearningNodeSession.id == session_id,
+                    LearningNodeSession.user_id == user_id,
+                )
+            )
+            if record is None:
+                return None
+            record.is_deleted = is_deleted
+            if is_deleted:
+                record.is_archived = False
+            record.updated_at = datetime.now(timezone.utc)
+            session.flush()
+            session.refresh(record)
+            return record
+
+    def mark_learning_node_session_opened(
+        self,
+        *,
+        user_id: int,
+        session_id: str,
+    ) -> LearningNodeSession | None:
+        with self.session() as session:
+            record = session.scalar(
+                select(LearningNodeSession).where(
+                    LearningNodeSession.id == session_id,
+                    LearningNodeSession.user_id == user_id,
+                )
+            )
+            if record is None:
+                return None
+            now = datetime.now(timezone.utc)
+            record.last_opened_at = now
+            if record.status == "created":
+                record.status = "in_progress"
+                if record.started_at is None:
+                    record.started_at = now
+            record.updated_at = now
+            session.flush()
+            session.refresh(record)
+            return record
+
+    def sync_learning_node_session_completion(
+        self,
+        *,
+        user_id: int,
+        learning_path_id: str,
+        node_id: str,
+        node_progress_status: str,
+    ) -> LearningNodeSession | None:
+        with self.session() as session:
+            record = session.scalar(
+                select(LearningNodeSession).where(
+                    LearningNodeSession.user_id == user_id,
+                    LearningNodeSession.learning_path_id == learning_path_id,
+                    LearningNodeSession.node_id == node_id,
+                )
+            )
+            if record is None:
+                return None
+            now = datetime.now(timezone.utc)
+            completed_statuses = {"completed", "mastered"}
+            if node_progress_status in completed_statuses:
+                record.status = "completed"
+                if record.started_at is None:
+                    record.started_at = now
+                record.completed_at = now
+            else:
+                if record.status == "completed":
+                    record.status = "in_progress"
+                record.completed_at = None
+            record.updated_at = now
+            session.flush()
+            session.refresh(record)
+            return record
 
     def get_user_learning_node_context(
         self,

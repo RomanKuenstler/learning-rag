@@ -9,6 +9,7 @@ from services.common.models import (
     GPTChatSession,
     GPTRecord,
     LearningLesson,
+    LearningNodeSession,
     LearningStateCheck,
     LearningModule,
     LearningPath,
@@ -518,6 +519,101 @@ class ChatRepository:
             user_id=user_id,
             learning_path_id=learning_path_id,
             node_id=node_id,
+        )
+
+    def list_learning_node_sessions(
+        self,
+        *,
+        user_id: int,
+        archived: bool = False,
+        include_deleted: bool = False,
+    ) -> list[LearningNodeSession]:
+        return self.postgres_client.list_learning_node_sessions(
+            user_id=user_id,
+            archived=archived,
+            include_deleted=include_deleted,
+        )
+
+    def get_learning_node_session(self, *, user_id: int, session_id: str) -> LearningNodeSession | None:
+        return self.postgres_client.get_learning_node_session(user_id=user_id, session_id=session_id)
+
+    def get_learning_node_session_by_node(
+        self,
+        *,
+        user_id: int,
+        learning_path_id: str,
+        node_id: str,
+    ) -> LearningNodeSession | None:
+        return self.postgres_client.get_learning_node_session_by_node(
+            user_id=user_id,
+            learning_path_id=learning_path_id,
+            node_id=node_id,
+        )
+
+    def ensure_learning_node_session(
+        self,
+        *,
+        user_id: int,
+        learning_path_id: str,
+        node_id: str,
+        node_type: str,
+        route_path: str,
+    ) -> LearningNodeSession:
+        return self.postgres_client.ensure_learning_node_session(
+            user_id=user_id,
+            learning_path_id=learning_path_id,
+            node_id=node_id,
+            node_type=node_type,
+            route_path=route_path,
+        )
+
+    def set_learning_node_session_archived(
+        self,
+        *,
+        user_id: int,
+        session_id: str,
+        is_archived: bool,
+    ) -> LearningNodeSession | None:
+        return self.postgres_client.set_learning_node_session_archived(
+            user_id=user_id,
+            session_id=session_id,
+            is_archived=is_archived,
+        )
+
+    def set_learning_node_session_deleted(
+        self,
+        *,
+        user_id: int,
+        session_id: str,
+        is_deleted: bool,
+    ) -> LearningNodeSession | None:
+        return self.postgres_client.set_learning_node_session_deleted(
+            user_id=user_id,
+            session_id=session_id,
+            is_deleted=is_deleted,
+        )
+
+    def mark_learning_node_session_opened(
+        self,
+        *,
+        user_id: int,
+        session_id: str,
+    ) -> LearningNodeSession | None:
+        return self.postgres_client.mark_learning_node_session_opened(user_id=user_id, session_id=session_id)
+
+    def sync_learning_node_session_completion(
+        self,
+        *,
+        user_id: int,
+        learning_path_id: str,
+        node_id: str,
+        node_progress_status: str,
+    ) -> LearningNodeSession | None:
+        return self.postgres_client.sync_learning_node_session_completion(
+            user_id=user_id,
+            learning_path_id=learning_path_id,
+            node_id=node_id,
+            node_progress_status=node_progress_status,
         )
 
     def get_user_learning_node_context(

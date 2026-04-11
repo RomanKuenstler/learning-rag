@@ -64,6 +64,31 @@ Future learning chat support is prepared through:
 - `chats.chat_type` (`normal|gpt|learning`)
 - `chats.learning_path_id` nullable foreign key
 
+## Learning Node Session Model
+
+A dedicated, non-chat learning session entity is now used for node-specific learning routes:
+
+- table: `learning_node_sessions`
+- uniqueness: one row per `(user_id, learning_path_id, node_id)`
+- key fields:
+  - `status` (`created|in_progress|completed`)
+  - `is_archived`
+  - `is_deleted` (soft-delete / hidden from sidebar)
+  - `started_at`, `completed_at`, `last_opened_at`
+  - timestamps (`created_at`, `updated_at`)
+
+This keeps node-session lifecycle separate from:
+
+- normal chats
+- GPT chats
+
+Lifecycle integration:
+
+- node Start/Continue ensures or reactivates the existing learning-node session
+- first successful learning-node route open marks session opened and transitions `created -> in_progress`
+- node-progress updates (`completed|mastered`) synchronize session status to `completed`
+- soft-delete hides from active sidebar but keeps DB row restorable
+
 ## User Node Context Generation Layer
 
 A reusable node-context engine was added in:

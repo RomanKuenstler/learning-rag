@@ -50,6 +50,9 @@ from services.retriever.schemas.learning import (
     CourseImportResponse,
     CourseListResponse,
     CourseTemplateResponse,
+    LearningNodeSessionDownloadRead,
+    LearningNodeSessionListResponse,
+    LearningNodeSessionRead,
     LearningNodeContextListResponse,
     LearningNodeContextRead,
     LearningNodeExecutionAttemptRead,
@@ -342,6 +345,134 @@ def create_app() -> FastAPI:
         if chat is None:
             raise HTTPException(status_code=404, detail="Chat not found")
         return chat
+
+    @app.get("/api/learning-node-sessions", response_model=LearningNodeSessionListResponse, responses={403: {"model": ErrorResponse}})
+    def list_learning_node_sessions(
+        auth: AuthContext = Depends(get_app_auth_context),
+        service: RetrieverAppService = Depends(get_retriever_service),
+    ) -> LearningNodeSessionListResponse:
+        try:
+            return service.list_learning_node_sessions(auth.user)
+        except PermissionError as error:
+            raise HTTPException(status_code=403, detail=str(error)) from error
+
+    @app.get("/api/learning-node-sessions/archived", response_model=LearningNodeSessionListResponse, responses={403: {"model": ErrorResponse}})
+    def list_archived_learning_node_sessions(
+        auth: AuthContext = Depends(get_app_auth_context),
+        service: RetrieverAppService = Depends(get_retriever_service),
+    ) -> LearningNodeSessionListResponse:
+        try:
+            return service.list_archived_learning_node_sessions(auth.user)
+        except PermissionError as error:
+            raise HTTPException(status_code=403, detail=str(error)) from error
+
+    @app.post(
+        "/api/learning-paths/{learning_path_id}/nodes/{node_id}/session",
+        response_model=LearningNodeSessionRead,
+        responses={404: {"model": ErrorResponse}, 422: {"model": ErrorResponse}, 403: {"model": ErrorResponse}},
+    )
+    def ensure_learning_node_session(
+        learning_path_id: str,
+        node_id: str,
+        auth: AuthContext = Depends(get_app_auth_context),
+        service: RetrieverAppService = Depends(get_retriever_service),
+    ) -> LearningNodeSessionRead:
+        try:
+            session = service.ensure_learning_node_session(auth.user, learning_path_id, node_id)
+        except PermissionError as error:
+            raise HTTPException(status_code=403, detail=str(error)) from error
+        except ValueError as error:
+            raise HTTPException(status_code=422, detail=str(error)) from error
+        if session is None:
+            raise HTTPException(status_code=404, detail="Learning path or node not found")
+        return session
+
+    @app.get("/api/learning-node-sessions/{session_id}", response_model=LearningNodeSessionRead, responses={404: {"model": ErrorResponse}})
+    def get_learning_node_session(
+        session_id: str,
+        mark_opened: bool = Query(default=False),
+        auth: AuthContext = Depends(get_app_auth_context),
+        service: RetrieverAppService = Depends(get_retriever_service),
+    ) -> LearningNodeSessionRead:
+        session = service.get_learning_node_session(auth.user, session_id, mark_opened=mark_opened)
+        if session is None:
+            raise HTTPException(status_code=404, detail="Learning node session not found")
+        return session
+
+    @app.patch(
+        "/api/learning-node-sessions/{session_id}/archive",
+        response_model=LearningNodeSessionRead,
+        responses={404: {"model": ErrorResponse}},
+    )
+    def archive_learning_node_session(
+        session_id: str,
+        auth: AuthContext = Depends(get_app_auth_context),
+        service: RetrieverAppService = Depends(get_retriever_service),
+    ) -> LearningNodeSessionRead:
+        session = service.archive_learning_node_session(auth.user, session_id)
+        if session is None:
+            raise HTTPException(status_code=404, detail="Learning node session not found")
+        return session
+
+    @app.patch(
+        "/api/learning-node-sessions/{session_id}/unarchive",
+        response_model=LearningNodeSessionRead,
+        responses={404: {"model": ErrorResponse}},
+    )
+    def unarchive_learning_node_session(
+        session_id: str,
+        auth: AuthContext = Depends(get_app_auth_context),
+        service: RetrieverAppService = Depends(get_retriever_service),
+    ) -> LearningNodeSessionRead:
+        session = service.unarchive_learning_node_session(auth.user, session_id)
+        if session is None:
+            raise HTTPException(status_code=404, detail="Learning node session not found")
+        return session
+
+    @app.patch(
+        "/api/learning-node-sessions/{session_id}/delete",
+        response_model=LearningNodeSessionRead,
+        responses={404: {"model": ErrorResponse}},
+    )
+    def soft_delete_learning_node_session(
+        session_id: str,
+        auth: AuthContext = Depends(get_app_auth_context),
+        service: RetrieverAppService = Depends(get_retriever_service),
+    ) -> LearningNodeSessionRead:
+        session = service.soft_delete_learning_node_session(auth.user, session_id)
+        if session is None:
+            raise HTTPException(status_code=404, detail="Learning node session not found")
+        return session
+
+    @app.post(
+        "/api/learning-node-sessions/{session_id}/reset",
+        response_model=LearningNodeSessionRead,
+        responses={404: {"model": ErrorResponse}},
+    )
+    def reset_learning_node_session(
+        session_id: str,
+        auth: AuthContext = Depends(get_app_auth_context),
+        service: RetrieverAppService = Depends(get_retriever_service),
+    ) -> LearningNodeSessionRead:
+        session = service.reset_learning_node_session(auth.user, session_id)
+        if session is None:
+            raise HTTPException(status_code=404, detail="Learning node session not found")
+        return session
+
+    @app.get(
+        "/api/learning-node-sessions/{session_id}/download",
+        response_model=LearningNodeSessionDownloadRead,
+        responses={404: {"model": ErrorResponse}},
+    )
+    def download_learning_node_session(
+        session_id: str,
+        auth: AuthContext = Depends(get_app_auth_context),
+        service: RetrieverAppService = Depends(get_retriever_service),
+    ) -> LearningNodeSessionDownloadRead:
+        session = service.download_learning_node_session(auth.user, session_id)
+        if session is None:
+            raise HTTPException(status_code=404, detail="Learning node session not found")
+        return session
 
     @app.get("/api/gpts", response_model=list[GptRead], responses={403: {"model": ErrorResponse}})
     def list_gpts(

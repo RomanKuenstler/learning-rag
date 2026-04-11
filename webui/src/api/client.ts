@@ -31,6 +31,9 @@ import type {
   LibraryUploadResponse,
   LearningModule,
   LearningLesson,
+  LearningNodeSession,
+  LearningNodeSessionDownload,
+  LearningNodeSessionListResponse,
   LearningGoal,
   LearningGoalPriority,
   LearningProfileBundle,
@@ -449,6 +452,43 @@ export const apiClient = {
       method: "PUT",
       body: JSON.stringify(payload),
     });
+  },
+  listLearningNodeSessions() {
+    return request<LearningNodeSessionListResponse>("/api/learning-node-sessions");
+  },
+  listArchivedLearningNodeSessions() {
+    return request<LearningNodeSessionListResponse>("/api/learning-node-sessions/archived");
+  },
+  ensureLearningNodeSession(pathId: string, nodeId: string) {
+    return request<LearningNodeSession>(`/api/learning-paths/${pathId}/nodes/${nodeId}/session`, {
+      method: "POST",
+    });
+  },
+  getLearningNodeSession(sessionId: string, markOpened = false) {
+    return request<LearningNodeSession>(`/api/learning-node-sessions/${sessionId}?mark_opened=${markOpened ? "true" : "false"}`);
+  },
+  archiveLearningNodeSession(sessionId: string) {
+    return request<LearningNodeSession>(`/api/learning-node-sessions/${sessionId}/archive`, {
+      method: "PATCH",
+    });
+  },
+  unarchiveLearningNodeSession(sessionId: string) {
+    return request<LearningNodeSession>(`/api/learning-node-sessions/${sessionId}/unarchive`, {
+      method: "PATCH",
+    });
+  },
+  deleteLearningNodeSession(sessionId: string) {
+    return request<LearningNodeSession>(`/api/learning-node-sessions/${sessionId}/delete`, {
+      method: "PATCH",
+    });
+  },
+  resetLearningNodeSession(sessionId: string) {
+    return request<LearningNodeSession>(`/api/learning-node-sessions/${sessionId}/reset`, {
+      method: "POST",
+    });
+  },
+  downloadLearningNodeSession(sessionId: string) {
+    return request<LearningNodeSessionDownload>(`/api/learning-node-sessions/${sessionId}/download`);
   },
   deleteLearningPath(pathId: string) {
     return request<LearningPath>(`/api/learning-paths/${pathId}`, { method: "DELETE" });

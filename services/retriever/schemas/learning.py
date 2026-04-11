@@ -324,6 +324,35 @@ class LearningNodeProgressUpdateRequest(BaseModel):
     evidence: dict[str, object] = Field(default_factory=dict)
 
 
+class LearningNodeSessionRead(BaseModel):
+    id: str
+    user_id: int
+    learning_path_id: str
+    node_id: str
+    node_type: str = ""
+    route_path: str = ""
+    node_title: str = ""
+    course_title: str = ""
+    status: Literal["created", "in_progress", "completed"] = "created"
+    is_archived: bool = False
+    is_deleted: bool = False
+    is_completed: bool = False
+    started_at: datetime | None = None
+    completed_at: datetime | None = None
+    last_opened_at: datetime | None = None
+    created_at: datetime
+    updated_at: datetime
+
+
+class LearningNodeSessionListResponse(BaseModel):
+    sessions: list[LearningNodeSessionRead] = Field(default_factory=list)
+
+
+class LearningNodeSessionDownloadRead(BaseModel):
+    session: LearningNodeSessionRead
+    message: str = "Download is not implemented yet."
+
+
 class LearningNodeContextRead(BaseModel):
     user_id: int
     learning_path_id: str

@@ -370,6 +370,37 @@ export type LearningPathResponse = {
   paths: LearningPath[];
 };
 
+export type LearningNodeSessionStatus = "created" | "in_progress" | "completed";
+
+export type LearningNodeSession = {
+  id: string;
+  user_id: number;
+  learning_path_id: string;
+  node_id: string;
+  node_type: SkilltreeNodeType | string;
+  route_path: string;
+  node_title: string;
+  course_title: string;
+  status: LearningNodeSessionStatus;
+  is_archived: boolean;
+  is_deleted: boolean;
+  is_completed: boolean;
+  started_at: string | null;
+  completed_at: string | null;
+  last_opened_at: string | null;
+  created_at: string;
+  updated_at: string;
+};
+
+export type LearningNodeSessionListResponse = {
+  sessions: LearningNodeSession[];
+};
+
+export type LearningNodeSessionDownload = {
+  session: LearningNodeSession;
+  message: string;
+};
+
 export type CourseSort =
   | "name_asc"
   | "name_desc"

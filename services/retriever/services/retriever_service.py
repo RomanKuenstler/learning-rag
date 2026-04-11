@@ -15,6 +15,7 @@ from services.common.config import Settings
 from services.common.models import (
     LearningLesson,
     LearningModule,
+    LearningNodeSession,
     LearningPath,
     UserAccount,
     UserLearningGoal,
@@ -55,6 +56,9 @@ from services.retriever.schemas.chat import (
     SystemServiceStatusRead,
 )
 from services.retriever.schemas.learning import (
+    LearningNodeSessionDownloadRead,
+    LearningNodeSessionListResponse,
+    LearningNodeSessionRead,
     LearningNodeExecutionAttemptRead,
     LearningNodeExecutionAttemptListResponse,
     LearningNodeExecutionCompleteResponse,
@@ -578,6 +582,109 @@ class RetrieverAppService:
         if chat is None:
             return None
         return map_chat(chat)
+
+    def list_learning_node_sessions(self, user: UserAccount) -> LearningNodeSessionListResponse:
+        records = self.chat_repository.list_learning_node_sessions(user_id=user.id, archived=False, include_deleted=False)
+        sessions = [self._build_learning_node_session_read(user, record) for record in records]
+        return LearningNodeSessionListResponse(sessions=[session for session in sessions if session is not None])
+
+    def list_archived_learning_node_sessions(self, user: UserAccount) -> LearningNodeSessionListResponse:
+        records = self.chat_repository.list_learning_node_sessions(user_id=user.id, archived=True, include_deleted=False)
+        sessions = [self._build_learning_node_session_read(user, record) for record in records]
+        return LearningNodeSessionListResponse(sessions=[session for session in sessions if session is not None])
+
+    def ensure_learning_node_session(self, user: UserAccount, learning_path_id: str, node_id: str) -> LearningNodeSessionRead | None:
+        path = self.chat_repository.get_learning_path(learning_path_id)
+        if path is None or not self._can_view_learning_path(user, path):
+            return None
+
+        definition = self._course_definition_from_learning_path(path)
+        node = next((item for item in definition.nodes if item.id == node_id), None)
+        if node is None:
+            raise ValueError(f"Unknown node_id '{node_id}'")
+
+        route_path = f"/learning/nodes/{learning_path_id}/{node_id}"
+        record = self.chat_repository.ensure_learning_node_session(
+            user_id=user.id,
+            learning_path_id=learning_path_id,
+            node_id=node_id,
+            node_type=node.type,
+            route_path=route_path,
+        )
+
+        progress_entries = self.chat_repository.list_user_learning_node_progress(user_id=user.id, learning_path_id=learning_path_id)
+        progress_by_node = {item.node_id: item.status for item in progress_entries}
+        self.chat_repository.sync_learning_node_session_completion(
+            user_id=user.id,
+            learning_path_id=learning_path_id,
+            node_id=node_id,
+            node_progress_status=progress_by_node.get(node_id, "available"),
+        )
+        refreshed = self.chat_repository.get_learning_node_session(user_id=user.id, session_id=record.id)
+        assert refreshed is not None
+        built = self._build_learning_node_session_read(user, refreshed)
+        return built
+
+    def get_learning_node_session(
+        self,
+        user: UserAccount,
+        session_id: str,
+        *,
+        mark_opened: bool = False,
+    ) -> LearningNodeSessionRead | None:
+        record = self.chat_repository.get_learning_node_session(user_id=user.id, session_id=session_id)
+        if record is None:
+            return None
+        if mark_opened:
+            opened = self.chat_repository.mark_learning_node_session_opened(user_id=user.id, session_id=session_id)
+            if opened is not None:
+                record = opened
+        return self._build_learning_node_session_read(user, record)
+
+    def archive_learning_node_session(self, user: UserAccount, session_id: str) -> LearningNodeSessionRead | None:
+        record = self.chat_repository.set_learning_node_session_archived(
+            user_id=user.id,
+            session_id=session_id,
+            is_archived=True,
+        )
+        if record is None:
+            return None
+        return self._build_learning_node_session_read(user, record)
+
+    def unarchive_learning_node_session(self, user: UserAccount, session_id: str) -> LearningNodeSessionRead | None:
+        record = self.chat_repository.set_learning_node_session_archived(
+            user_id=user.id,
+            session_id=session_id,
+            is_archived=False,
+        )
+        if record is None:
+            return None
+        return self._build_learning_node_session_read(user, record)
+
+    def soft_delete_learning_node_session(self, user: UserAccount, session_id: str) -> LearningNodeSessionRead | None:
+        record = self.chat_repository.set_learning_node_session_deleted(
+            user_id=user.id,
+            session_id=session_id,
+            is_deleted=True,
+        )
+        if record is None:
+            return None
+        return self._build_learning_node_session_read(user, record)
+
+    def reset_learning_node_session(self, user: UserAccount, session_id: str) -> LearningNodeSessionRead | None:
+        record = self.chat_repository.get_learning_node_session(user_id=user.id, session_id=session_id)
+        if record is None:
+            return None
+        return self._build_learning_node_session_read(user, record)
+
+    def download_learning_node_session(self, user: UserAccount, session_id: str) -> LearningNodeSessionDownloadRead | None:
+        record = self.chat_repository.get_learning_node_session(user_id=user.id, session_id=session_id)
+        if record is None:
+            return None
+        built = self._build_learning_node_session_read(user, record)
+        if built is None:
+            return None
+        return LearningNodeSessionDownloadRead(session=built)
 
     def download_chat(self, user: UserAccount, chat_id: str):
         self._ensure_student_cannot_use_standard_chat(user)
@@ -1908,6 +2015,12 @@ class RetrieverAppService:
         )
         if result is None:
             return None
+        self.chat_repository.sync_learning_node_session_completion(
+            user_id=user.id,
+            learning_path_id=learning_path_id,
+            node_id=node_id,
+            node_progress_status=result.node_status,
+        )
         self._safe_recompute_personalization_layers(user=user, reasons=["learning_node_progress_updated", "ksa_updated"])
         self._safe_recompute_user_node_contexts_for_available_nodes(
             user=user,
@@ -2052,13 +2165,21 @@ class RetrieverAppService:
 
         refreshed = self.chat_repository.get_learning_path(path.id)
         assert refreshed is not None
+        refreshed_read = self._build_learning_path_read(user, refreshed)
+        node_status_after_update = str(refreshed_read.node_progress.get(node_id, "available"))
+        self.chat_repository.sync_learning_node_session_completion(
+            user_id=user.id,
+            learning_path_id=path.id,
+            node_id=node_id,
+            node_progress_status=node_status_after_update,
+        )
         self._safe_recompute_personalization_layers(user=user, reasons=["learning_node_progress_updated"])
         self._safe_recompute_user_node_contexts_for_available_nodes(
             user=user,
             path=refreshed,
             reason="learning_node_progress_updated",
         )
-        return self._build_learning_path_read(user, refreshed)
+        return refreshed_read
 
     def update_learning_path(
         self,
@@ -4053,6 +4174,41 @@ class RetrieverAppService:
             can_delete=self._can_delete_learning_path(user, path),
             created_at=path.created_at,
             updated_at=path.updated_at,
+        )
+
+    def _build_learning_node_session_read(
+        self,
+        user: UserAccount,
+        record: LearningNodeSession,
+    ) -> LearningNodeSessionRead | None:
+        path = self.chat_repository.get_learning_path(record.learning_path_id)
+        if path is None or not self._can_view_learning_path(user, path):
+            return None
+        definition = self._course_definition_from_learning_path(path)
+        node = next((item for item in definition.nodes if item.id == record.node_id), None)
+        if node is None:
+            return None
+        status = str(record.status or "created")
+        if status not in {"created", "in_progress", "completed"}:
+            status = "created"
+        return LearningNodeSessionRead(
+            id=record.id,
+            user_id=record.user_id,
+            learning_path_id=record.learning_path_id,
+            node_id=record.node_id,
+            node_type=record.node_type,
+            route_path=f"/learning/nodes/{record.id}",
+            node_title=node.title,
+            course_title=path.title,
+            status=status,
+            is_archived=bool(record.is_archived),
+            is_deleted=bool(record.is_deleted),
+            is_completed=status == "completed",
+            started_at=record.started_at,
+            completed_at=record.completed_at,
+            last_opened_at=record.last_opened_at,
+            created_at=record.created_at,
+            updated_at=record.updated_at,
         )
 
     def _build_learning_node_context_read(self, record) -> LearningNodeContextRead:

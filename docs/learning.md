@@ -1,5 +1,37 @@
 # Learning And Courses
 
+## Learning Node Session Shell (This Step)
+
+Added a dedicated `Learning Node Session` concept for per-user, per-course-node learning routes.
+
+What this step now provides:
+
+- sidebar section: `Learning Nodes`
+- one reusable session per `(user_id, learning_path_id, node_id)`
+- Start/Continue on a course node now opens a dedicated node session route
+- dedicated route: `/learning/nodes/{session_id}`
+- per-item sidebar menu: `Archive`, `Reset`, `Download`, `Delete`
+
+Status icon semantics in sidebar:
+
+- blue play: session `created` (node started from tree, not interactively opened yet)
+- orange check-in-circle: session `in_progress`
+- green check: session `completed`
+
+Session lifecycle behavior:
+
+- `created` on first node start from the course tree
+- `created -> in_progress` on first successful load of `/learning/nodes/{session_id}`
+- `in_progress -> completed` when node progress becomes `completed` or `mastered`
+- archived sessions are removed from the active list and available in archive flows
+- delete is soft-delete (`is_deleted=true`), not physical DB deletion
+- soft-deleted sessions are reactivated (same row, no duplicate) when starting that node again from Courses
+
+Step boundary reminder:
+
+- this step only prepares routing/navigation/session lifecycle shell
+- final node content UI/interaction flow remains a later step
+
 ## User Node Context Foundation (Step)
 
 The backend now persists a per-user, per-course-node context snapshot that is generated before node execution.

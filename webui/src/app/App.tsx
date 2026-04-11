@@ -14,6 +14,7 @@ import { PreferencesDialog } from "../components/preferences/PreferencesDialog";
 import { Sidebar } from "../components/sidebar/Sidebar";
 import { useChatApp } from "../hooks/useChatApp";
 import { LoginPage } from "../pages/LoginPage";
+import { LearningNodePage } from "../pages/LearningNodePage";
 import { PasswordChangePage } from "../pages/PasswordChangePage";
 import { GptEditorPage } from "../pages/GptEditorPage";
 
@@ -42,8 +43,11 @@ function AppRoutes() {
   const location = useLocation();
   const currentChatId = location.pathname.startsWith("/chats/") ? location.pathname.split("/")[2] ?? null : null;
   const currentGptId = location.pathname.startsWith("/gpts/") && location.pathname.endsWith("/chat") ? location.pathname.split("/")[2] ?? null : null;
-  const activeView = location.pathname.startsWith("/learning")
-    ? "learning"
+  const currentLearningNodeSessionId = location.pathname.startsWith("/learning/nodes/") ? location.pathname.split("/")[3] ?? null : null;
+  const activeView = location.pathname.startsWith("/learning/nodes/")
+    ? "learning-node"
+    : location.pathname.startsWith("/learning")
+      ? "learning"
     : location.pathname.startsWith("/courses")
       ? "courses"
     : location.pathname.startsWith("/library")
@@ -209,11 +213,31 @@ function AppRoutes() {
     }
   }
 
+  async function handleSelectLearningNodeSession(sessionId: string) {
+    navigate(`/learning/nodes/${sessionId}`);
+  }
+
+  async function handleArchiveLearningNodeSession(sessionId: string) {
+    await app.archiveLearningNodeSession(sessionId);
+    if (currentLearningNodeSessionId === sessionId) {
+      navigate("/courses");
+    }
+  }
+
+  async function handleDeleteLearningNodeSession(sessionId: string) {
+    await app.deleteLearningNodeSession(sessionId);
+    if (currentLearningNodeSessionId === sessionId) {
+      navigate("/courses");
+    }
+  }
+
   const sidebar = (
     <Sidebar
       chats={app.chats}
       gpts={app.gpts}
+      learningNodeSessions={app.learningNodeSessions}
       activeChatId={currentGptId ?? app.activeChatId}
+      activeLearningNodeSessionId={currentLearningNodeSessionId}
       activeView={activeView}
       currentUser={app.currentUser}
       canUseStandardChat={app.canUseStandardChat}
@@ -241,6 +265,11 @@ function AppRoutes() {
       }}
       onDownloadChat={(chatId) => void app.downloadChat(chatId)}
       onDeleteChat={(chatId) => void handleDeleteChat(chatId)}
+      onSelectLearningNodeSession={(sessionId) => void handleSelectLearningNodeSession(sessionId)}
+      onArchiveLearningNodeSession={(sessionId) => void handleArchiveLearningNodeSession(sessionId)}
+      onResetLearningNodeSession={(sessionId) => void app.resetLearningNodeSession(sessionId)}
+      onDownloadLearningNodeSession={(sessionId) => void app.downloadLearningNodeSession(sessionId)}
+      onDeleteLearningNodeSession={(sessionId) => void handleDeleteLearningNodeSession(sessionId)}
       onEditGpt={(gptId) => navigate(`/gpts/${gptId}/edit`)}
       onClearGpt={(gptId) => void app.clearGptChat(gptId)}
       onDownloadGpt={(gptId) => void app.downloadGptChat(gptId)}
@@ -402,6 +431,14 @@ function AppRoutes() {
               }
             />
             <Route
+              path="/learning/nodes/:sessionId"
+              element={
+                <LearningNodeRoute
+                  app={app}
+                />
+              }
+            />
+            <Route
               path="/courses"
               element={
                 <CoursesPage
@@ -417,7 +454,10 @@ function AppRoutes() {
                   onUpdateNodeProgress={(courseId, nodeId, payload) => app.updateLearningNodeProgress(courseId, nodeId, payload)}
                   onImport={app.importCourseFiles}
                   onDownloadTemplate={app.downloadCourseTemplate}
-                  onStartContinue={() => navigate("/learning")}
+                  onStartContinue={async (courseId, nodeId) => {
+                    const session = await app.ensureLearningNodeSession(courseId, nodeId);
+                    navigate(`/learning/nodes/${session.id}`);
+                  }}
                   onToggleArchived={(courseId, nextArchived) =>
                     app
                       .updateLearningPath(courseId, { status: nextArchived ? "archived" : "published" })
@@ -500,6 +540,7 @@ function AppRoutes() {
         <PreferencesDialog
           initialTab={preferencesTab}
           archivedChats={app.archivedChats}
+          archivedLearningNodeSessions={app.archivedLearningNodeSessions}
           settingsDraft={app.settingsDraft}
           personalizationDraft={app.personalizationDraft}
           availableModes={app.settings?.available_assistant_modes ?? ["simple", "refine", "thinking"]}
@@ -517,8 +558,11 @@ function AppRoutes() {
           personalizationSuccess={app.personalizationSuccess}
           onClose={() => setPreferencesTab(null)}
           onDownloadChat={(chatId) => void app.downloadChat(chatId)}
+          onDownloadLearningNodeSession={(sessionId) => void app.downloadLearningNodeSession(sessionId)}
           onUnarchiveChat={(chatId) => void app.unarchiveChat(chatId)}
+          onUnarchiveLearningNodeSession={(sessionId) => void app.unarchiveLearningNodeSession(sessionId)}
           onDeleteChat={(chatId) => void handleDeleteChat(chatId)}
+          onDeleteLearningNodeSession={(sessionId) => void app.deleteLearningNodeSession(sessionId)}
           onFieldChange={app.updateSettingsDraft}
           onPersonalizationFieldChange={app.updatePersonalizationDraft}
           onSaveSettings={() => void app.saveSettings()}
@@ -751,6 +795,59 @@ function ChatRoute({
       attachmentRules={attachmentRules}
       onSend={onSend}
       onFeedback={onFeedback}
+    />
+  );
+}
+
+function LearningNodeRoute({
+  app,
+}: {
+  app: ReturnType<typeof useChatApp>;
+}) {
+  const params = useParams<{ sessionId: string }>();
+  const sessionId = params.sessionId ?? "";
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [session, setSession] = useState<Awaited<ReturnType<typeof app.getLearningNodeSession>> | null>(null);
+
+  useEffect(() => {
+    if (!sessionId) {
+      return;
+    }
+    let cancelled = false;
+    setLoading(true);
+    setError(null);
+    void app
+      .getLearningNodeSession(sessionId, false)
+      .then((payload) => {
+        if (!cancelled) {
+          setSession(payload);
+        }
+      })
+      .catch((nextError: unknown) => {
+        if (!cancelled) {
+          setError(nextError instanceof Error ? nextError.message : "Failed to load learning node session");
+        }
+      })
+      .finally(() => {
+        if (!cancelled) {
+          setLoading(false);
+        }
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [app, sessionId]);
+
+  if (!sessionId) {
+    return <Navigate to="/courses" replace />;
+  }
+
+  return (
+    <LearningNodePage
+      loading={loading}
+      error={error}
+      session={session}
     />
   );
 }

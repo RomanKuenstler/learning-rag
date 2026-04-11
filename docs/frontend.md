@@ -55,6 +55,19 @@
 - Preview history is cleared locally whenever any GPT config field changes.
 - Persistent GPT chats lock the header assistant-mode picker because mode comes from the GPT itself.
 
+## Learning Node Sessions UI Shell
+
+- Sidebar now includes a dedicated `Learning Nodes` section.
+- Items are not normal chats and not GPT chats; they map to dedicated learning-node sessions.
+- Each item shows status icon state:
+  - blue play (`created`)
+  - orange check-in-circle (`in_progress`)
+  - green check (`completed`)
+- Each item menu includes: `Archive`, `Reset` (placeholder), `Download` (placeholder), `Delete` (soft-delete).
+- Dedicated learning-node route added: `/learning/nodes/:sessionId`.
+- Courses node Start/Continue now ensures a reusable session for that user/node and navigates to that route.
+- Archive tab in Preferences now includes archived learning-node sessions alongside archived chats.
+
 ## Styling Approach
 
 - Styling remains centralized in `webui/src/styles/index.css`.

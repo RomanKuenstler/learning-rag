@@ -39,7 +39,7 @@ type CoursesPageProps = {
   ) => Promise<LearningPath>;
   onImport: (files: File[], scopesByFile: Record<string, "global" | "user">) => Promise<CourseImportResponse>;
   onDownloadTemplate: () => Promise<unknown>;
-  onStartContinue: (course: CourseListItem) => void;
+  onStartContinue: (courseId: string, nodeId: string) => Promise<unknown> | unknown;
   onToggleArchived: (courseId: string, nextArchived: boolean) => Promise<unknown>;
   onDeleteCourse: (courseId: string) => Promise<unknown>;
 };
@@ -587,7 +587,11 @@ export function CoursesPage({
                         aria-label={course.status === "draft" ? "Start course" : "Continue course"}
                         onClick={(event) => {
                           event.stopPropagation();
-                          void onStartContinue(course);
+                          setSelectedCourseId(course.id);
+                          if (!detailsByCourseId[course.id]) {
+                            void onLoadDetails(course.id)
+                              .then((payload) => setDetailsByCourseId((current) => ({ ...current, [course.id]: payload })));
+                          }
                         }}
                       >
                         <Icon name="play" className="course-play-icon" />
@@ -940,7 +944,8 @@ export function CoursesPage({
                                 aria-label={`${actionLabel} node`}
                                 onClick={() => {
                                   void onUpdateNodeProgress(selectedCourse.id, selectedNode.id, { status: "in_progress" })
-                                    .then((payload) => setDetailsByCourseId((current) => ({ ...current, [selectedCourse.id]: payload })));
+                                    .then((payload) => setDetailsByCourseId((current) => ({ ...current, [selectedCourse.id]: payload })))
+                                    .then(() => onStartContinue(selectedCourse.id, selectedNode.id));
                                 }}
                               >
                                 <Icon name="play" />

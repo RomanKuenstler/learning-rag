@@ -1,5 +1,52 @@
 # Changelog
 
+## 2026-04-11 22:20 UTC
+
+- Added dedicated learning-node session persistence and API shell for per-user, per-node learning routes.
+- Added migration:
+  - `20260411_0019_learning_node_sessions.py`
+  - new table `learning_node_sessions` with:
+    - unique `(user_id, learning_path_id, node_id)`
+    - lifecycle status (`created|in_progress|completed`)
+    - archive state (`is_archived`)
+    - soft-delete state (`is_deleted`)
+    - route/session metadata and timestamps (`started_at`, `completed_at`, `last_opened_at`)
+- Added backend session APIs:
+  - `GET /api/learning-node-sessions`
+  - `GET /api/learning-node-sessions/archived`
+  - `POST /api/learning-paths/{learning_path_id}/nodes/{node_id}/session`
+  - `GET /api/learning-node-sessions/{session_id}?mark_opened=true|false`
+  - `PATCH /api/learning-node-sessions/{session_id}/archive`
+  - `PATCH /api/learning-node-sessions/{session_id}/unarchive`
+  - `PATCH /api/learning-node-sessions/{session_id}/delete` (soft delete)
+  - `POST /api/learning-node-sessions/{session_id}/reset` (placeholder)
+  - `GET /api/learning-node-sessions/{session_id}/download` (placeholder)
+- Integrated completion sync with node progress updates and node execution completion so session sidebar status updates to `completed` when node is completed/mastered.
+- Added new frontend learning-node route shell:
+  - `/learning/nodes/:sessionId`
+  - page component: `LearningNodePage` (intentional placeholder shell, no final content UI yet)
+- Added sidebar `Learning Nodes` section with per-item status icon states:
+  - blue play (`created`)
+  - orange check-in-circle (`in_progress`)
+  - green check (`completed`)
+- Added per-learning-session sidebar menu actions:
+  - `Archive`
+  - `Reset` (placeholder)
+  - `Download` (placeholder)
+  - `Delete` (soft-delete/hide)
+- Updated Courses node Start/Continue behavior in the node detail panel:
+  - ensures single reusable session for user+node
+  - reactivates soft-deleted sessions instead of creating duplicates
+  - opens dedicated learning-node route
+- Updated Preferences Archive tab to include archived learning-node sessions with unarchive/download/delete actions.
+- Added API tests:
+  - `tests/test_learning_node_sessions_api.py`
+- Updated docs:
+  - `docs/learning.md`
+  - `docs/frontend.md`
+  - `docs/architecture.md`
+  - `docs/testing.md`
+
 ## 2026-04-11 18:35 UTC
 
 - Added structured runtime plan generation for `learning_unit` execution:

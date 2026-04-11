@@ -223,6 +223,28 @@ Additional focused checks:
 
 - `pytest tests/test_node_context_engine.py`
 
+## Learning Node Session Shell Checks Covered
+
+- learning-node session API route coverage:
+  - list active
+  - list archived
+  - ensure/create-or-reactivate for user+node
+  - mark-opened load behavior
+  - archive/unarchive
+  - soft-delete
+  - reset/download placeholders
+- frontend production build with:
+  - `Learning Nodes` sidebar section
+  - dedicated learning-node route shell
+  - Preferences archive integration for archived learning-node sessions
+
+Focused run:
+
+```bash
+python3 -m pytest tests/test_learning_node_sessions_api.py -q
+cd webui && npm run build
+```
+
 Smoke validation (manual, API):
 
 1. Start a `learning_unit` node and verify package fields:
