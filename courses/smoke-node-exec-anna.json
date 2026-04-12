@@ -14,16 +14,16 @@
   "allowed_tags": [],
   "chapters": [
     {
-      "id": "ch-1",
-      "title": "Smoke",
-      "description": "Smoke chapter",
+      "id": "chapter-foundations",
+      "title": "Foundations",
+      "description": "Core operating system, networking, scripting, programming, and version control skills.",
       "order_index": 0,
       "metadata": {}
     },
     {
-      "id": "chapter-foundations",
-      "title": "Foundations",
-      "description": "Core operating system, networking, scripting, programming, and version control skills.",
+      "id": "ch-1",
+      "title": "Smoke",
+      "description": "Smoke chapter",
       "order_index": 0,
       "metadata": {}
     },
@@ -315,8 +315,8 @@
       "completion_mode": "lesson_complete",
       "estimated_duration_minutes": 90,
       "layout": {
-        "x": 120,
-        "y": 120
+        "x": 120.0,
+        "y": 120.0
       },
       "metadata": {},
       "display": {},
@@ -408,8 +408,8 @@
       "completion_mode": "quiz_pass",
       "estimated_duration_minutes": 30,
       "layout": {
-        "x": 310,
-        "y": 240
+        "x": 310.0,
+        "y": 240.0
       },
       "metadata": {
         "pass_threshold": 0.75
@@ -474,8 +474,8 @@
       "completion_mode": "lesson_complete",
       "estimated_duration_minutes": 90,
       "layout": {
-        "x": 500,
-        "y": 120
+        "x": 500.0,
+        "y": 120.0
       },
       "metadata": {},
       "display": {},
@@ -569,8 +569,8 @@
       "completion_mode": "practice_complete",
       "estimated_duration_minutes": 95,
       "layout": {
-        "x": 690,
-        "y": 240
+        "x": 690.0,
+        "y": 240.0
       },
       "metadata": {},
       "display": {},
@@ -653,8 +653,8 @@
       "completion_mode": "checkpoint_pass",
       "estimated_duration_minutes": 30,
       "layout": {
-        "x": 880,
-        "y": 120
+        "x": 880.0,
+        "y": 120.0
       },
       "metadata": {
         "pass_threshold": 0.72
@@ -735,8 +735,8 @@
       "completion_mode": "checkpoint_pass",
       "estimated_duration_minutes": 180,
       "layout": {
-        "x": 1070,
-        "y": 240
+        "x": 1070.0,
+        "y": 240.0
       },
       "metadata": {
         "pass_threshold": 0.85
@@ -844,8 +844,13 @@
   ],
   "edges": [
     {
-      "from_node_id": "node-linux",
-      "to_node_id": "node-foundations-quiz",
+      "from_node_id": "node-docker",
+      "to_node_id": "node-docker-practice",
+      "relationship": "recommended"
+    },
+    {
+      "from_node_id": "node-docker-practice",
+      "to_node_id": "node-platform-checkpoint",
       "relationship": "recommended"
     },
     {
@@ -854,13 +859,8 @@
       "relationship": "recommended"
     },
     {
-      "from_node_id": "node-docker",
-      "to_node_id": "node-docker-practice",
-      "relationship": "recommended"
-    },
-    {
-      "from_node_id": "node-docker-practice",
-      "to_node_id": "node-platform-checkpoint",
+      "from_node_id": "node-linux",
+      "to_node_id": "node-foundations-quiz",
       "relationship": "recommended"
     },
     {

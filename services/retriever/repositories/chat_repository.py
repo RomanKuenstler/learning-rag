@@ -260,6 +260,17 @@ class ChatRepository:
             result_json=result_json,
         )
 
+    def delete_user_ksa_drill_attempt(
+        self,
+        *,
+        user_id: int,
+        attempt_id: str,
+    ) -> bool:
+        return self.postgres_client.delete_user_ksa_drill_attempt(
+            user_id=user_id,
+            attempt_id=attempt_id,
+        )
+
     def list_user_file_filters(self, user_id: int, *, is_admin: bool):
         return self.postgres_client.list_user_file_filters(user_id=user_id, is_admin=is_admin)
 

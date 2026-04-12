@@ -430,6 +430,16 @@ export type LearningNodeExecutionStartResponse = {
   completion_reason: string;
 };
 
+export type LearningNodeExecutionCompleteResponse = {
+  attempt: LearningNodeExecutionAttempt;
+  node_completed: boolean;
+  node_status: string;
+};
+
+export type LearningNodeExecutionAttemptListResponse = {
+  attempts: LearningNodeExecutionAttempt[];
+};
+
 export type CourseSort =
   | "name_asc"
   | "name_desc"

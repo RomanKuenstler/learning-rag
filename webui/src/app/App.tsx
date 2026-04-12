@@ -822,6 +822,76 @@ function LearningNodeRoute({
   const [attemptLoading, setAttemptLoading] = useState(false);
   const [attemptError, setAttemptError] = useState<string | null>(null);
   const [milestoneFinishing, setMilestoneFinishing] = useState(false);
+  const [assessmentFinishing, setAssessmentFinishing] = useState(false);
+  const [assessmentRestarting, setAssessmentRestarting] = useState(false);
+  const [guidedCompleting, setGuidedCompleting] = useState(false);
+  const [guidedRestarting, setGuidedRestarting] = useState(false);
+
+  const isStaleGeneratingAttempt = (attemptRecord: Awaited<ReturnType<typeof app.getLatestLearningNodeExecution>>) => {
+    if (String(attemptRecord.status ?? "") !== "generating") {
+      return false;
+    }
+    const startedAt = Date.parse(String(attemptRecord.started_at ?? ""));
+    if (Number.isNaN(startedAt)) {
+      return false;
+    }
+    return Date.now() - startedAt > 90_000;
+  };
+
+  const tryFallbackToCompletedAttempt = async (pathId: string, nodeId: string) => {
+    try {
+      const attempts = await app.listLearningNodeExecutionAttempts(pathId, nodeId, 20);
+      const completed = attempts.find((item) => String(item.status) === "completed");
+      if (completed) {
+        setAttempt(completed);
+        setAttemptError("Latest generation attempt is stalled. Showing the latest completed attempt.");
+        return true;
+      }
+    } catch {
+      // keep polling fallback silent
+    }
+    return false;
+  };
+
+  const pollAttemptUntilReady = async (pathId: string, nodeId: string, isCancelled?: () => boolean) => {
+    const maxPollCycles = 120;
+    for (let cycle = 0; cycle < maxPollCycles; cycle += 1) {
+      if (isCancelled?.()) {
+        return;
+      }
+      await new Promise((resolve) => window.setTimeout(resolve, 2500));
+      if (isCancelled?.()) {
+        return;
+      }
+      try {
+        const latest = await app.getLatestLearningNodeExecution(pathId, nodeId);
+        if (isCancelled?.()) {
+          return;
+        }
+        setAttempt(latest);
+        setAttemptError(null);
+        if (isStaleGeneratingAttempt(latest)) {
+          const switched = await tryFallbackToCompletedAttempt(pathId, nodeId);
+          if (switched) {
+            return;
+          }
+        }
+        if (String(latest.status ?? "") !== "generating") {
+          return;
+        }
+      } catch (pollError: unknown) {
+        if (isCancelled?.()) {
+          return;
+        }
+        setAttemptError(pollError instanceof Error ? pollError.message : "Failed to refresh learning node package");
+        return;
+      }
+    }
+    if (isCancelled?.()) {
+      return;
+    }
+    setAttemptError("Package generation is taking longer than expected. Please keep this page open.");
+  };
 
   useEffect(() => {
     if (!sessionId) {
@@ -837,37 +907,10 @@ function LearningNodeRoute({
     setAttemptError(null);
     setAttempt(null);
     setMilestoneFinishing(false);
-    const pollAttemptUntilReady = async (pathId: string, nodeId: string) => {
-      const maxPollCycles = 120;
-      for (let cycle = 0; cycle < maxPollCycles; cycle += 1) {
-        if (cancelled) {
-          return;
-        }
-        await new Promise((resolve) => window.setTimeout(resolve, 2500));
-        if (cancelled) {
-          return;
-        }
-        try {
-          const latest = await app.getLatestLearningNodeExecution(pathId, nodeId);
-          if (cancelled) {
-            return;
-          }
-          setAttempt(latest);
-          setAttemptError(null);
-          if (String(latest.status ?? "") !== "generating") {
-            return;
-          }
-        } catch (pollError: unknown) {
-          if (!cancelled) {
-            setAttemptError(pollError instanceof Error ? pollError.message : "Failed to refresh learning node package");
-          }
-          return;
-        }
-      }
-      if (!cancelled) {
-        setAttemptError("Package generation is taking longer than expected. Please keep this page open.");
-      }
-    };
+    setAssessmentFinishing(false);
+    setAssessmentRestarting(false);
+    setGuidedCompleting(false);
+    setGuidedRestarting(false);
     void (async () => {
       try {
         const payload = await app.getLearningNodeSession(sessionId, false);
@@ -908,8 +951,12 @@ function LearningNodeRoute({
           const latestAttempt = await app.getLatestLearningNodeExecution(payload.learning_path_id, payload.node_id);
           if (!cancelled) {
             setAttempt(latestAttempt);
+            if (isStaleGeneratingAttempt(latestAttempt)) {
+              void tryFallbackToCompletedAttempt(payload.learning_path_id, payload.node_id);
+              return;
+            }
             if (String(latestAttempt.status ?? "") === "generating") {
-              void pollAttemptUntilReady(payload.learning_path_id, payload.node_id);
+              void pollAttemptUntilReady(payload.learning_path_id, payload.node_id, () => cancelled);
             }
           }
         } catch {
@@ -920,7 +967,7 @@ function LearningNodeRoute({
             }
             setAttempt(started.attempt);
             if (String(started.attempt.status ?? "") === "generating") {
-              void pollAttemptUntilReady(payload.learning_path_id, payload.node_id);
+              void pollAttemptUntilReady(payload.learning_path_id, payload.node_id, () => cancelled);
             }
             if (started.auto_completed) {
               void app.loadLearningNodeSessions();
@@ -972,6 +1019,125 @@ function LearningNodeRoute({
     }
   };
 
+  const handleAssessmentComplete = async (responses: Record<string, unknown>) => {
+    if (!session || !attempt) {
+      return;
+    }
+    setAssessmentFinishing(true);
+    setAttemptError(null);
+    try {
+      const savedAttempt = await app.submitLearningNodeExecutionResponses(
+        session.learning_path_id,
+        session.node_id,
+        attempt.attempt_id,
+        responses,
+      );
+      setAttempt(savedAttempt);
+      const completed = await app.completeLearningNodeExecution(
+        session.learning_path_id,
+        session.node_id,
+        attempt.attempt_id,
+      );
+      setAttempt(completed.attempt);
+      await app.loadLearningNodeSessions();
+      const refreshedDetails = await app.getLearningPathDetails(session.learning_path_id);
+      setLearningPath(refreshedDetails);
+    } catch (nextError: unknown) {
+      setAttemptError(nextError instanceof Error ? nextError.message : "Failed to complete assessment hook");
+      throw nextError;
+    } finally {
+      setAssessmentFinishing(false);
+    }
+  };
+
+  const handleAssessmentRestart = async () => {
+    if (!session) {
+      return;
+    }
+    setAssessmentRestarting(true);
+    setAttemptError(null);
+    try {
+      const restarted = await app.startLearningNodeExecution(session.learning_path_id, session.node_id, true);
+      setAttempt(restarted.attempt);
+      if (String(restarted.attempt.status ?? "") === "generating") {
+        void pollAttemptUntilReady(session.learning_path_id, session.node_id);
+      }
+    } catch (nextError: unknown) {
+      setAttemptError(nextError instanceof Error ? nextError.message : "Failed to restart assessment hook");
+      throw nextError;
+    } finally {
+      setAssessmentRestarting(false);
+    }
+  };
+
+  const handleAssessmentStart = async () => {
+    if (!session) {
+      return;
+    }
+    if (session.status !== "created") {
+      return;
+    }
+    try {
+      const opened = await app.getLearningNodeSession(session.id, true);
+      setSession(opened);
+    } catch (nextError: unknown) {
+      setAttemptError(nextError instanceof Error ? nextError.message : "Failed to set assessment in progress");
+      throw nextError;
+    }
+  };
+
+  const handleGuidedComplete = async (responses: Record<string, unknown>) => {
+    if (!session || !attempt) {
+      return;
+    }
+    setGuidedCompleting(true);
+    setAttemptError(null);
+    try {
+      const savedAttempt = await app.submitLearningNodeExecutionResponses(
+        session.learning_path_id,
+        session.node_id,
+        attempt.attempt_id,
+        responses,
+      );
+      setAttempt(savedAttempt);
+      const completed = await app.completeLearningNodeExecution(
+        session.learning_path_id,
+        session.node_id,
+        attempt.attempt_id,
+      );
+      setAttempt(completed.attempt);
+      await app.loadLearningNodeSessions();
+      const refreshedDetails = await app.getLearningPathDetails(session.learning_path_id);
+      setLearningPath(refreshedDetails);
+    } catch (nextError: unknown) {
+      setAttemptError(nextError instanceof Error ? nextError.message : "Failed to complete learning node");
+      throw nextError;
+    } finally {
+      setGuidedCompleting(false);
+    }
+  };
+
+  const handleGuidedRestart = async () => {
+    if (!session) {
+      return;
+    }
+    setGuidedRestarting(true);
+    setAttemptError(null);
+    try {
+      const restarted = await app.startLearningNodeExecution(session.learning_path_id, session.node_id, true);
+      setAttempt(restarted.attempt);
+      if (String(restarted.attempt.status ?? "") === "generating") {
+        void pollAttemptUntilReady(session.learning_path_id, session.node_id);
+      }
+      await app.loadLearningNodeSessions();
+    } catch (nextError: unknown) {
+      setAttemptError(nextError instanceof Error ? nextError.message : "Failed to restart learning node");
+      throw nextError;
+    } finally {
+      setGuidedRestarting(false);
+    }
+  };
+
   return (
     <LearningNodePage
       loading={loading}
@@ -987,6 +1153,15 @@ function LearningNodeRoute({
         void handleMilestoneFinish();
       }}
       milestoneFinishing={milestoneFinishing}
+      onAssessmentComplete={handleAssessmentComplete}
+      assessmentFinishing={assessmentFinishing}
+      onAssessmentRestart={handleAssessmentRestart}
+      assessmentRestarting={assessmentRestarting}
+      onAssessmentStart={handleAssessmentStart}
+      onGuidedComplete={handleGuidedComplete}
+      guidedCompleting={guidedCompleting}
+      onGuidedRestart={handleGuidedRestart}
+      guidedRestarting={guidedRestarting}
     />
   );
 }

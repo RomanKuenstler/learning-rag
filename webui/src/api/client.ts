@@ -33,6 +33,8 @@ import type {
   LearningLesson,
   LearningNodeSession,
   LearningNodeExecutionAttempt,
+  LearningNodeExecutionAttemptListResponse,
+  LearningNodeExecutionCompleteResponse,
   LearningNodeExecutionStartResponse,
   LearningNodeSessionDownload,
   LearningNodeSessionListResponse,
@@ -474,6 +476,21 @@ export const apiClient = {
   },
   getLatestLearningNodeExecution(pathId: string, nodeId: string) {
     return request<LearningNodeExecutionAttempt>(`/api/learning-paths/${pathId}/nodes/${nodeId}/execution/latest`);
+  },
+  listLearningNodeExecutionAttempts(pathId: string, nodeId: string, limit = 20) {
+    const safeLimit = Math.max(1, Math.min(100, limit));
+    return request<LearningNodeExecutionAttemptListResponse>(`/api/learning-paths/${pathId}/nodes/${nodeId}/execution/attempts?limit=${safeLimit}`);
+  },
+  submitLearningNodeExecutionResponses(pathId: string, nodeId: string, attemptId: string, responses: Record<string, unknown>) {
+    return request<LearningNodeExecutionAttempt>(`/api/learning-paths/${pathId}/nodes/${nodeId}/execution/attempts/${attemptId}/responses`, {
+      method: "PUT",
+      body: JSON.stringify({ responses }),
+    });
+  },
+  completeLearningNodeExecution(pathId: string, nodeId: string, attemptId: string) {
+    return request<LearningNodeExecutionCompleteResponse>(`/api/learning-paths/${pathId}/nodes/${nodeId}/execution/attempts/${attemptId}/complete`, {
+      method: "POST",
+    });
   },
   getLearningNodeSession(sessionId: string, markOpened = false) {
     return request<LearningNodeSession>(`/api/learning-node-sessions/${sessionId}?mark_opened=${markOpened ? "true" : "false"}`);

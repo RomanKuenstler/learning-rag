@@ -11,7 +11,7 @@ from services.common.models import LearningPath, UserAccount
 from services.retriever.repositories.chat_repository import ChatRepository
 from services.retriever.services.course_files import CourseDefinition, CourseNodeDefinition
 from services.retriever.services.course_skilltree import COMPLETED_STATES, build_skilltree_runtime
-from services.retriever.services.ksa_drills import evaluate_drill_attempt, generate_round_archetypes
+from services.retriever.services.ksa_drills import TOPIC_BY_KEY, evaluate_drill_attempt, generate_round_archetypes
 from services.retriever.services.node_context import DIMENSION_GROUP
 
 QUIZ_BOUNDARY_NODE_TYPES = {"quiz", "practice", "checkpoint", "milestone", "unlock_gate"}
@@ -107,7 +107,11 @@ class LearningNodeExecutionService:
         progress_map = {entry.node_id: entry.status for entry in progress_entries}
         runtime = build_skilltree_runtime(definition, persisted_node_progress=progress_map)
         current_state = runtime.node_progress.get(node.id, "locked")
-        if current_state not in {"available", "in_progress", "failed_needs_retry"}:
+        allowed_states = {"available", "in_progress", "failed_needs_retry"}
+        if node.type == "assessment_hook":
+            allowed_states.add("completed")
+            allowed_states.add("mastered")
+        if current_state not in allowed_states:
             raise ValueError("Node is not startable in its current state")
 
         active_attempt = self._load_active_attempt(
@@ -128,14 +132,15 @@ class LearningNodeExecutionService:
             self._close_superseded_active_attempt(user_id=user.id, attempt=active_attempt)
 
         now = datetime.now(timezone.utc)
-        self.repository.upsert_user_learning_node_progress(
-            user_id=user.id,
-            learning_path_id=learning_path.id,
-            node_id=node.id,
-            status="in_progress",
-            started_at=now,
-            completed_at=None,
-        )
+        if not (node.type == "assessment_hook" and current_state in {"completed", "mastered"}):
+            self.repository.upsert_user_learning_node_progress(
+                user_id=user.id,
+                learning_path_id=learning_path.id,
+                node_id=node.id,
+                status="in_progress",
+                started_at=now,
+                completed_at=None,
+            )
 
         package = self._build_runtime_package_for_node(
             user=user,
@@ -207,6 +212,89 @@ class LearningNodeExecutionService:
             node_status="in_progress",
         )
 
+    def restart_with_existing_package(
+        self,
+        *,
+        user: UserAccount,
+        learning_path: LearningPath,
+        definition: CourseDefinition,
+        node: CourseNodeDefinition,
+        node_context: dict[str, Any],
+    ) -> NodeExecutionResult:
+        progress_entries = self.repository.list_user_learning_node_progress(user_id=user.id, learning_path_id=learning_path.id)
+        progress_map = {entry.node_id: entry.status for entry in progress_entries}
+        runtime = build_skilltree_runtime(definition, persisted_node_progress=progress_map)
+        current_state = runtime.node_progress.get(node.id, "locked")
+        allowed_states = {"available", "in_progress", "failed_needs_retry", "completed", "mastered"}
+        if current_state not in allowed_states:
+            raise ValueError("Node is not startable in its current state")
+
+        active_attempt = self._load_active_attempt(
+            user_id=user.id,
+            learning_path_id=learning_path.id,
+            node_id=node.id,
+        )
+        if active_attempt is not None:
+            self._close_superseded_active_attempt(user_id=user.id, attempt=active_attempt)
+
+        attempts = self.repository.list_user_learning_node_execution_attempts(
+            user_id=user.id,
+            learning_path_id=learning_path.id,
+            node_id=node.id,
+            limit=30,
+        )
+        reusable_package: dict[str, Any] | None = None
+        for item in attempts:
+            status = str(getattr(item, "status", "") or "")
+            if status == "generating":
+                continue
+            package_json = dict(getattr(item, "package_json", {}) or {})
+            if not package_json:
+                continue
+            generation_state = str(dict(getattr(item, "result_json", {}) or {}).get("generation_state") or "").strip().lower()
+            if generation_state == "queued":
+                continue
+            reusable_package = package_json
+            break
+        if reusable_package is None:
+            raise ValueError("No reusable assessment package found for restart")
+
+        now = datetime.now(timezone.utc)
+        if current_state not in {"completed", "mastered"}:
+            self.repository.upsert_user_learning_node_progress(
+                user_id=user.id,
+                learning_path_id=learning_path.id,
+                node_id=node.id,
+                status="in_progress",
+                started_at=now,
+                completed_at=None,
+            )
+
+        source_node_window = list(reusable_package.get("source_node_window") or [])
+        attempt = self.repository.create_user_learning_node_execution_attempt(
+            {
+                "user_id": user.id,
+                "learning_path_id": learning_path.id,
+                "node_id": node.id,
+                "node_type": node.type,
+                "status": "in_progress",
+                "generation_reason": "on_restart_reuse_package",
+                "package_json": reusable_package,
+                "responses_json": {},
+                "result_json": {},
+                "context_snapshot_json": node_context,
+                "source_node_window_json": source_node_window,
+                "started_at": now,
+            }
+        )
+        return NodeExecutionResult(
+            attempt=attempt,
+            auto_completed=False,
+            completion_reason="restarted_reused_package",
+            node_completed=False,
+            node_status="completed" if current_state in {"completed", "mastered"} else "in_progress",
+        )
+
     def start_placeholder(
         self,
         *,
@@ -221,7 +309,11 @@ class LearningNodeExecutionService:
         progress_map = {entry.node_id: entry.status for entry in progress_entries}
         runtime = build_skilltree_runtime(definition, persisted_node_progress=progress_map)
         current_state = runtime.node_progress.get(node.id, "locked")
-        if current_state not in {"available", "in_progress", "failed_needs_retry"}:
+        allowed_states = {"available", "in_progress", "failed_needs_retry"}
+        if node.type == "assessment_hook":
+            allowed_states.add("completed")
+            allowed_states.add("mastered")
+        if current_state not in allowed_states:
             raise ValueError("Node is not startable in its current state")
 
         active_attempt = self._load_active_attempt(
@@ -244,14 +336,15 @@ class LearningNodeExecutionService:
             self._close_superseded_active_attempt(user_id=user.id, attempt=active_attempt)
 
         now = datetime.now(timezone.utc)
-        self.repository.upsert_user_learning_node_progress(
-            user_id=user.id,
-            learning_path_id=learning_path.id,
-            node_id=node.id,
-            status="in_progress",
-            started_at=now,
-            completed_at=None,
-        )
+        if not (node.type == "assessment_hook" and current_state in {"completed", "mastered"}):
+            self.repository.upsert_user_learning_node_progress(
+                user_id=user.id,
+                learning_path_id=learning_path.id,
+                node_id=node.id,
+                status="in_progress",
+                started_at=now,
+                completed_at=None,
+            )
         attempt = self.repository.create_user_learning_node_execution_attempt(
             {
                 "user_id": user.id,
@@ -389,6 +482,28 @@ class LearningNodeExecutionService:
             required_rounds = int(package.get("required_round_count") or 0)
             completed_rounds = int(result_json.get("completed_round_count") or 0)
             node_completed = completed_rounds >= required_rounds and required_rounds > 0
+            if node_completed:
+                previous_mirror_id = self._get_previous_mirrored_drill_attempt_id(
+                    user_id=user.id,
+                    learning_path_id=learning_path.id,
+                    node_id=node.id,
+                    current_attempt_id=str(attempt.id),
+                )
+                if previous_mirror_id:
+                    self._remove_mirrored_drill_attempt_impact(
+                        user_id=user.id,
+                        drill_attempt_id=previous_mirror_id,
+                    )
+                mirrored_drill_attempt_id = self._mirror_assessment_hook_as_drill_attempt(
+                    user=user,
+                    learning_path=learning_path,
+                    node=node,
+                    package=package,
+                    responses=responses,
+                    drill_result=dict(result_json.get("drill_result") or {}),
+                )
+                if mirrored_drill_attempt_id:
+                    result_json["mirrored_drill_attempt_id"] = mirrored_drill_attempt_id
             if node_completed:
                 node_completed = self._complete_node_progress(
                     user=user,
@@ -609,6 +724,150 @@ class LearningNodeExecutionService:
             completion_reason="completed" if node_completed else "not_passed",
             node_completed=node_completed,
             node_status=node_status,
+        )
+
+    def _mirror_assessment_hook_as_drill_attempt(
+        self,
+        *,
+        user: UserAccount,
+        learning_path: LearningPath,
+        node: CourseNodeDefinition,
+        package: dict[str, Any],
+        responses: dict[str, Any],
+        drill_result: dict[str, Any],
+    ) -> str:
+        selected_topic_keys = [str(item).strip() for item in list(package.get("selected_topic_keys") or []) if str(item).strip()]
+        question_set = [dict(item) for item in list(package.get("question_set") or []) if isinstance(item, dict)]
+        answer_map = dict(responses.get("answers") or responses.get("deep_dive_answers") or {})
+        source_topic_input = f"Course Node: {learning_path.title} / {node.title}"
+
+        drill_attempt = self.repository.create_user_ksa_drill_attempt(
+            user_id=user.id,
+            assessment_version="ksa-drill-v1",
+            selected_topic_keys=selected_topic_keys,
+            question_set_json=question_set,
+            source_topic_input=source_topic_input,
+            topic_classification_json={},
+            rounds_json=[
+                {
+                    **dict(item),
+                    # Keep KSA drill history schema-compatible for KsaPanel rendering.
+                    "origin": str(dict(item).get("origin") or "") in {"user_core", "user_variant", "llm_stretch", "llm_growth"}
+                    and str(dict(item).get("origin"))
+                    or "user_core",
+                }
+                for item in list(package.get("rounds") or [])
+                if isinstance(item, dict)
+            ],
+        )
+        self.repository.upsert_user_ksa_drill_answers(
+            user_id=user.id,
+            attempt_id=drill_attempt.id,
+            answers_json=answer_map,
+        )
+        result_payload = dict(drill_result or {})
+        result_payload["source"] = "course_node_assessment_hook"
+        result_payload["source_label"] = "Course Node"
+        result_payload["course_node"] = {
+            "learning_path_id": learning_path.id,
+            "learning_path_title": learning_path.title,
+            "node_id": node.id,
+            "node_title": node.title,
+            "node_type": node.type,
+        }
+        self.repository.complete_user_ksa_drill_attempt(
+            user_id=user.id,
+            attempt_id=drill_attempt.id,
+            result_json=result_payload,
+        )
+        return str(drill_attempt.id)
+
+    def _get_previous_mirrored_drill_attempt_id(
+        self,
+        *,
+        user_id: int,
+        learning_path_id: str,
+        node_id: str,
+        current_attempt_id: str,
+    ) -> str:
+        attempts = self.repository.list_user_learning_node_execution_attempts(
+            user_id=user_id,
+            learning_path_id=learning_path_id,
+            node_id=node_id,
+            limit=25,
+        )
+        for record in attempts:
+            if str(record.id) == current_attempt_id:
+                continue
+            result_json = dict(record.result_json or {})
+            mirrored_id = str(result_json.get("mirrored_drill_attempt_id") or "").strip()
+            if mirrored_id:
+                return mirrored_id
+        return ""
+
+    def _remove_mirrored_drill_attempt_impact(self, *, user_id: int, drill_attempt_id: str) -> None:
+        attempt = self.repository.get_user_ksa_drill_attempt(user_id=user_id, attempt_id=drill_attempt_id)
+        if attempt is None:
+            return
+        result_json = dict(attempt.result_json or {})
+        topic_updates = dict(result_json.get("topic_updates") or {})
+        profile = self.repository.get_user_ksa_profile(user_id)
+        profile_json = dict(profile.profile_json or {}) if profile else {}
+        knowledge = dict(profile_json.get("knowledge") or {})
+        skills = dict(profile_json.get("skills") or {})
+        abilities = dict(profile_json.get("abilities") or {})
+        drill_state = dict(profile_json.get("drill_state") or {})
+        topic_nodes = dict(drill_state.get("topic_nodes") or {})
+
+        for topic_key, update in topic_updates.items():
+            topic = TOPIC_BY_KEY.get(str(topic_key))
+            if topic is None:
+                continue
+            group = str(topic.get("group") or "")
+            delta = float(dict(update or {}).get("delta") or 0.0)
+            if group == "knowledge":
+                current = float(knowledge.get(topic_key) or 2.0)
+                knowledge[topic_key] = max(1, min(5, int(round(current - delta))))
+            elif group == "skills":
+                current = float(skills.get(topic_key) or 2.0)
+                skills[topic_key] = max(1, min(5, int(round(current - delta))))
+            elif group == "abilities":
+                current = float(abilities.get(topic_key) or 2.0)
+                abilities[topic_key] = max(1, min(5, int(round(current - delta))))
+            node_payload = dict(topic_nodes.get(topic_key) or {})
+            if node_payload:
+                level = float(node_payload.get("level") or 2.0)
+                next_level = max(1.0, min(5.0, level - delta))
+                node_payload["level"] = round(next_level, 3)
+                node_payload["chart_level"] = max(1, min(5, int(round(next_level))))
+                topic_nodes[topic_key] = node_payload
+
+        drill_state["topic_nodes"] = topic_nodes
+        drill_state["attempt_count"] = max(0, int(drill_state.get("attempt_count") or 0) - 1)
+        profile_json["knowledge"] = knowledge
+        profile_json["skills"] = skills
+        profile_json["abilities"] = abilities
+        profile_json["drill_state"] = drill_state
+
+        assessment_details = dict(profile_json.get("assessment_details") or {})
+        derived = dict(assessment_details.get("derived") or {})
+        logic = float(abilities.get("executive_function") or 2)
+        quant = float(abilities.get("quantitative_reasoning") or 2)
+        logic_quant_index = (logic / 5.0) + (quant / 5.0)
+        derived["logic_quantitative_index"] = round(logic_quant_index, 4)
+        derived["learning_speed_multiplier"] = 1.5 if logic_quant_index > 1.6 else 1.0
+        assessment_details["derived"] = derived
+        profile_json["assessment_details"] = assessment_details
+
+        self.repository.upsert_user_ksa_profile(
+            user_id=user_id,
+            has_assessment=True,
+            assessment_version="ksa-drill-v1",
+            profile_json=profile_json,
+        )
+        self.repository.delete_user_ksa_drill_attempt(
+            user_id=user_id,
+            attempt_id=drill_attempt_id,
         )
 
     def _load_active_attempt(self, *, user_id: int, learning_path_id: str, node_id: str):

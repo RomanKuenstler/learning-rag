@@ -1340,6 +1340,25 @@ class PostgresClient:
             session.refresh(record)
             return record
 
+    def delete_user_ksa_drill_attempt(
+        self,
+        *,
+        user_id: int,
+        attempt_id: str,
+    ) -> bool:
+        with self.session() as session:
+            record = session.scalar(
+                select(UserKSADrillAttempt).where(
+                    UserKSADrillAttempt.id == attempt_id,
+                    UserKSADrillAttempt.user_id == user_id,
+                )
+            )
+            if record is None:
+                return False
+            session.delete(record)
+            session.flush()
+            return True
+
     def get_user_by_id(self, user_id: int) -> UserAccount | None:
         with self.session() as session:
             return session.get(UserAccount, user_id)

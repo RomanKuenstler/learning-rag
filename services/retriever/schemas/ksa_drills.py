@@ -35,7 +35,16 @@ class KSADrillQuestionRead(BaseModel):
     related_subtopic: str | None = None
     prompt: str
     time_limit_seconds: int | None = None
-    topic_source: Literal["manual", "auto_good", "auto_bad", "user_core", "user_variant", "llm_stretch", "llm_growth"] | None = None
+    topic_source: Literal[
+        "manual",
+        "auto_good",
+        "auto_bad",
+        "user_core",
+        "user_variant",
+        "llm_stretch",
+        "llm_growth",
+        "assessment_hook_topic",
+    ] | None = None
     choices: list[str] = Field(default_factory=list)
     correct_answer: str | None = None
     distractors: list[str] = Field(default_factory=list)
@@ -52,7 +61,7 @@ class KSADrillTopicClassificationRead(BaseModel):
 
 
 class KSADrillRoundRead(BaseModel):
-    round_number: Literal[1, 2, 3, 4]
+    round_number: int = Field(ge=1)
     origin: Literal["user_core", "user_variant", "llm_stretch", "llm_growth"]
     type_combo: str = Field(min_length=1)
     big_map_group: Literal["Knowledge", "Skills", "Abilities"]

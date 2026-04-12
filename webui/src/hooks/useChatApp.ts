@@ -1764,6 +1764,19 @@ export function useChatApp() {
     return apiClient.getLatestLearningNodeExecution(pathId, nodeId);
   }
 
+  async function listLearningNodeExecutionAttempts(pathId: string, nodeId: string, limit = 20) {
+    const payload = await apiClient.listLearningNodeExecutionAttempts(pathId, nodeId, limit);
+    return payload.attempts;
+  }
+
+  async function submitLearningNodeExecutionResponses(pathId: string, nodeId: string, attemptId: string, responses: Record<string, unknown>) {
+    return apiClient.submitLearningNodeExecutionResponses(pathId, nodeId, attemptId, responses);
+  }
+
+  async function completeLearningNodeExecution(pathId: string, nodeId: string, attemptId: string) {
+    return apiClient.completeLearningNodeExecution(pathId, nodeId, attemptId);
+  }
+
   async function getLearningNodeSession(sessionId: string, markOpened = false) {
     const session = await apiClient.getLearningNodeSession(sessionId, markOpened);
     upsertLearningNodeSessionInState(session);
@@ -2358,6 +2371,9 @@ export function useChatApp() {
     ensureLearningNodeSession,
     startLearningNodeExecution,
     getLatestLearningNodeExecution,
+    listLearningNodeExecutionAttempts,
+    submitLearningNodeExecutionResponses,
+    completeLearningNodeExecution,
     getLearningNodeSession,
     archiveLearningNodeSession,
     unarchiveLearningNodeSession,

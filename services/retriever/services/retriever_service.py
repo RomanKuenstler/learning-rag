@@ -1873,7 +1873,15 @@ class RetrieverAppService:
         if context_record is None:
             raise ValueError("Node context is not available for execution")
         node_context = dict(context_record.context or {})
-        if node.type in ASYNC_HEAVY_NODE_TYPES:
+        if node.type in {"assessment_hook", "quiz", "practice", "checkpoint", "capstone"} and force_new_attempt:
+            result = self.node_execution_service.restart_with_existing_package(
+                user=user,
+                learning_path=path,
+                definition=definition,
+                node=node,
+                node_context=node_context,
+            )
+        elif node.type in ASYNC_HEAVY_NODE_TYPES:
             result = self.node_execution_service.start_placeholder(
                 user=user,
                 learning_path=path,

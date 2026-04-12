@@ -3508,7 +3508,6 @@ button.send:hover:not(:disabled) {
 
 .ksa-drill-topic-card {
   text-align: left;
-  border: 1px solid #d7dee8;
   border-radius: 12px;
   background: #f8fafc;
   padding: 0.82rem 0.8rem;
@@ -4290,14 +4289,14 @@ button.send:hover:not(:disabled) {
   grid-template-columns: auto minmax(0, 1fr);
   align-items: start;
   gap: 0.65rem;
-  padding: 0.9rem 0.95rem;
-  border: 1px solid #d1d5db;
+  padding: 0.45rem 0.95rem;
   border-radius: 12px;
-  background: #fff;
+  background: #f8fafc;
 }
 
 .diagnostic-option-card.selected {
-  border-color: #374151;
+  border: none !important;
+  outline: none !important;
   box-shadow: 0 0 0 1px rgba(17, 24, 39, 0.2);
   background: #f3f4f6;
 }
@@ -6251,6 +6250,103 @@ button.send:hover:not(:disabled) {
   line-height: 1.4;
 }
 
+.learning-node-guided-start {
+  border-radius: 14px;
+  padding: 1.1rem 1rem 1rem;
+  display: grid;
+  justify-items: center;
+  gap: 0.45rem;
+  text-align: center;
+}
+
+.learning-node-guided-start-icon {
+  width: 86px;
+  height: 86px;
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  background: #fff7ed;
+  color: #ea580c;
+}
+
+.learning-node-guided-start-icon .icon {
+  width: 2.8rem;
+  height: 2.8rem;
+}
+
+.learning-node-guided-start > strong {
+  color: #0f172a;
+  font-size: 1.03rem;
+}
+
+.learning-node-guided-start > small {
+  color: #475569;
+}
+
+.learning-node-guided-start-list {
+  list-style: none;
+  margin: 0.25rem 0 0;
+  padding: 0;
+  width: min(100%, 560px);
+  display: grid;
+  gap: 0.4rem;
+}
+
+.learning-node-guided-start-list > li {
+  border: 1px solid #e2e8f0;
+  border-radius: 10px;
+  background: #ffffff;
+  padding: 0.48rem 0.62rem;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.45rem;
+  justify-content: center;
+}
+
+.learning-node-guided-start-list > li .icon {
+  width: 0.95rem;
+  height: 0.95rem;
+  color: #16a34a;
+}
+
+.learning-node-guided-start-list > li > span {
+  color: #1e293b;
+  font-weight: 600;
+}
+
+.learning-node-guided-result-hero {
+  display: grid;
+  justify-items: center;
+  margin-bottom: 0.2rem;
+}
+
+.learning-node-guided-result-badge {
+  border-radius: 14px;
+  padding: 0.7rem 0.95rem;
+  min-width: 280px;
+  display: grid;
+  justify-items: center;
+  gap: 0.22rem;
+  text-align: center;
+}
+
+.learning-node-guided-result-badge .icon {
+  width: 3.1rem;
+  height: 3.1rem;
+}
+
+.learning-node-guided-result-badge.success .icon {
+  color: #ea580c;
+}
+
+.learning-node-guided-result-badge.failed .icon {
+  color: #dc2626;
+}
+
+.learning-node-guided-result-badge > strong {
+  color: #1e293b;
+}
+
 .learning-node-initial-loading {
   min-height: 340px;
   border: 1px dashed var(--border);
@@ -6269,7 +6365,7 @@ button.send:hover:not(:disabled) {
   height: 72px;
   border-radius: 50%;
   border: 4px solid #cbd5e1;
-  border-top-color: #2563eb;
+  border-top-color: #f97316;
   animation: spin 0.9s linear infinite;
 }
 
@@ -6301,7 +6397,9 @@ button.send:hover:not(:disabled) {
 }
 
 .learning-node-question-card {
-  background: #fcfdff;
+  border: none !important;
+  background-color: transparent !important;
+  padding: 0 !important;
 }
 
 .learning-node-rubric-row {
@@ -6476,6 +6574,11 @@ button.send:hover:not(:disabled) {
   justify-self: center;
 }
 
+.learning-node-assessment-results-table .learning-node-milestone-topic-head > span:nth-child(2) {
+  text-align: left;
+  justify-self: left;
+}
+
 .learning-node-milestone-topic-body {
   display: grid;
 }
@@ -6605,6 +6708,85 @@ button.send:hover:not(:disabled) {
   gap: 0.6rem;
 }
 
+.learning-node-assessment-results-table .learning-node-milestone-topic-head,
+.learning-node-assessment-results-table .learning-node-milestone-topic-line {
+  grid-template-columns: 2fr 1.5fr 0.8fr;
+}
+
+.learning-node-guided-results-table .learning-node-milestone-topic-head,
+.learning-node-guided-results-table .learning-node-milestone-topic-line {
+  grid-template-columns: 2fr 1fr;
+}
+
+.learning-node-guided-results-table .learning-node-milestone-topic-head > span:last-child {
+  text-align: right;
+}
+
+.learning-node-guided-results-table .learning-node-milestone-topic-line > span:last-child {
+  text-align: right;
+  justify-self: end;
+  font-weight: 700;
+}
+
+.learning-node-assessment-results-table .learning-node-milestone-topic-head > span:nth-child(2) {
+  text-align: left;
+}
+
+.learning-node-assessment-results-table .learning-node-milestone-topic-head > span:last-child {
+  text-align: right;
+}
+
+.learning-node-assessment-results-table .learning-node-milestone-topic-line > span:last-child {
+  font-weight: 700;
+  color: #0f172a;
+  text-align: right;
+  justify-self: end;
+}
+
+.learning-node-assessment-results-table .learning-node-milestone-topic-line > span:last-child.trend-up {
+  color: #16a34a;
+}
+
+.learning-node-assessment-results-table .learning-node-milestone-topic-line > span:last-child.trend-down {
+  color: #dc2626;
+}
+
+.learning-node-progress-floating {
+  position: fixed;
+  left: calc(15.7rem);
+  right: 1rem;
+  bottom: 5.3rem;
+  z-index: 34;
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 0.55rem;
+  pointer-events: none;
+}
+
+.learning-node-progress-track {
+  width: 100%;
+  height: 0.58rem;
+  border-radius: 999px;
+  background: #e2e8f0;
+  overflow: hidden;
+}
+
+.learning-node-progress-fill {
+  height: 100%;
+  border-radius: 999px;
+  background: linear-gradient(90deg, #f59e0b 0%, #f97316 100%);
+  transition: width 160ms ease;
+}
+
+.learning-node-progress-floating > small {
+  color: #475569;
+  font-weight: 700;
+  min-width: 3.1rem;
+  text-align: right;
+  display: none;
+}
+
 @media (max-width: 980px) {
   .learning-node-page-grid {
     grid-template-columns: 1fr;
@@ -6639,6 +6821,16 @@ button.send:hover:not(:disabled) {
     left: 0.8rem;
     right: 0.8rem;
     bottom: 0.65rem;
+  }
+
+  .learning-node-progress-floating {
+    left: 0.8rem;
+    right: 0.8rem;
+    bottom: 4.55rem;
+  }
+
+  .learning-node-progress-track {
+    width: min(100%, 320px);
   }
 
   .learning-node-fixed-footer-inner {
