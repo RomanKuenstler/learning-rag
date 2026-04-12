@@ -81,6 +81,8 @@ class LearningNodeSessionApiStub:
         }
 
     def ensure_learning_node_session(self, _user: UserAccount, learning_path_id: str, node_id: str):
+        if node_id == "unlock-gate-1":
+            raise ValueError("unlock_gate nodes do not create learning sessions")
         for value in self.sessions.values():
             if value["learning_path_id"] == learning_path_id and value["node_id"] == node_id:
                 value["is_deleted"] = False
@@ -210,3 +212,12 @@ def test_learning_node_session_open_archive_and_download() -> None:
     assert downloaded.status_code == 200
     assert downloaded.json()["session"]["id"] == "sess-1"
     assert "not implemented" in downloaded.json()["message"].lower()
+
+
+def test_unlock_gate_session_creation_is_rejected() -> None:
+    stub = LearningNodeSessionApiStub()
+    client = build_client(stub)
+
+    response = client.post("/api/learning-paths/course-1/nodes/unlock-gate-1/session")
+    assert response.status_code == 422
+    assert "unlock_gate" in response.json()["detail"]

@@ -60,13 +60,30 @@
 - Sidebar now includes a dedicated `Learning Nodes` section.
 - Items are not normal chats and not GPT chats; they map to dedicated learning-node sessions.
 - Each item shows status icon state:
-  - blue play (`created`)
-  - orange check-in-circle (`in_progress`)
-  - green check (`completed`)
+  - blue dotted circle (`created`)
+  - orange/yellow half-filled circle (`in_progress`)
+  - green check-in-circle (`completed`)
 - Each item menu includes: `Archive`, `Reset` (placeholder), `Download` (placeholder), `Delete` (soft-delete).
 - Dedicated learning-node route added: `/learning/nodes/:sessionId`.
 - Courses node Start/Continue now ensures a reusable session for that user/node and navigates to that route.
 - Archive tab in Preferences now includes archived learning-node sessions alongside archived chats.
+
+## Learning Node Page Rendering
+
+- `LearningNodePage` now renders from real node + runtime package data instead of shell placeholders.
+- Top-of-page uses node title/description and metadata tags (`type`, `chapter`, `branch`, required/optional, KSA `dimension: topic/subtopic`).
+- Rendered node types in this step:
+  - `milestone`
+  - `assessment_hook`
+  - `quiz`
+  - `practice`
+  - `checkpoint`
+  - `capstone`
+- `assessment_hook` uses KSA drill-style question cards directly on the page (no manual topic input).
+- `quiz` reuses existing option-card and textarea styles for single/multi choice + free-text questions.
+- `practice` reuses existing textarea style and attachment-chip language, with split text/upload layout for upload tasks.
+- `checkpoint`/`capstone` compose quiz + practice + assessment sections into one page layout.
+- `unlock_gate` is route-guarded away from page rendering and has no normal learning-session entry path.
 
 ## Styling Approach
 

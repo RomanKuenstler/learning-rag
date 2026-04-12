@@ -231,7 +231,7 @@ LEARNING_CONTEXT_DEFAULTS = {
     "learning_context_notes": "",
 }
 
-ASYNC_HEAVY_NODE_TYPES = {"assessment_hook", "checkpoint", "capstone"}
+ASYNC_HEAVY_NODE_TYPES = {"assessment_hook", "checkpoint", "capstone", "quiz", "practice"}
 
 SUPPORTED_ROLES = {"admin", "user", "student"}
 EXAMPLE_LEARNING_PATH_TITLE = "Example: Docker Fundamentals"
@@ -602,6 +602,8 @@ class RetrieverAppService:
         node = next((item for item in definition.nodes if item.id == node_id), None)
         if node is None:
             raise ValueError(f"Unknown node_id '{node_id}'")
+        if node.type == "unlock_gate":
+            raise ValueError("unlock_gate nodes do not create learning sessions")
 
         route_path = f"/learning/nodes/{learning_path_id}/{node_id}"
         record = self.chat_repository.ensure_learning_node_session(
@@ -1729,7 +1731,60 @@ class RetrieverAppService:
         record = self.chat_repository.get_learning_path(learning_path_id)
         if record is None or not self._can_view_learning_path(user, record):
             return None
+        definition = self._course_definition_from_learning_path(record)
+        if self._auto_complete_unlock_gate_nodes(user=user, path=record, definition=definition):
+            refreshed = self.chat_repository.get_learning_path(learning_path_id)
+            if refreshed is not None:
+                record = refreshed
         return self._build_learning_path_read(user, record)
+
+    def _auto_complete_unlock_gate_nodes(self, *, user: UserAccount, path: LearningPath, definition: CourseDefinition) -> bool:
+        progress_entries = self.chat_repository.list_user_learning_node_progress(user_id=user.id, learning_path_id=path.id)
+        progress_map = {entry.node_id: entry.status for entry in progress_entries}
+        runtime = build_skilltree_runtime(definition, persisted_node_progress=progress_map)
+        profile = self.chat_repository.get_user_ksa_profile(user.id)
+        profile_json = dict(profile.profile_json or {}) if profile else {}
+        dimension_group = {"K": "knowledge", "S": "skills", "A": "abilities"}
+        now = datetime.now(timezone.utc)
+        changed = False
+        for node in definition.nodes:
+            if node.type != "unlock_gate":
+                continue
+            if progress_map.get(node.id) in COMPLETED_STATES:
+                continue
+            node_state = runtime.node_progress.get(node.id, "locked")
+            if node_state not in {"available", "in_progress"}:
+                continue
+            prereq_ids = list(node.prerequisites.requires_all) + list(node.prerequisites.requires_any)
+            prereq_completed = all(progress_map.get(item) in COMPLETED_STATES for item in prereq_ids) if prereq_ids else True
+            if not prereq_completed:
+                continue
+            requirements_met = True
+            for rule in list(node.adaptive_unlock.ksa_thresholds or []):
+                section = dimension_group.get(str(rule.dimension).upper(), "skills")
+                current_level = int(dict(profile_json.get(section) or {}).get(rule.topic, 1))
+                if current_level < int(rule.min_level):
+                    requirements_met = False
+                    break
+            if not requirements_met:
+                continue
+            for checkpoint_id in list(node.adaptive_unlock.requires_checkpoint_node_ids or []):
+                if progress_map.get(checkpoint_id) not in COMPLETED_STATES:
+                    requirements_met = False
+                    break
+            if not requirements_met:
+                continue
+            self.chat_repository.upsert_user_learning_node_progress(
+                user_id=user.id,
+                learning_path_id=path.id,
+                node_id=node.id,
+                status="completed",
+                started_at=now,
+                completed_at=now,
+            )
+            progress_map[node.id] = "completed"
+            changed = True
+        return changed
 
     def get_learning_node_context(
         self,
@@ -1844,6 +1899,13 @@ class RetrieverAppService:
                 node=node,
                 node_context=node_context,
                 force_new_attempt=force_new_attempt,
+            )
+        if result.node_status in {"completed", "mastered"}:
+            self.chat_repository.sync_learning_node_session_completion(
+                user_id=user.id,
+                learning_path_id=learning_path_id,
+                node_id=node_id,
+                node_progress_status=result.node_status,
             )
         self._safe_recompute_personalization_layers(user=user, reasons=["learning_node_progress_updated"])
         self._safe_recompute_user_node_contexts_for_available_nodes(
@@ -4187,6 +4249,8 @@ class RetrieverAppService:
         definition = self._course_definition_from_learning_path(path)
         node = next((item for item in definition.nodes if item.id == record.node_id), None)
         if node is None:
+            return None
+        if node.type == "unlock_gate":
             return None
         status = str(record.status or "created")
         if status not in {"created", "in_progress", "completed"}:

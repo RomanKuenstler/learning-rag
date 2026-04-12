@@ -333,7 +333,9 @@ function AppRoutes() {
         onAssistantModeChange={currentGptId || app.isStudent ? (() => undefined) : app.setAssistantMode}
         assistantModeLocked={Boolean(currentGptId) || app.isStudent}
         headerRight={
-          app.isStudent ? (
+          activeView === "learning-node" ? (
+            <div />
+          ) : app.isStudent ? (
             <div className="header-learning-badge" aria-label="Learning mode">
               <span className="header-learning-badge-icon-shell" aria-hidden="true">
                 <Icon name="academic-hat" className="header-learning-badge-icon" />
@@ -456,6 +458,9 @@ function AppRoutes() {
                   onDownloadTemplate={app.downloadCourseTemplate}
                   onStartContinue={async (courseId, nodeId) => {
                     const session = await app.ensureLearningNodeSession(courseId, nodeId);
+                    if (!session) {
+                      return;
+                    }
                     navigate(`/learning/nodes/${session.id}`);
                   }}
                   onToggleArchived={(courseId, nextArchived) =>
@@ -804,11 +809,19 @@ function LearningNodeRoute({
 }: {
   app: ReturnType<typeof useChatApp>;
 }) {
+  const navigate = useNavigate();
   const params = useParams<{ sessionId: string }>();
   const sessionId = params.sessionId ?? "";
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [session, setSession] = useState<Awaited<ReturnType<typeof app.getLearningNodeSession>> | null>(null);
+  const [learningPath, setLearningPath] = useState<Awaited<ReturnType<typeof app.getLearningPathDetails>> | null>(null);
+  const [attempt, setAttempt] = useState<Awaited<ReturnType<typeof app.getLatestLearningNodeExecution>> | null>(null);
+  const [pathLoading, setPathLoading] = useState(false);
+  const [pathError, setPathError] = useState<string | null>(null);
+  const [attemptLoading, setAttemptLoading] = useState(false);
+  const [attemptError, setAttemptError] = useState<string | null>(null);
+  const [milestoneFinishing, setMilestoneFinishing] = useState(false);
 
   useEffect(() => {
     if (!sessionId) {
@@ -817,37 +830,163 @@ function LearningNodeRoute({
     let cancelled = false;
     setLoading(true);
     setError(null);
-    void app
-      .getLearningNodeSession(sessionId, false)
-      .then((payload) => {
-        if (!cancelled) {
-          setSession(payload);
+    setPathLoading(false);
+    setPathError(null);
+    setLearningPath(null);
+    setAttemptLoading(false);
+    setAttemptError(null);
+    setAttempt(null);
+    setMilestoneFinishing(false);
+    const pollAttemptUntilReady = async (pathId: string, nodeId: string) => {
+      const maxPollCycles = 120;
+      for (let cycle = 0; cycle < maxPollCycles; cycle += 1) {
+        if (cancelled) {
+          return;
         }
-      })
-      .catch((nextError: unknown) => {
+        await new Promise((resolve) => window.setTimeout(resolve, 2500));
+        if (cancelled) {
+          return;
+        }
+        try {
+          const latest = await app.getLatestLearningNodeExecution(pathId, nodeId);
+          if (cancelled) {
+            return;
+          }
+          setAttempt(latest);
+          setAttemptError(null);
+          if (String(latest.status ?? "") !== "generating") {
+            return;
+          }
+        } catch (pollError: unknown) {
+          if (!cancelled) {
+            setAttemptError(pollError instanceof Error ? pollError.message : "Failed to refresh learning node package");
+          }
+          return;
+        }
+      }
+      if (!cancelled) {
+        setAttemptError("Package generation is taking longer than expected. Please keep this page open.");
+      }
+    };
+    void (async () => {
+      try {
+        const payload = await app.getLearningNodeSession(sessionId, false);
+        if (cancelled) {
+          return;
+        }
+        setSession(payload);
+        setLoading(false);
+        setPathLoading(true);
+        let details: Awaited<ReturnType<typeof app.getLearningPathDetails>> | null = null;
+        try {
+          details = await app.getLearningPathDetails(payload.learning_path_id);
+        } catch (pathLoadError: unknown) {
+          if (!cancelled) {
+            setPathError(pathLoadError instanceof Error ? pathLoadError.message : "Failed to load learning node details");
+          }
+          return;
+        } finally {
+          if (!cancelled) {
+            setPathLoading(false);
+          }
+        }
+        if (cancelled || !details) {
+          return;
+        }
+        setLearningPath(details);
+        const node = details.nodes.find((item) => item.id === payload.node_id);
+        if (!node) {
+          setPathError("Node definition is missing for this learning session.");
+          return;
+        }
+        if (node.type === "unlock_gate") {
+          navigate("/courses", { replace: true });
+          return;
+        }
+        setAttemptLoading(true);
+        try {
+          const latestAttempt = await app.getLatestLearningNodeExecution(payload.learning_path_id, payload.node_id);
+          if (!cancelled) {
+            setAttempt(latestAttempt);
+            if (String(latestAttempt.status ?? "") === "generating") {
+              void pollAttemptUntilReady(payload.learning_path_id, payload.node_id);
+            }
+          }
+        } catch {
+          try {
+            const started = await app.startLearningNodeExecution(payload.learning_path_id, payload.node_id, false);
+            if (cancelled) {
+              return;
+            }
+            setAttempt(started.attempt);
+            if (String(started.attempt.status ?? "") === "generating") {
+              void pollAttemptUntilReady(payload.learning_path_id, payload.node_id);
+            }
+            if (started.auto_completed) {
+              void app.loadLearningNodeSessions();
+              const refreshedDetails = await app.getLearningPathDetails(payload.learning_path_id);
+              if (!cancelled) {
+                setLearningPath(refreshedDetails);
+              }
+            }
+          } catch (attemptLoadError: unknown) {
+            if (!cancelled) {
+              setAttemptError(attemptLoadError instanceof Error ? attemptLoadError.message : "Failed to load learning node package");
+            }
+          }
+        } finally {
+          if (!cancelled) {
+            setAttemptLoading(false);
+          }
+        }
+      } catch (nextError: unknown) {
         if (!cancelled) {
           setError(nextError instanceof Error ? nextError.message : "Failed to load learning node session");
         }
-      })
-      .finally(() => {
+      } finally {
         if (!cancelled) {
           setLoading(false);
         }
-      });
+      }
+    })();
+
     return () => {
       cancelled = true;
     };
-  }, [app, sessionId]);
+  }, [navigate, sessionId]);
 
   if (!sessionId) {
     return <Navigate to="/courses" replace />;
   }
+
+  const handleMilestoneFinish = async () => {
+    if (!session) {
+      return;
+    }
+    setMilestoneFinishing(true);
+    try {
+      await app.archiveLearningNodeSession(session.id);
+      navigate(`/courses?course=${encodeURIComponent(session.learning_path_id)}`, { replace: true });
+    } finally {
+      setMilestoneFinishing(false);
+    }
+  };
 
   return (
     <LearningNodePage
       loading={loading}
       error={error}
       session={session}
+      learningPath={learningPath}
+      pathLoading={pathLoading}
+      pathError={pathError}
+      attempt={attempt}
+      attemptLoading={attemptLoading}
+      attemptError={attemptError}
+      onMilestoneFinish={() => {
+        void handleMilestoneFinish();
+      }}
+      milestoneFinishing={milestoneFinishing}
     />
   );
 }

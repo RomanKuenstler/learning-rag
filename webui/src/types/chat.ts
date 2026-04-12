@@ -401,6 +401,35 @@ export type LearningNodeSessionDownload = {
   message: string;
 };
 
+export type LearningNodeExecutionAttempt = {
+  attempt_id: string;
+  user_id: number;
+  learning_path_id: string;
+  node_id: string;
+  node_type: SkilltreeNodeType | string;
+  status: string;
+  generation_reason: string;
+  package: Record<string, unknown>;
+  responses: Record<string, unknown>;
+  result: Record<string, unknown>;
+  context_snapshot: Record<string, unknown>;
+  source_node_window: string[];
+  is_resumable: boolean;
+  is_active: boolean;
+  attempt_closed_reason: string | null;
+  package_sections_progress: Record<string, unknown>;
+  started_at: string;
+  completed_at: string | null;
+  created_at: string;
+  updated_at: string;
+};
+
+export type LearningNodeExecutionStartResponse = {
+  attempt: LearningNodeExecutionAttempt;
+  auto_completed: boolean;
+  completion_reason: string;
+};
+
 export type CourseSort =
   | "name_asc"
   | "name_desc"

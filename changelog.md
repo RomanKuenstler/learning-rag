@@ -1,5 +1,40 @@
 # Changelog
 
+## 2026-04-11 23:40 UTC
+
+- Implemented full learning-node page rendering shell for runtime-generated node packages:
+  - top metadata block now uses real node title/description plus tags (`type`, `chapter`, `branch`, `required`, KSA tags)
+  - type-specific page rendering for:
+    - `milestone`
+    - `assessment_hook`
+    - `quiz`
+    - `practice`
+    - `checkpoint`
+    - `capstone`
+- `assessment_hook` page now renders generated topics and deep-dive style questions directly on-page (no manual topic input UI).
+- `quiz` page renders real `mc_questions` + free-text package fields using existing option-card/textarea styles.
+- `practice` page renders mixed task packages, including split textarea/upload layout for upload tasks.
+- `checkpoint`/`capstone` pages compose quiz + practice + assessment sections from persisted package payloads.
+- Updated `milestone` behavior and page:
+  - start flow auto-triggers execution and completion sync when requirements are met
+  - celebratory layout with certificate placeholder, non-functional download, node status summary, and non-functional `Next`.
+- Added `unlock_gate` safeguards:
+  - no learning-node session creation (`POST /session` returns `422` for unlock_gate nodes)
+  - no sidebar session rendering for unlock_gate rows
+  - no Start/Continue action button in Courses node detail panel
+  - backend course-load auto-completion pass for eligible unlock_gate nodes.
+- Updated learning-node sidebar icon visuals:
+  - `created`: blue dotted circle
+  - `in_progress`: orange/yellow half-filled circle
+  - `completed`: green check-in-circle
+- Added test coverage update:
+  - `tests/test_learning_node_sessions_api.py` includes unlock_gate session creation rejection.
+- Updated docs:
+  - `docs/learning.md`
+  - `docs/frontend.md`
+  - `docs/architecture.md`
+  - `docs/testing.md`
+
 ## 2026-04-11 22:20 UTC
 
 - Added dedicated learning-node session persistence and API shell for per-user, per-node learning routes.

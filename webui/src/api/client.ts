@@ -32,6 +32,8 @@ import type {
   LearningModule,
   LearningLesson,
   LearningNodeSession,
+  LearningNodeExecutionAttempt,
+  LearningNodeExecutionStartResponse,
   LearningNodeSessionDownload,
   LearningNodeSessionListResponse,
   LearningGoal,
@@ -463,6 +465,15 @@ export const apiClient = {
     return request<LearningNodeSession>(`/api/learning-paths/${pathId}/nodes/${nodeId}/session`, {
       method: "POST",
     });
+  },
+  startLearningNodeExecution(pathId: string, nodeId: string, forceNewAttempt = false) {
+    return request<LearningNodeExecutionStartResponse>(
+      `/api/learning-paths/${pathId}/nodes/${nodeId}/execution/start?force_new_attempt=${forceNewAttempt ? "true" : "false"}`,
+      { method: "POST" },
+    );
+  },
+  getLatestLearningNodeExecution(pathId: string, nodeId: string) {
+    return request<LearningNodeExecutionAttempt>(`/api/learning-paths/${pathId}/nodes/${nodeId}/execution/latest`);
   },
   getLearningNodeSession(sessionId: string, markOpened = false) {
     return request<LearningNodeSession>(`/api/learning-node-sessions/${sessionId}?mark_opened=${markOpened ? "true" : "false"}`);

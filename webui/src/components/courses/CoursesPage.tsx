@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState, type ChangeEvent } from "react";
+import { useSearchParams } from "react-router-dom";
 import type { CourseImportResponse, CourseListItem, CourseSort, LearningPath } from "../../types/chat";
 import { Dialog } from "../common/Dialog";
 import { Icon } from "../common/Icons";
@@ -265,6 +266,7 @@ export function CoursesPage({
   onToggleArchived,
   onDeleteCourse,
 }: CoursesPageProps) {
+  const [searchParams] = useSearchParams();
   const [search, setSearch] = useState("");
   const [scope, setScope] = useState<CourseScopeFilter>("all");
   const [status, setStatus] = useState<CourseStatusFilter>("all");
@@ -465,6 +467,20 @@ export function CoursesPage({
       setSelectedCourseId(null);
     }
   }, [courses, selectedCourseId]);
+
+  useEffect(() => {
+    const courseFromQuery = searchParams.get("course")?.trim() ?? "";
+    if (!courseFromQuery) {
+      return;
+    }
+    if (selectedCourseId === courseFromQuery) {
+      return;
+    }
+    if (!courses.some((course) => course.id === courseFromQuery)) {
+      return;
+    }
+    setSelectedCourseId(courseFromQuery);
+  }, [courses, searchParams, selectedCourseId]);
 
   useEffect(() => {
     if (!menuCourseId) {
@@ -901,7 +917,8 @@ export function CoursesPage({
                           const runtime = selectedDetails.node_runtime[selectedNode.id];
                           const state = selectedDetails.node_progress[selectedNode.id] ?? "locked";
                           const prereqsSatisfied = runtime ? runtime.blocked_by_all.length === 0 && runtime.blocked_by_any.length === 0 : false;
-                          const showActions = prereqsSatisfied && state !== "locked" && state !== "awaiting_checkpoint";
+                          const isUnlockGate = selectedNode.type === "unlock_gate";
+                          const showActions = !isUnlockGate && prereqsSatisfied && state !== "locked" && state !== "awaiting_checkpoint";
                           const canReset = state === "in_progress" || state === "completed";
                           const actionLabel = state === "in_progress" ? "Continue" : "Start";
                           if (!showActions) {
@@ -943,9 +960,13 @@ export function CoursesPage({
                                 title={actionLabel}
                                 aria-label={`${actionLabel} node`}
                                 onClick={() => {
-                                  void onUpdateNodeProgress(selectedCourse.id, selectedNode.id, { status: "in_progress" })
-                                    .then((payload) => setDetailsByCourseId((current) => ({ ...current, [selectedCourse.id]: payload })))
-                                    .then(() => onStartContinue(selectedCourse.id, selectedNode.id));
+                                  void Promise.resolve(onStartContinue(selectedCourse.id, selectedNode.id))
+                                    .then(() => onLoadDetails(selectedCourse.id))
+                                    .then((payload) => {
+                                      if (payload) {
+                                        setDetailsByCourseId((current) => ({ ...current, [selectedCourse.id]: payload }));
+                                      }
+                                    });
                                 }}
                               >
                                 <Icon name="play" />

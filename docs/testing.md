@@ -229,13 +229,18 @@ Additional focused checks:
   - list active
   - list archived
   - ensure/create-or-reactivate for user+node
+  - unlock_gate session creation rejection (`422`)
   - mark-opened load behavior
   - archive/unarchive
   - soft-delete
   - reset/download placeholders
 - frontend production build with:
   - `Learning Nodes` sidebar section
-  - dedicated learning-node route shell
+  - dedicated learning-node route renderer for `milestone`, `assessment_hook`, `quiz`, `practice`, `checkpoint`, `capstone`
+  - top metadata tags (type/chapter/branch/required/KSA)
+  - combined checkpoint/capstone section composition
+  - milestone celebratory page layout
+  - unlock_gate route guard and no-action behavior from course detail panel
   - Preferences archive integration for archived learning-node sessions
 
 Focused run:

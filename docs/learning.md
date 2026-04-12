@@ -14,14 +14,15 @@ What this step now provides:
 
 Status icon semantics in sidebar:
 
-- blue play: session `created` (node started from tree, not interactively opened yet)
-- orange check-in-circle: session `in_progress`
-- green check: session `completed`
+- blue dotted circle: session `created`
+- orange/yellow half-filled circle: session `in_progress`
+- green check-in-circle: session `completed`
 
 Session lifecycle behavior:
 
 - `created` on first node start from the course tree
-- `created -> in_progress` on first successful load of `/learning/nodes/{session_id}`
+- `created` is intentionally preserved on initial page open in this step
+- `in_progress` is reserved for explicit progress-state transitions
 - `in_progress -> completed` when node progress becomes `completed` or `mastered`
 - archived sessions are removed from the active list and available in archive flows
 - delete is soft-delete (`is_deleted=true`), not physical DB deletion
@@ -31,6 +32,45 @@ Step boundary reminder:
 
 - this step only prepares routing/navigation/session lifecycle shell
 - final node content UI/interaction flow remains a later step
+
+## Learning Node Page Rendering (milestone, assessment_hook, quiz, practice, checkpoint, capstone)
+
+The dedicated node page now renders real runtime package data from node execution attempts.
+
+Top section behavior (all supported node types):
+
+- real node title + description from the skilltree definition
+- metadata tags:
+  - node type
+  - chapter id
+  - branch id
+  - required/optional state
+  - KSA tags in `dimension: topic/subtopic` format
+
+Special behaviors:
+
+- `unlock_gate`:
+  - never creates a learning-node session
+  - is filtered out of learning-node session listing/sidebar
+  - has no Start/Continue action in the course node detail panel
+  - is auto-completed in backend when requirements are satisfied
+- `milestone`:
+  - start flow triggers execution and auto-completion when milestone requirements are met
+  - page uses a celebratory layout with certificate placeholder, non-functional download button, scoped node status summary, and non-functional `Next` button
+
+Type-specific rendering from persisted runtime package:
+
+- `assessment_hook`: generated topics + deep-dive style assessment questions (direct page rendering, no manual topic-entry flow)
+- `quiz`: `mc_questions` + `free_text_questions` (or `free_text_quiz_questions`)
+- `practice`: `tasks` (including split textarea + upload surface for upload tasks)
+- `checkpoint`: combined quiz + practice + assessment-hook sections from package fields
+- `capstone`: same combined composition pattern as checkpoint, scaled for larger payloads
+
+Current non-goals in this step:
+
+- no scoring/validation-result UI
+- no finish/celebration flows for non-milestone node types
+- no `learning_unit`/`review` page rendering yet
 
 ## User Node Context Foundation (Step)
 

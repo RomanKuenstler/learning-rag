@@ -85,9 +85,10 @@ This keeps node-session lifecycle separate from:
 Lifecycle integration:
 
 - node Start/Continue ensures or reactivates the existing learning-node session
-- first successful learning-node route open marks session opened and transitions `created -> in_progress`
+- initial learning-node route open keeps session in `created` in this phase
 - node-progress updates (`completed|mastered`) synchronize session status to `completed`
 - soft-delete hides from active sidebar but keeps DB row restorable
+- `unlock_gate` nodes are excluded from learning-node session creation/list rendering
 
 ## User Node Context Generation Layer
 
@@ -147,6 +148,8 @@ Key architecture points:
 - completion updates flow back into node progress and KSA profile refinement
 - upload-capable tasks persist artifact references and extracted summaries on the attempt payload
 - checkpoint/capstone scoring combines deterministic MC scoring, LLM rubric scoring, and KSA drill scoring
+- milestone auto-completion from execution start now synchronizes learning-node session completion state
+- unlock-gate auto-completion is enforced in course-load flows when structural/threshold requirements are satisfied
 
 Current non-goal:
 

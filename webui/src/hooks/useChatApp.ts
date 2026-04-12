@@ -1756,6 +1756,14 @@ export function useChatApp() {
     return session;
   }
 
+  async function startLearningNodeExecution(pathId: string, nodeId: string, forceNewAttempt = false) {
+    return apiClient.startLearningNodeExecution(pathId, nodeId, forceNewAttempt);
+  }
+
+  async function getLatestLearningNodeExecution(pathId: string, nodeId: string) {
+    return apiClient.getLatestLearningNodeExecution(pathId, nodeId);
+  }
+
   async function getLearningNodeSession(sessionId: string, markOpened = false) {
     const session = await apiClient.getLearningNodeSession(sessionId, markOpened);
     upsertLearningNodeSessionInState(session);
@@ -2348,6 +2356,8 @@ export function useChatApp() {
     updateLearningNodeProgress,
     loadLearningNodeSessions,
     ensureLearningNodeSession,
+    startLearningNodeExecution,
+    getLatestLearningNodeExecution,
     getLearningNodeSession,
     archiveLearningNodeSession,
     unarchiveLearningNodeSession,
