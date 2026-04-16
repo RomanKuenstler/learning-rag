@@ -353,6 +353,7 @@ export type LearningPath = {
   visual_layout: Record<string, unknown>;
   metadata: Record<string, unknown>;
   node_progress: Record<string, SkilltreeNodeProgressState | string>;
+  node_attempt_counts: Record<string, number>;
   node_runtime: Record<string, SkilltreeNodeRuntime>;
   chapter_progress: SkilltreeChapterProgress[];
   branch_progress: SkilltreeBranchProgress[];

@@ -528,7 +528,7 @@ a {
   inset: 0 auto 0 0;
   z-index: 55;
   width: 14.8rem;
-  padding: 4.5rem 0.7rem 0.8rem;
+  padding: 4.5rem 0 0.8rem 0.7rem;
   border-right: 1px solid var(--border);
   background: var(--bg);
 }
@@ -539,6 +539,7 @@ a {
   display: flex;
   flex-direction: column;
   gap: 0;
+  overflow: hidden;
 }
 
 .side-nav-top {
@@ -739,11 +740,14 @@ a {
 }
 
 .side-nav-sections {
-  display: grid;
-  align-content: start;
+  display: block;
   gap: 0;
   min-height: 0;
   flex: 1 1 auto;
+  overflow-y: auto;
+  overflow-x: hidden;
+  padding-right: 0;
+  padding-bottom: 0.4rem;
 }
 
 .side-nav-chat-list {
@@ -751,12 +755,13 @@ a {
   display: grid;
   align-content: start;
   gap: 0.2rem;
-  overflow: auto;
-  padding-right: 0.15rem;
+  overflow: visible;
+  padding-right: 0;
 }
 
 .side-nav-gpt-list,
 .side-nav-chat-list-compact {
+  min-height: 0;
   overflow: visible;
 }
 
@@ -852,6 +857,11 @@ a {
   background: transparent;
 }
 
+.learning-session-status-dot.not-started {
+  border: 1.5px solid #9ca3af;
+  background: transparent;
+}
+
 .learning-session-status-dot.in-progress {
   border: 1.5px solid #f59e0b;
   background: conic-gradient(from 90deg, #f59e0b 0deg 180deg, transparent 180deg 360deg);
@@ -860,6 +870,11 @@ a {
 .learning-session-status-dot.completed {
   border: 1.5px solid #16a34a;
   background: #16a34a;
+}
+
+.learning-session-status-dot.completed-all {
+  border: 1.5px solid #2563eb;
+  background: #2563eb;
 }
 
 .learning-session-status-icon.completed {
@@ -4651,27 +4666,174 @@ button.send:hover:not(:disabled) {
 
 .courses-toolbar {
   display: grid;
-  grid-template-columns: minmax(220px, 2fr) minmax(140px, 0.95fr) minmax(140px, 0.95fr) minmax(180px, 1.2fr);
   gap: 0.55rem;
   margin-bottom: 0.7rem;
+  align-items: center;
+}
+
+.courses-toolbar.admin {
+  grid-template-columns: minmax(220px, 2fr) minmax(280px, 1.7fr) minmax(220px, 1.2fr);
+}
+
+.courses-toolbar.user {
+  grid-template-columns: minmax(220px, 1fr) auto;
+}
+
+.table-search-input {
+  position: relative;
+  min-width: 0;
+}
+
+.table-search-input-icon {
+  position: absolute;
+  left: 0.72rem;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 0.95rem;
+  height: 0.95rem;
+  color: #94a3b8;
+  pointer-events: none;
+}
+
+.table-search-input-control {
+  padding-left: 2.2rem !important;
+}
+
+.library-search-input {
+  width: min(420px, 100%);
+}
+
+.courses-trigger-label {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.38rem;
+  color: #111827;
+  font-weight: 500;
+  font-size: 0.92rem;
+}
+
+.courses-trigger-icon {
+  width: 0.9rem;
+  height: 0.9rem;
+  color: #64748b;
+}
+
+.courses-trigger-arrows {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.08rem;
+  margin-left: 0.08rem;
+  color: #64748b;
+}
+
+.courses-trigger-arrow-up {
+  display: none;
+}
+
+.courses-trigger-arrow-down {
+  width: 0.8rem;
+  height: 0.8rem;
+}
+
+.courses-trigger-arrow-up {
+  transform: scale(0.75);
+}
+
+.courses-trigger-arrow-down {
+  transform: translateY(0.04rem);
+}
+
+.courses-toolbar .gpt-editor-select-trigger {
+  min-height: 2.45rem;
+  padding: 0.58rem 0.74rem;
+}
+
+.courses-toolbar .gpt-editor-select-trigger .header-mode-chevron {
+  display: none;
+}
+
+.courses-toolbar-icon {
+  width: 1.55rem;
+  height: 1.55rem;
+  border-radius: 8px;
+  border: none;
+  background: transparent;
+  color: #475569;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.courses-toolbar-icon .icon {
+  width: 0.92rem;
+  height: 0.92rem;
+}
+
+.courses-toolbar-icon.sort .icon {
+  transform: rotate(90deg);
+}
+
+.courses-head.admin,
+.courses-row.admin {
+  grid-template-columns:
+    minmax(210px, 1.9fr)
+    minmax(76px, 0.6fr)
+    minmax(110px, 0.95fr)
+    minmax(90px, 0.7fr)
+    minmax(72px, 0.54fr)
+    minmax(72px, 0.54fr)
+    minmax(72px, 0.54fr)
+    minmax(78px, 0.56fr)
+    minmax(130px, 0.92fr)
+    minmax(72px, 0.5fr);
+}
+
+.courses-head.compact,
+.courses-row.compact {
+  grid-template-columns:
+    minmax(250px, 2.35fr)
+    minmax(80px, 0.62fr)
+    minmax(80px, 0.62fr)
+    minmax(80px, 0.62fr)
+    minmax(78px, 0.56fr)
+    minmax(130px, 0.92fr)
+    minmax(72px, 0.5fr);
+}
+
+.courses-head.admin > :nth-child(9),
+.courses-row.admin > :nth-child(9),
+.courses-head.admin > :nth-child(10),
+.courses-row.admin > :nth-child(10),
+.courses-head.compact > :nth-child(6),
+.courses-row.compact > :nth-child(6),
+.courses-head.compact > :nth-child(7),
+.courses-row.compact > :nth-child(7) {
+  justify-self: end;
+  text-align: right;
+}
+.courses-toolbar-filters {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.45rem;
+  min-width: 0;
+}
+
+.courses-toolbar-sort {
+  display: inline-flex;
+  align-items: center;
+  justify-self: end;
+  gap: 0.45rem;
+}
+
+.courses-toolbar-sort.user-only {
+  margin-left: auto;
 }
 
 .courses-table {
   max-height: none;
 }
 
-.courses-head,
-.courses-row {
-  grid-template-columns: minmax(240px, 2.1fr) minmax(90px, 0.75fr) minmax(140px, 1fr) minmax(100px, 0.85fr) minmax(80px, 0.62fr) minmax(80px, 0.62fr) minmax(80px, 0.62fr) minmax(155px, 1fr) minmax(96px, 0.72fr);
-}
-
-.courses-head > :nth-child(8),
-.courses-row > :nth-child(8),
-.courses-head > :nth-child(9),
-.courses-row > :nth-child(9) {
-  justify-self: end;
-  text-align: right;
-}
 
 .courses-row {
   cursor: pointer;
@@ -4691,6 +4853,18 @@ button.send:hover:not(:disabled) {
   color: #111827;
 }
 
+.courses-title-main {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.42rem;
+}
+
+.course-status-icon {
+  width: 0.86rem;
+  height: 0.86rem;
+  flex-shrink: 0;
+}
+
 .courses-title-cell small {
   color: #6b7280;
   font-size: 0.77rem;
@@ -4706,6 +4880,8 @@ button.send:hover:not(:disabled) {
   justify-content: flex-end;
   align-items: center;
   gap: 0.25rem;
+  min-height: 1.9rem;
+  min-width: 2.2rem;
 }
 
 .course-icon-button {
@@ -5165,6 +5341,7 @@ button.send:hover:not(:disabled) {
   padding: 0;
   cursor: pointer;
   z-index: 3;
+  overflow: visible;
 }
 
 .skilltree-completion-block {
@@ -5187,6 +5364,15 @@ button.send:hover:not(:disabled) {
 .skilltree-node-icon {
   width: 1.1rem;
   height: 1.1rem;
+}
+
+.skilltree-node-progress-indicator {
+  position: absolute;
+  right: -3px;
+  bottom: -3px;
+  width: 0.86rem;
+  height: 0.86rem;
+  box-shadow: 0 0 0 2px #ffffff;
 }
 
 .skilltree-node.selected .skilltree-node-icon-shell {
@@ -5701,13 +5887,39 @@ button.send:hover:not(:disabled) {
     grid-template-columns: minmax(220px, 2.4fr) 0.85fr minmax(110px, 1fr) 0.85fr 0.65fr 0.8fr;
   }
 
-  .courses-toolbar {
-    grid-template-columns: minmax(220px, 2fr) repeat(3, minmax(130px, 1fr));
+  .courses-toolbar.admin {
+    grid-template-columns: minmax(220px, 2fr) minmax(220px, 1.4fr) minmax(180px, 1fr);
   }
 
-  .courses-head,
-  .courses-row {
-    grid-template-columns: minmax(220px, 2.2fr) 0.8fr minmax(120px, 1fr) 0.85fr 0.62fr 0.62fr 0.62fr minmax(140px, 1fr) minmax(96px, 0.72fr);
+  .courses-toolbar.user {
+    grid-template-columns: minmax(220px, 1fr) auto;
+  }
+
+  .courses-head.admin,
+  .courses-row.admin {
+    grid-template-columns:
+      minmax(200px, 2.1fr)
+      0.62fr
+      minmax(100px, 0.9fr)
+      0.72fr
+      0.52fr
+      0.52fr
+      0.52fr
+      0.56fr
+      minmax(120px, 0.85fr)
+      minmax(68px, 0.45fr);
+  }
+
+  .courses-head.compact,
+  .courses-row.compact {
+    grid-template-columns:
+      minmax(220px, 2.35fr)
+      0.56fr
+      0.56fr
+      0.56fr
+      0.56fr
+      minmax(120px, 0.85fr)
+      minmax(68px, 0.45fr);
   }
 
   .skilltree-shell {
@@ -6084,7 +6296,22 @@ button.send:hover:not(:disabled) {
 
   .courses-head,
   .courses-row {
-    min-width: 980px;
+    min-width: 900px;
+  }
+
+  .courses-toolbar {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 0.5rem;
+  }
+
+  .courses-toolbar-filters {
+    width: 100%;
+  }
+
+  .courses-toolbar-sort,
+  .courses-toolbar-sort.user-only {
+    width: 100%;
+    justify-content: flex-end;
   }
 
   .learning-goals-head,
@@ -6358,6 +6585,10 @@ button.send:hover:not(:disabled) {
   text-align: center;
   gap: 0.7rem;
   padding: 1.5rem;
+}
+
+.learning-node-result-loading {
+  min-height: 260px;
 }
 
 .learning-node-loading-circle {
@@ -6719,6 +6950,7 @@ button.send:hover:not(:disabled) {
 }
 
 .learning-node-guided-results-table .learning-node-milestone-topic-head > span:last-child {
+  justify-self: end;
   text-align: right;
 }
 

@@ -215,6 +215,7 @@ function MultipleChoiceQuestion({
   multiAnswers,
   setSingleAnswers,
   setMultiAnswers,
+  showHeading = true,
 }: {
   question: Record<string, unknown>;
   index: number;
@@ -222,6 +223,7 @@ function MultipleChoiceQuestion({
   multiAnswers: MultiAnswerMap;
   setSingleAnswers: Dispatch<SetStateAction<AnswerMap>>;
   setMultiAnswers: Dispatch<SetStateAction<MultiAnswerMap>>;
+  showHeading?: boolean;
 }) {
   const questionId = normalizeQuestionId(question.id, "mc", index);
   const questionType = asText(question.type, "single").toLowerCase();
@@ -230,7 +232,7 @@ function MultipleChoiceQuestion({
 
   return (
     <article className="ksa-question-card learning-node-question-card">
-      <h4>Question {index + 1}</h4>
+      {showHeading ? <h4>Question {index + 1}</h4> : null}
       <p>{asText(question.question, "Question prompt missing.")}</p>
       <div className="diagnostic-options-list">
         {options.map((option) => (
@@ -278,19 +280,21 @@ function FreeTextQuestion({
   answers,
   setAnswers,
   answerKeyPrefix,
+  showHeading = true,
 }: {
   question: Record<string, unknown>;
   index: number;
   answers: AnswerMap;
   setAnswers: Dispatch<SetStateAction<AnswerMap>>;
   answerKeyPrefix: string;
+  showHeading?: boolean;
 }) {
   const questionId = normalizeQuestionId(question.id, answerKeyPrefix, index);
   const rubric = asArray(question.rubric).map((item) => asText(item)).filter(Boolean);
 
   return (
     <article className="ksa-question-card learning-node-question-card">
-      <h4>Prompt {index + 1}</h4>
+      {showHeading ? <h4>Prompt {index + 1}</h4> : null}
       <p>{asText(question.question || question.prompt, "Prompt missing.")}</p>
       <textarea
         className="dialog-input diagnostic-textarea"
@@ -734,6 +738,7 @@ export function LearningNodePage({
   const guidedProgressPercent = showGuidedProgress
     ? Math.round(((guidedItemIndex + 1) / guidedItems.length) * 100)
     : 0;
+  const showGuidedResultLoading = guidedStep === "complete" && guidedCompleting;
   const currentDrillQuestion = drillQuestions[assessmentQuestionIndex] ?? null;
   const isLastAssessmentQuestion = assessmentQuestionIndex >= drillQuestions.length - 1;
   const showAssessmentProgress = showAssessmentFooterActions && assessmentStep === "questions" && drillQuestions.length > 0;
@@ -988,6 +993,7 @@ export function LearningNodePage({
                       multiAnswers={multiAnswers}
                       setSingleAnswers={setSingleAnswers}
                       setMultiAnswers={setMultiAnswers}
+                      showHeading={node?.type !== "quiz"}
                     />
                   ) : null}
                   {currentGuidedItem?.kind === "ft" ? (
@@ -998,6 +1004,7 @@ export function LearningNodePage({
                       answers={textAnswers}
                       setAnswers={setTextAnswers}
                       answerKeyPrefix={currentGuidedItem.prefix}
+                      showHeading={node?.type !== "quiz"}
                     />
                   ) : null}
                   {currentGuidedItem?.kind === "practice" ? (
@@ -1032,33 +1039,43 @@ export function LearningNodePage({
               ) : null}
               {guidedStep === "complete" ? (
                 <section className="learning-node-section">
-                  <div className="learning-node-guided-result-hero">
-                    <div className={`learning-node-guided-result-badge ${guidedPassedByThreshold ? "success" : "failed"}`}>
-                      <Icon name={guidedPassedByThreshold ? "certificate" : "ban"} />
-                      <strong>{guidedPassedByThreshold ? `${guidedCompletionLabel} completed` : `${guidedCompletionLabel} not completed`}</strong>
-                    </div>
-                  </div>
-                  {guidedResultRows.length > 0 ? (
-                    <div className="learning-node-milestone-topic-table learning-node-guided-results-table">
-                      <div className="learning-node-milestone-topic-head">
-                        <span>Section</span>
-                        <span>Result</span>
-                      </div>
-                      <div className="learning-node-milestone-topic-body">
-                        {guidedResultRows.map((row, index) => {
-                          return (
-                            <div key={`guided-result-${index}`} className="learning-node-milestone-topic-line">
-                              <span>{row.label}</span>
-                              <span className={row.scoreClass}>{row.scoreText}</span>
-                            </div>
-                          );
-                        })}
-                      </div>
+                  {showGuidedResultLoading ? (
+                    <div className="learning-node-initial-loading learning-node-result-loading">
+                      <span className="learning-node-loading-circle" aria-hidden="true" />
+                      <strong>Please wait while your results are being verified.</strong>
+                      <small>This may take a few seconds.</small>
                     </div>
                   ) : (
-                    <div className="learning-node-page-placeholder">
-                      No result metrics are available yet.
-                    </div>
+                    <>
+                      <div className="learning-node-guided-result-hero">
+                        <div className={`learning-node-guided-result-badge ${guidedPassedByThreshold ? "success" : "failed"}`}>
+                          <Icon name={guidedPassedByThreshold ? "certificate" : "ban"} />
+                          <strong>{guidedPassedByThreshold ? `${guidedCompletionLabel} completed` : `${guidedCompletionLabel} not completed`}</strong>
+                        </div>
+                      </div>
+                      {guidedResultRows.length > 0 ? (
+                        <div className="learning-node-milestone-topic-table learning-node-guided-results-table">
+                          <div className="learning-node-milestone-topic-head">
+                            <span>Section</span>
+                            <span>Result</span>
+                          </div>
+                          <div className="learning-node-milestone-topic-body">
+                            {guidedResultRows.map((row, index) => {
+                              return (
+                                <div key={`guided-result-${index}`} className="learning-node-milestone-topic-line">
+                                  <span>{row.label}</span>
+                                  <span className={row.scoreClass}>{row.scoreText}</span>
+                                </div>
+                              );
+                            })}
+                          </div>
+                        </div>
+                      ) : (
+                        <div className="learning-node-page-placeholder">
+                          No result metrics are available yet.
+                        </div>
+                      )}
+                    </>
                   )}
                 </section>
               ) : null}
@@ -1181,6 +1198,16 @@ export function LearningNodePage({
                       Download Certificate
                     </button>
                   ) : null}
+                  {guidedStep === "items" && (node?.type === "quiz" || node?.type === "practice") && guidedItemIndex > 0 ? (
+                    <button
+                      className="secondary-button"
+                      type="button"
+                      disabled={guidedCompleting || guidedRestarting}
+                      onClick={() => setGuidedItemIndex((value) => Math.max(0, value - 1))}
+                    >
+                      Back
+                    </button>
+                  ) : null}
                   <button
                     className="primary-button"
                     type="button"
@@ -1219,11 +1246,12 @@ export function LearningNodePage({
                       }
                       if (guidedStep === "items") {
                         if (isLastGuidedItem) {
+                          setGuidedStep("complete");
                           void (async () => {
                             try {
                               await onGuidedComplete?.(collectedGuidedResponses);
-                              setGuidedStep("complete");
                             } catch {
+                              setGuidedStep("items");
                               // Error banner is handled at route level.
                             }
                           })();

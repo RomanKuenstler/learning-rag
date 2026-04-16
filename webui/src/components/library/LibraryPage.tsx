@@ -60,6 +60,7 @@ export function LibraryPage({
 }: LibraryPageProps) {
   const [uploadOpen, setUploadOpen] = useState(false);
   const [deleteTarget, setDeleteTarget] = useState<LibraryFile | null>(null);
+  const [search, setSearch] = useState("");
 
   useEffect(() => {
     if (library === null) {
@@ -68,6 +69,20 @@ export function LibraryPage({
   }, [library, onLoad, showOtherUsers]);
 
   const busySet = useMemo(() => new Set(busyFileIds), [busyFileIds]);
+  const filteredFiles = useMemo(() => {
+    if (!library) {
+      return [];
+    }
+    const needle = search.trim().toLowerCase();
+    if (!needle) {
+      return library.files;
+    }
+    return library.files.filter((file) => {
+      const inName = file.file_name.toLowerCase().includes(needle);
+      const inTags = file.tags.some((tag) => tag.toLowerCase().includes(needle));
+      return inName || inTags;
+    });
+  }, [library, search]);
 
   return (
     <section className="chat-column library-column">
@@ -92,21 +107,31 @@ export function LibraryPage({
       <section className="info-group-card library-table-card">
         <div className="library-table-header">
           <h4>Files</h4>
+          <div className="table-search-input library-search-input">
+            <Icon name="search" className="table-search-input-icon" />
+            <input
+              className="dialog-input table-search-input-control"
+              type="search"
+              placeholder="Search files or tags"
+              value={search}
+              onChange={(event) => setSearch(event.target.value)}
+            />
+          </div>
         </div>
 
         <div className="library-table">
           {loading ? <div className="empty-state">Loading library...</div> : null}
 
-          {!loading && library && library.files.length === 0 ? (
+          {!loading && library && filteredFiles.length === 0 ? (
             <div className="empty-state">
               <div>
-                <p>No files are embedded yet.</p>
-                <p>Upload supported knowledge files to start grounding answers.</p>
+                <p>{library.files.length > 0 ? "No files match your search." : "No files are embedded yet."}</p>
+                <p>{library.files.length > 0 ? "Try a different file or tag keyword." : "Upload supported knowledge files to start grounding answers."}</p>
               </div>
             </div>
           ) : null}
 
-          {!loading && library && library.files.length > 0 ? (
+          {!loading && library && filteredFiles.length > 0 ? (
             <>
               <div className="library-table-head">
                 <span>Name</span>
@@ -120,7 +145,7 @@ export function LibraryPage({
                 <span>Actions</span>
               </div>
               <div className="library-table-body">
-                {library.files.map((file) => (
+                {filteredFiles.map((file) => (
                   <div key={file.id} className="library-table-row">
                     <div className="library-path">
                       <strong>{file.file_name}</strong>

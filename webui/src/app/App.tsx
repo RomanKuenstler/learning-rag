@@ -58,6 +58,7 @@ function AppRoutes() {
           ? "gpt"
           : "chat";
   const activeGptChat = currentGptId ? app.gptChatsById[currentGptId] ?? null : null;
+  const showAssistantModeDropdown = activeView === "chat";
   const [preferencesTab, setPreferencesTab] = useState<PreferencesTab | null>(null);
   const [infoOpen, setInfoOpen] = useState(false);
   const [helpOpen, setHelpOpen] = useState(false);
@@ -333,7 +334,7 @@ function AppRoutes() {
         onAssistantModeChange={currentGptId || app.isStudent ? (() => undefined) : app.setAssistantMode}
         assistantModeLocked={Boolean(currentGptId) || app.isStudent}
         headerRight={
-          activeView === "learning-node" ? (
+          showAssistantModeDropdown ? undefined : activeView === "learning-node" ? (
             <div />
           ) : app.isStudent ? (
             <div className="header-learning-badge" aria-label="Learning mode">
@@ -355,7 +356,9 @@ function AppRoutes() {
                 <strong className="header-gpt-badge-name">{activeGptChat?.gpt.name ?? "Untitled GPT"}</strong>
               </span>
             </div>
-          ) : undefined
+          ) : (
+            <div />
+          )
         }
         content={
           <Routes>
@@ -445,6 +448,7 @@ function AppRoutes() {
               element={
                 <CoursesPage
                   courses={app.courses}
+                  learningNodeSessions={app.learningNodeSessions}
                   loading={app.coursesLoading}
                   error={app.coursesError}
                   importing={app.coursesImporting}

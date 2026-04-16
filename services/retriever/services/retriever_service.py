@@ -2272,6 +2272,8 @@ class RetrieverAppService:
             fields["difficulty_level"] = fields["difficulty_level"].strip()
         fields.pop("allowed_file_ids", None)
         fields.pop("allowed_tags", None)
+        current_schema_version = int(record.schema_version or 2)
+        fields["schema_version"] = current_schema_version + 1
         updated = self.chat_repository.update_learning_path(learning_path_id, fields)
         if updated is None:
             return None
@@ -4050,6 +4052,10 @@ class RetrieverAppService:
         allowed_files = self.chat_repository.list_learning_path_allowed_files(path.id)
         allowed_tags = self.chat_repository.list_learning_path_allowed_tags(path.id)
         progress_entries = self.chat_repository.list_user_learning_node_progress(user_id=user.id, learning_path_id=path.id)
+        node_attempt_counts = self.chat_repository.count_user_learning_node_execution_attempts_by_node(
+            user_id=user.id,
+            learning_path_id=path.id,
+        )
         progress_map = {entry.node_id: entry.status for entry in progress_entries}
         runtime = build_skilltree_runtime(definition, persisted_node_progress=progress_map)
         return LearningPathRead(
@@ -4172,6 +4178,7 @@ class RetrieverAppService:
             visual_layout=dict(definition.visual_layout or {}),
             metadata=dict(definition.metadata or {}),
             node_progress=dict(runtime.node_progress),
+            node_attempt_counts=dict(node_attempt_counts),
             node_runtime={
                 node_id: SkilltreeNodeRuntimeRead(
                     blocked_by_all=list(item.blocked_by_all),

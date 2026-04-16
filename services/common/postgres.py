@@ -2179,6 +2179,26 @@ class PostgresClient:
             )
             return list(rows)
 
+    def count_user_learning_node_execution_attempts_by_node(
+        self,
+        *,
+        user_id: int,
+        learning_path_id: str,
+    ) -> dict[str, int]:
+        with self.session() as session:
+            rows = session.execute(
+                select(
+                    UserLearningNodeExecutionAttempt.node_id,
+                    func.count(UserLearningNodeExecutionAttempt.id),
+                )
+                .where(
+                    UserLearningNodeExecutionAttempt.user_id == user_id,
+                    UserLearningNodeExecutionAttempt.learning_path_id == learning_path_id,
+                )
+                .group_by(UserLearningNodeExecutionAttempt.node_id)
+            ).all()
+            return {str(node_id): int(total) for node_id, total in rows}
+
     def update_user_learning_node_execution_attempt(
         self,
         *,

@@ -227,6 +227,7 @@ class LearningPathRead(BaseModel):
     visual_layout: dict[str, object] = Field(default_factory=dict)
     metadata: dict[str, object] = Field(default_factory=dict)
     node_progress: dict[str, str] = Field(default_factory=dict)
+    node_attempt_counts: dict[str, int] = Field(default_factory=dict)
     node_runtime: dict[str, SkilltreeNodeRuntimeRead] = Field(default_factory=dict)
     chapter_progress: list[SkilltreeChapterProgressRead] = Field(default_factory=list)
     branch_progress: list[SkilltreeBranchProgressRead] = Field(default_factory=list)

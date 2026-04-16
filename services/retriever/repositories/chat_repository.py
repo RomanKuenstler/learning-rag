@@ -708,6 +708,17 @@ class ChatRepository:
             limit=limit,
         )
 
+    def count_user_learning_node_execution_attempts_by_node(
+        self,
+        *,
+        user_id: int,
+        learning_path_id: str,
+    ) -> dict[str, int]:
+        return self.postgres_client.count_user_learning_node_execution_attempts_by_node(
+            user_id=user_id,
+            learning_path_id=learning_path_id,
+        )
+
     def update_user_learning_node_execution_attempt(
         self,
         *,
