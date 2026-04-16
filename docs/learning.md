@@ -70,7 +70,27 @@ Current non-goals in this step:
 
 - no scoring/validation-result UI
 - no finish/celebration flows for non-milestone node types
-- no `learning_unit`/`review` page rendering yet
+- no final validation/result screens for `learning_unit`/`review`
+- no real audio or real explain-again generation for `learning_unit`/`review` yet
+
+`learning_unit` and `review` learning node pages now render as a shared multi-step learning flow:
+
+- steps are driven from persisted runtime package shape:
+  - `learning_unit`: `mini_topic_lessons`
+  - `review`: `recap_structure.mini_recaps` (fallback to `mini_topic_lessons` if needed)
+- each flow prepends a start step showing:
+  - node overview
+  - generated important topics
+  - planned step list
+- each content step provides:
+  - top progress bar
+  - scrollable lesson content area
+  - placeholder technical-term tooltip style (orange dotted underline + hover definition)
+  - dummy media rendering support (`image` and `video`)
+  - bottom interaction row with like/dislike and Sources popover
+- fixed footer actions for these node types:
+  - left: disabled `Audio`, `Explain again`
+  - right: `Back` / `Next`
 
 ## User Node Context Foundation (Step)
 

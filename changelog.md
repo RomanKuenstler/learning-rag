@@ -1,5 +1,34 @@
 # Changelog
 
+## 2026-04-16 19:55 UTC
+
+- Implemented learning-node page UI flow for `learning_unit` and `review` using real runtime package structure:
+  - `learning_unit` step mapping from `package.mini_topic_lessons`
+  - `review` step mapping from `package.recap_structure.mini_recaps` (fallback-safe)
+- Added shared multi-step lesson shell:
+  - start overview step (topics + planned steps)
+  - top progress bar
+  - scrollable lesson content card
+  - fixed bottom action footer
+- Added lesson action/footer controls for `learning_unit`/`review`:
+  - left: disabled `Audio`, `Explain again` placeholder
+  - right: `Back` / `Next` navigation with start-step transition behavior
+- Added in-content assistant-style utility controls:
+  - icon-only like/dislike placeholders
+  - Sources button + popover using existing assistant evidence menu pattern
+- Added placeholder technical-term UI treatment:
+  - orange dotted underline
+  - hover tooltip definition
+- Added dummy media support in lesson content:
+  - placeholder image rendering
+  - video step rendering with short description
+  - DevOps roadmap course flow now includes a deterministic dummy image step in this renderer
+- Updated docs:
+  - `docs/frontend.md`
+  - `docs/learning.md`
+  - `docs/architecture.md`
+  - `docs/testing.md`
+
 ## 2026-04-11 23:40 UTC
 
 - Implemented full learning-node page rendering shell for runtime-generated node packages:

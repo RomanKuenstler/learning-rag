@@ -1791,8 +1791,19 @@ export function useChatApp() {
 
   async function unarchiveLearningNodeSession(sessionId: string) {
     const session = await apiClient.unarchiveLearningNodeSession(sessionId);
-    upsertLearningNodeSessionInState(session);
-    return session;
+    const prior = archivedLearningNodeSessions.find((entry) => entry.id === sessionId)
+      ?? learningNodeSessions.find((entry) => entry.id === sessionId);
+    const preserved = prior
+      ? {
+          ...session,
+          status: prior.status,
+          started_at: prior.started_at,
+          completed_at: prior.completed_at,
+          last_opened_at: prior.last_opened_at,
+        }
+      : session;
+    upsertLearningNodeSessionInState(preserved);
+    return preserved;
   }
 
   async function deleteLearningNodeSession(sessionId: string) {

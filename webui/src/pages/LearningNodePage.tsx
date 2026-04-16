@@ -1,6 +1,7 @@
-import { useEffect, useMemo, useState, type Dispatch, type SetStateAction } from "react";
+import { useEffect, useMemo, useRef, useState, type Dispatch, type SetStateAction } from "react";
 import { Icon } from "../components/common/Icons";
-import type { LearningNodeExecutionAttempt, LearningNodeSession, LearningPath, SkilltreeNode } from "../types/chat";
+import { SourcesPanel } from "../components/sources/SourcesPanel";
+import type { LearningNodeExecutionAttempt, LearningNodeSession, LearningPath, SkilltreeNode, Source } from "../types/chat";
 
 type LearningNodePageProps = {
   loading: boolean;
@@ -23,12 +24,36 @@ type LearningNodePageProps = {
   guidedCompleting?: boolean;
   onGuidedRestart?: () => Promise<void>;
   guidedRestarting?: boolean;
+  onLessonComplete?: (responses: Record<string, unknown>) => Promise<void>;
+  lessonCompleting?: boolean;
+  onLessonClose?: () => Promise<void> | void;
+  lessonClosing?: boolean;
 };
 
 type AnswerMap = Record<string, string>;
 type MultiAnswerMap = Record<string, string[]>;
 type UploadMap = Record<string, File[]>;
 type GuidedContentStep = "start" | "items" | "complete";
+type LessonFlowStep = {
+  id: string;
+  title: string;
+  summary: string;
+  goal: string;
+  topics: string[];
+  mediaKind: "none" | "image" | "video";
+  videoDescription?: string;
+  downloadFiles: DownloadableFile[];
+};
+type DownloadableFile = {
+  fileName: string;
+  ext: string;
+  tone: "is-red" | "is-blue" | "is-purple" | "is-gray" | "is-green";
+  sizeLabel: string;
+  href: string;
+};
+
+const DUMMY_DEVOPS_IMAGE = "data:image/svg+xml;utf8,%3Csvg xmlns='http://www.w3.org/2000/svg' width='1200' height='640' viewBox='0 0 1200 640'%3E%3Cdefs%3E%3ClinearGradient id='bg' x1='0%25' y1='0%25' x2='100%25' y2='100%25'%3E%3Cstop offset='0%25' stop-color='%23fff7ed'/%3E%3Cstop offset='100%25' stop-color='%23ffedd5'/%3E%3C/linearGradient%3E%3C/defs%3E%3Crect width='1200' height='640' fill='url(%23bg)'/%3E%3Cg fill='none' stroke='%23f97316' stroke-width='5'%3E%3Crect x='110' y='135' width='980' height='370' rx='24'/%3E%3Cpath d='M180 428 C 290 300, 430 345, 520 270 C 645 160, 785 180, 915 105' stroke-linecap='round'/%3E%3C/g%3E%3Ccircle cx='915' cy='105' r='17' fill='%23f97316'/%3E%3Ctext x='180' y='215' font-family='Arial, sans-serif' font-size='46' fill='%230f172a' font-weight='700'%3EDevOps Learning Unit Preview%3C/text%3E%3Ctext x='180' y='270' font-family='Arial, sans-serif' font-size='30' fill='%23334155'%3EConcept map placeholder for runtime media rendering%3C/text%3E%3C/svg%3E";
+const DUMMY_VIDEO_URL = "https://interactive-examples.mdn.mozilla.net/media/cc0-videos/flower.mp4";
 
 function asRecord(value: unknown): Record<string, unknown> {
   return value && typeof value === "object" ? (value as Record<string, unknown>) : {};
@@ -45,6 +70,88 @@ function hasRecordFields(value: unknown): boolean {
 function asText(value: unknown, fallback = ""): string {
   const text = String(value ?? "").trim();
   return text || fallback;
+}
+
+function attachmentTone(fileName: string): "is-red" | "is-blue" | "is-purple" | "is-gray" | "is-green" {
+  const normalized = fileName.toLowerCase();
+  if (normalized.endsWith(".pdf")) return "is-red";
+  if (normalized.endsWith(".html") || normalized.endsWith(".htm")) return "is-blue";
+  if (normalized.endsWith(".epub")) return "is-purple";
+  if (normalized.endsWith(".md") || normalized.endsWith(".txt")) return "is-gray";
+  return "is-green";
+}
+
+function fileExtension(fileName: string): string {
+  const ext = fileName.split(".").pop()?.trim().toUpperCase();
+  return ext || "FILE";
+}
+
+function toDataHref(fileName: string, content: string): string {
+  return `data:text/plain;charset=utf-8,${encodeURIComponent(`# ${fileName}\n\n${content}\n`)}`;
+}
+
+function normalizeDownloadableFiles(
+  source: Record<string, unknown>,
+  fallbackPrefix: string,
+  fallbackContent: string,
+  includeFallback = false,
+): DownloadableFile[] {
+  const keys = [
+    "download_files",
+    "files",
+    "attachments",
+    "resources",
+    "supporting_files",
+    "step_files",
+    "reference_files",
+    "materials",
+  ];
+  const raw = keys.flatMap((key) => asArray(source[key]));
+  const mapped = raw
+    .map((entry, index) => {
+      if (typeof entry === "string") {
+        const fileName = entry.includes(".") ? entry : `${entry}.md`;
+        return {
+          fileName,
+          href: toDataHref(fileName, fallbackContent),
+          sizeLabel: "Template",
+        };
+      }
+      const record = asRecord(entry);
+      const fileName = asText(
+        record.file_name || record.filename || record.name || record.title || record.label,
+        `${fallbackPrefix}-${index + 1}.md`,
+      );
+      const href = asText(record.download_url || record.url || record.href || record.path || record.file_path);
+      const rawSize = record.size_label ?? record.size ?? record.bytes;
+      const sizeLabel = typeof rawSize === "number"
+        ? `${Math.max(1, Math.round(rawSize / 1024))} KB`
+        : asText(rawSize, "Template");
+      return {
+        fileName,
+        href: href || toDataHref(fileName, fallbackContent),
+        sizeLabel,
+      };
+    })
+    .filter((item) => item.fileName);
+
+  const withFallback = mapped.length > 0
+    ? mapped
+    : includeFallback
+      ? [
+        {
+          fileName: `${fallbackPrefix}.md`,
+          href: toDataHref(`${fallbackPrefix}.md`, fallbackContent),
+          sizeLabel: "Template",
+        },
+      ]
+      : [];
+
+  return withFallback.slice(0, 4).map((item) => ({
+    ...item,
+    ext: fileExtension(item.fileName),
+    tone: attachmentTone(item.fileName),
+  }));
 }
 
 function normalizeQuestionId(input: unknown, fallbackPrefix: string, index: number): string {
@@ -171,6 +278,10 @@ function nodeTypeIconName(typeValue: unknown): "play" | "check" | "archive" | "a
   return "book";
 }
 
+function nodeTypeHeaderIconName(typeValue: unknown): "play" | "check" | "archive" | "academic-hat" | "book" | "certificate" {
+  return nodeTypeIconName(typeValue);
+}
+
 function getRouteLabel(node: SkilltreeNode, learningPath: LearningPath | null): string {
   const displayRoute = asText(asRecord(node.display).route_name || asRecord(node.display).route_title);
   if (displayRoute) {
@@ -208,6 +319,50 @@ function renderMetadataTags(node: SkilltreeNode, learningPath: LearningPath | nu
   );
 }
 
+function detectMediaKind(step: Record<string, unknown>, index: number, nodeType: string, courseTitle: string): "none" | "image" | "video" {
+  const hints = asArray(step.style_hints).map((item) => asText(item).toLowerCase());
+  const textBlob = `${asText(step.title)} ${asText(step.mini_topic_title)} ${asText(step.brief)} ${asText(step.intro_brief)} ${asText(step.teaching_brief)}`.toLowerCase();
+  if (nodeType === "review") {
+    if (hints.some((hint) => hint.includes("image")) || textBlob.includes("diagram") || textBlob.includes("graphic") || index === 0) {
+      return "image";
+    }
+    return "none";
+  }
+  if (nodeType === "learning_unit" && (textBlob.includes("linux fundamentals") || textBlob.includes("linux filesystem") || textBlob.includes("linux")) && index === 1) {
+    return "video";
+  }
+  if (hints.some((hint) => hint.includes("video")) || textBlob.includes("video")) {
+    return "video";
+  }
+  if (hints.some((hint) => hint.includes("image")) || textBlob.includes("diagram") || textBlob.includes("graphic")) {
+    return "image";
+  }
+  if (nodeType === "review" && index === 0) {
+    return "video";
+  }
+  if (courseTitle.toLowerCase().includes("devops roadmap") && index === 0) {
+    return "image";
+  }
+  return "none";
+}
+
+function dummyLessonSources(learningPath: LearningPath | null, sourceNodeIds: string[]): Source[] {
+  return sourceNodeIds.slice(0, 8).map((nodeId, index) => {
+    const nodeTitle = learningPath?.nodes.find((item) => item.id === nodeId)?.title ?? nodeId;
+    return {
+      chunk_id: `node-${nodeId}-${index + 1}`,
+      file_name: `${nodeTitle}.md`,
+      file_path: `/courses/${learningPath?.id ?? "course"}/nodes/${nodeId}`,
+      title: nodeTitle,
+      chapter: null,
+      section: `Runtime package excerpt ${index + 1}`,
+      page_number: null,
+      score: Number(Math.max(0.65, 0.98 - index * 0.05).toFixed(3)),
+      tags: ["learning-node", "runtime-package"],
+    };
+  });
+}
+
 function MultipleChoiceQuestion({
   question,
   index,
@@ -229,11 +384,16 @@ function MultipleChoiceQuestion({
   const questionType = asText(question.type, "single").toLowerCase();
   const isMultiple = questionType === "multiple" || questionType === "multi";
   const options = asArray(question.options).map((item) => asText(item)).filter(Boolean);
+  const downloadFiles = useMemo(
+    () => normalizeDownloadableFiles(question, `question-${index + 1}-resources`, "Reference files for this question step.", false),
+    [index, question],
+  );
 
   return (
     <article className="ksa-question-card learning-node-question-card">
       {showHeading ? <h4>Question {index + 1}</h4> : null}
       <p>{asText(question.question, "Question prompt missing.")}</p>
+      <DownloadableFiles files={downloadFiles} />
       <div className="diagnostic-options-list">
         {options.map((option) => (
           <label
@@ -280,6 +440,8 @@ function FreeTextQuestion({
   answers,
   setAnswers,
   answerKeyPrefix,
+  uploads,
+  setUploads,
   showHeading = true,
 }: {
   question: Record<string, unknown>;
@@ -287,22 +449,37 @@ function FreeTextQuestion({
   answers: AnswerMap;
   setAnswers: Dispatch<SetStateAction<AnswerMap>>;
   answerKeyPrefix: string;
+  uploads: UploadMap;
+  setUploads: Dispatch<SetStateAction<UploadMap>>;
   showHeading?: boolean;
 }) {
   const questionId = normalizeQuestionId(question.id, answerKeyPrefix, index);
-  const rubric = asArray(question.rubric).map((item) => asText(item)).filter(Boolean);
+  const uploadFiles = uploads[questionId] ?? [];
+  const downloadFiles = useMemo(
+    () => normalizeDownloadableFiles(question, `prompt-${index + 1}-resources`, "Starter reference files for this prompt."),
+    [index, question],
+  );
 
   return (
     <article className="ksa-question-card learning-node-question-card">
       {showHeading ? <h4>Prompt {index + 1}</h4> : null}
       <p>{asText(question.question || question.prompt, "Prompt missing.")}</p>
-      <textarea
-        className="dialog-input diagnostic-textarea"
-        rows={4}
-        placeholder="Write your answer here..."
-        value={answers[questionId] ?? ""}
-        onChange={(event) => setAnswers((current) => ({ ...current, [questionId]: event.target.value }))}
-      />
+      <DownloadableFiles files={downloadFiles} />
+      <div className="learning-node-practice-split">
+        <textarea
+          className="dialog-input diagnostic-textarea"
+          rows={6}
+          placeholder="Write your answer here..."
+          value={answers[questionId] ?? ""}
+          onChange={(event) => setAnswers((current) => ({ ...current, [questionId]: event.target.value }))}
+        />
+        <UploadPanel
+          uploadKey={questionId}
+          uploads={uploadFiles}
+          setUploads={setUploads}
+          helperText="Upload optional files (parts or full solution)."
+        />
+      </div>
     </article>
   );
 }
@@ -380,57 +557,118 @@ function PracticeTask({
   setUploads: Dispatch<SetStateAction<UploadMap>>;
 }) {
   const taskId = normalizeQuestionId(task.id, "task", index);
-  const isUploadTask = asText(task.type) === "artifact_upload";
   const uploadFiles = uploads[taskId] ?? [];
+  const downloadFiles = useMemo(
+    () => normalizeDownloadableFiles(task, `practice-${index + 1}-resources`, "Practice materials and starter assets."),
+    [index, task],
+  );
 
   return (
     <article className="ksa-question-card learning-node-question-card">
       <h4>{asText(task.title, `Practice Task ${index + 1}`)}</h4>
       <p>{asText(task.prompt, "Task prompt missing.")}</p>
-      {isUploadTask ? (
-        <div className="learning-node-practice-split">
-          <textarea
-            className="dialog-input diagnostic-textarea"
-            rows={6}
-            placeholder="Describe your approach, notes, and solution summary..."
-            value={textAnswers[taskId] ?? ""}
-            onChange={(event) => setTextAnswers((current) => ({ ...current, [taskId]: event.target.value }))}
-          />
-          <div className="learning-node-upload-box">
-            <label className="secondary-button learning-node-upload-trigger">
-              Select files
-              <input
-                type="file"
-                multiple
-                onChange={(event) => {
-                  const selected = Array.from(event.target.files ?? []);
-                  setUploads((current) => ({ ...current, [taskId]: selected }));
-                }}
-              />
-            </label>
-            <div className="composer-attachment-chip-list">
-              {uploadFiles.length === 0 ? <small>No files selected yet.</small> : null}
-              {uploadFiles.map((file) => (
-                <div key={`${taskId}-${file.name}-${file.size}`} className="composer-attachment-chip">
-                  <span className="composer-attachment-meta">
-                    <span className="composer-attachment-name">{file.name}</span>
-                    <span className="composer-attachment-ext">{file.name.split(".").pop()?.toUpperCase() ?? "FILE"}</span>
-                  </span>
-                </div>
-              ))}
-            </div>
-          </div>
-        </div>
-      ) : (
+      <DownloadableFiles files={downloadFiles} />
+      <div className="learning-node-practice-split">
         <textarea
           className="dialog-input diagnostic-textarea"
-          rows={5}
-          placeholder="Write your response..."
+          rows={6}
+          placeholder="Describe your approach, notes, and solution summary..."
           value={textAnswers[taskId] ?? ""}
           onChange={(event) => setTextAnswers((current) => ({ ...current, [taskId]: event.target.value }))}
         />
-      )}
+        <UploadPanel
+          uploadKey={taskId}
+          uploads={uploadFiles}
+          setUploads={setUploads}
+          helperText="Upload optional artifacts for this exercise."
+        />
+      </div>
     </article>
+  );
+}
+
+function UploadPanel({
+  uploadKey,
+  uploads,
+  setUploads,
+  helperText,
+}: {
+  uploadKey: string;
+  uploads: File[];
+  setUploads: Dispatch<SetStateAction<UploadMap>>;
+  helperText: string;
+}) {
+  return (
+    <div className="learning-node-upload-box">
+      <label className="learning-node-upload-dropzone">
+        <Icon name="arrow-up" />
+        <strong>Click to upload or drag and drop</strong>
+        <small>{helperText}</small>
+        <input
+          type="file"
+          multiple
+          onChange={(event) => {
+            const selected = Array.from(event.target.files ?? []);
+            if (selected.length === 0) {
+              return;
+            }
+            setUploads((current) => ({ ...current, [uploadKey]: [...(current[uploadKey] ?? []), ...selected] }));
+          }}
+        />
+      </label>
+      <div className="composer-attachment-chip-list">
+        {uploads.length === 0 ? <small>No files selected yet.</small> : null}
+        {uploads.map((file, index) => (
+          <div key={`${uploadKey}-${file.name}-${file.size}-${index}`} className="composer-attachment-chip learning-node-upload-file-row">
+            <span className={`library-extension-chip ${attachmentTone(file.name)}`}>{fileExtension(file.name)}</span>
+            <span className="composer-attachment-meta">
+              <span className="composer-attachment-name">{file.name}</span>
+              <span className="composer-attachment-ext">{`${Math.max(1, Math.round(file.size / 1024))} KB`}</span>
+            </span>
+            <button
+              className="composer-attachment-remove"
+              type="button"
+              aria-label={`Remove ${file.name}`}
+              onClick={() => {
+                setUploads((current) => ({
+                  ...current,
+                  [uploadKey]: (current[uploadKey] ?? []).filter((_, i) => i !== index),
+                }));
+              }}
+            >
+              ×
+            </button>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function DownloadableFiles({ files }: { files: DownloadableFile[] }) {
+  if (files.length === 0) {
+    return null;
+  }
+  return (
+    <div className="learning-node-download-files">
+      {files.map((file, index) => (
+        <a
+          key={`${file.fileName}-${index}`}
+          className="learning-node-download-chip"
+          href={file.href}
+          download={file.fileName}
+          target={file.href.startsWith("data:") ? undefined : "_blank"}
+          rel={file.href.startsWith("data:") ? undefined : "noreferrer"}
+        >
+          <span className={`library-extension-chip ${file.tone}`}>{file.ext}</span>
+          <span className="learning-node-download-meta">
+            <strong>{file.fileName}</strong>
+            <small>{file.sizeLabel}</small>
+          </span>
+          <Icon name="download" />
+        </a>
+      ))}
+    </div>
   );
 }
 
@@ -455,6 +693,10 @@ export function LearningNodePage({
   guidedCompleting = false,
   onGuidedRestart,
   guidedRestarting = false,
+  onLessonComplete,
+  lessonCompleting = false,
+  onLessonClose,
+  lessonClosing = false,
 }: LearningNodePageProps) {
   const [singleAnswers, setSingleAnswers] = useState<AnswerMap>({});
   const [multiAnswers, setMultiAnswers] = useState<MultiAnswerMap>({});
@@ -464,6 +706,12 @@ export function LearningNodePage({
   const [assessmentQuestionIndex, setAssessmentQuestionIndex] = useState(0);
   const [guidedStep, setGuidedStep] = useState<GuidedContentStep>("start");
   const [guidedItemIndex, setGuidedItemIndex] = useState(0);
+  const [lessonFlowStepIndex, setLessonFlowStepIndex] = useState(0);
+  const [lessonSourcesOpen, setLessonSourcesOpen] = useState(false);
+  const [lessonTranscriptOpen, setLessonTranscriptOpen] = useState(false);
+  const [lessonVideoHeight, setLessonVideoHeight] = useState<number>(0);
+  const [lessonCompleted, setLessonCompleted] = useState(false);
+  const lessonVideoWrapRef = useRef<HTMLDivElement | null>(null);
 
   useEffect(() => {
     setSingleAnswers({});
@@ -474,7 +722,13 @@ export function LearningNodePage({
     setAssessmentQuestionIndex(0);
     setGuidedStep("start");
     setGuidedItemIndex(0);
+    setLessonSourcesOpen(false);
+    setLessonTranscriptOpen(false);
+    setLessonVideoHeight(0);
+    setLessonFlowStepIndex(0);
+    setLessonCompleted(false);
   }, [session?.id, attempt?.attempt_id]);
+
 
   const node = useMemo(() => {
     if (!session || !learningPath) {
@@ -569,6 +823,63 @@ export function LearningNodePage({
         };
       }),
     [assessmentRounds, generatedTopics],
+  );
+  const isLessonNodeType = Boolean(node && (node.type === "learning_unit" || node.type === "review"));
+  const lessonSteps = useMemo(() => {
+    if (!node || !attempt) {
+      return [] as LessonFlowStep[];
+    }
+    const courseTitle = asText(learningPath?.title);
+    if (node.type === "learning_unit") {
+      return asArray(packageData.mini_topic_lessons).map((item, index) => {
+        const step = asRecord(item);
+        return {
+          id: asText(step.step_id, `lesson-${index + 1}`),
+          title: asText(step.mini_topic_title || step.title, `Mini lesson ${index + 1}`),
+          summary: asText(step.intro_brief || step.teaching_brief, "This lesson introduces a focused concept for this learning node."),
+          goal: asText(step.lesson_goal, "Understand and apply the mini topic in practical context."),
+          topics: asArray(step.expected_difficulty_points).map((value) => asText(value)).filter(Boolean).slice(0, 4),
+          mediaKind: detectMediaKind(step, index, node.type, courseTitle),
+          videoDescription: "Watch this short clip before continuing to the next step.",
+          downloadFiles: normalizeDownloadableFiles(
+            step,
+            `lesson-step-${index + 1}-resources`,
+            `Learning unit support files for step "${asText(step.mini_topic_title || step.title, `Step ${index + 1}`)}".`,
+          ),
+        };
+      });
+    }
+    if (node.type === "review") {
+      const recap = asRecord(packageData.recap_structure);
+      const miniRecaps = asArray(recap.mini_recaps).length > 0
+        ? asArray(recap.mini_recaps)
+        : asArray(packageData.mini_topic_lessons);
+      return miniRecaps.map((item, index) => {
+        const step = asRecord(item);
+        return {
+          id: asText(step.step_id, `recap-${index + 1}`),
+          title: asText(step.title || step.mini_topic_title, `Review step ${index + 1}`),
+          summary: asText(step.brief || step.intro_brief, "This review step reinforces important concepts from previous nodes."),
+          goal: asText(step.goal || step.lesson_goal, "Consolidate understanding and prepare for upcoming checkpoints."),
+          topics: asArray(step.focus_topics).map((value) => asText(value)).filter(Boolean).slice(0, 4),
+          mediaKind: detectMediaKind(step, index, node.type, courseTitle),
+          videoDescription: "Recap video: review this short summary before moving on.",
+          downloadFiles: normalizeDownloadableFiles(
+            step,
+            `review-step-${index + 1}-resources`,
+            `Review support files for step "${asText(step.title || step.mini_topic_title, `Review ${index + 1}`)}".`,
+          ),
+        };
+      });
+    }
+    return [] as LessonFlowStep[];
+  }, [attempt, learningPath?.title, node, packageData.mini_topic_lessons, packageData.recap_structure]);
+  const lessonStartTopics = useMemo(() => {
+    return (asArray(packageData.important_topics).map((item) => asText(item)).filter(Boolean).slice(0, 8));
+  }, [packageData.important_topics]);
+  const lessonSources = useMemo(
+    () => dummyLessonSources(learningPath, asArray(attempt?.source_node_window).map((item) => asText(item)).filter(Boolean)),
+    [attempt?.source_node_window, learningPath],
   );
   const generationState = asText(asRecord(attempt?.result).generation_state).toLowerCase();
   const showInitialGenerationLoader = Boolean(
@@ -666,6 +977,14 @@ export function LearningNodePage({
         if (value) {
           freeTextAnswers[questionId] = value;
         }
+        const files = uploads[questionId] ?? [];
+        files.forEach((file) => {
+          uploadedArtifacts.push({
+            task_id: questionId,
+            file_name: file.name,
+            content: file.name,
+          });
+        });
         return;
       }
       if (item.kind === "practice") {
@@ -738,6 +1057,100 @@ export function LearningNodePage({
   const guidedProgressPercent = showGuidedProgress
     ? Math.round(((guidedItemIndex + 1) / guidedItems.length) * 100)
     : 0;
+  const lessonFlowTotalSteps = lessonSteps.length + 2;
+  const boundedLessonStep = Math.min(Math.max(lessonFlowStepIndex, 0), Math.max(lessonFlowTotalSteps - 1, 0));
+  const lessonCurrentStep = lessonSteps[Math.max(0, Math.min(lessonSteps.length - 1, boundedLessonStep - 1))] ?? null;
+  const isLessonStartStep = boundedLessonStep === 0;
+  const isLessonResultStep = boundedLessonStep === lessonFlowTotalSteps - 1;
+  const isLessonContentStep = !isLessonStartStep && !isLessonResultStep;
+  const isLessonFirstContentStep = boundedLessonStep === 1;
+  const isLessonLastContentStep = boundedLessonStep >= lessonSteps.length;
+  const showLessonFooterActions = Boolean(!showInitialGenerationLoader && isLessonNodeType);
+  const showLessonProgress = showLessonFooterActions && lessonFlowTotalSteps > 1 && !lessonCompleted;
+  const showLessonContentActions = Boolean(!showInitialGenerationLoader && isLessonContentStep);
+  const lessonProgressPercent = showLessonProgress
+    ? Math.round((boundedLessonStep / Math.max(lessonFlowTotalSteps - 1, 1)) * 100)
+    : 0;
+  const lessonCompletionPayload = useMemo(() => {
+    const lessonStepIds = lessonSteps.map((item) => item.id);
+    if (node?.type === "review") {
+      return {
+        phase_progress: {
+          phase_1_introduction: true,
+          phase_2_grouped_recaps: true,
+          phase_3_summary_and_feedback: true,
+          ...Object.fromEntries(lessonStepIds.map((stepId) => [stepId, true])),
+        },
+        node_feedback: {
+          text: "Completed review flow in learning node chat.",
+          rating: 4,
+        },
+        questions: [],
+      } as Record<string, unknown>;
+    }
+    return {
+      phase_progress: {
+        phase_1_introduction: true,
+        phase_2_niveau_estimation: true,
+        phase_3_user_self_explanation: true,
+        phase_4_structure_preview: true,
+        phase_5_mini_topic_lessons: true,
+        phase_6_node_recap: true,
+        ...Object.fromEntries(lessonStepIds.map((stepId) => [stepId, true])),
+      },
+      niveau_self_positioning: {
+        confidence: "intermediate",
+      },
+      user_high_level_explanation: "Completed all mini-topic steps in this learning node.",
+      user_importance_explanation: "The node content connects to practical execution and reinforces the core goals.",
+      interaction_feedback: {
+        explain_again_used: false,
+      },
+    } as Record<string, unknown>;
+  }, [lessonSteps, node?.type]);
+  const lessonBootstrapRef = useRef<string>("");
+  useEffect(() => {
+    if (!isLessonNodeType) {
+      return;
+    }
+    const bootKey = `${session?.id ?? "none"}:${attempt?.attempt_id ?? "none"}`;
+    if (lessonBootstrapRef.current === bootKey) {
+      return;
+    }
+    lessonBootstrapRef.current = bootKey;
+    const result = asRecord(attempt?.result);
+    const alreadyCompleted = Boolean(attempt?.completed_at)
+      || session?.status === "completed"
+      || Boolean(result.passed);
+    setLessonCompleted(alreadyCompleted);
+    setLessonFlowStepIndex(alreadyCompleted ? Math.max(lessonFlowTotalSteps - 1, 0) : 0);
+  }, [
+    attempt?.attempt_id,
+    attempt?.completed_at,
+    attempt?.result,
+    isLessonNodeType,
+    lessonFlowTotalSteps,
+    session?.id,
+    session?.status,
+  ]);
+  useEffect(() => {
+    const target = lessonVideoWrapRef.current;
+    if (!target || typeof ResizeObserver === "undefined") {
+      return;
+    }
+    const observer = new ResizeObserver((entries) => {
+      const entry = entries[0];
+      if (!entry) {
+        return;
+      }
+      const nextHeight = Math.round(entry.contentRect.height);
+      if (nextHeight > 0) {
+        setLessonVideoHeight(nextHeight);
+      }
+    });
+    observer.observe(target);
+    return () => observer.disconnect();
+  }, [boundedLessonStep, lessonTranscriptOpen, lessonCurrentStep?.mediaKind]);
   const showGuidedResultLoading = guidedStep === "complete" && guidedCompleting;
   const currentDrillQuestion = drillQuestions[assessmentQuestionIndex] ?? null;
   const isLastAssessmentQuestion = assessmentQuestionIndex >= drillQuestions.length - 1;
@@ -799,8 +1212,15 @@ export function LearningNodePage({
   return (
     <section className="learning-node-page-shell">
       <header className="learning-node-page-header">
-        <h2>{node?.title ?? session?.node_title ?? "Learning Node"}</h2>
-        <p>{asText(node?.description, "This node currently has no description.")}</p>
+        <div className="learning-node-page-heading">
+          <span className="learning-node-header-icon-wrap" aria-hidden="true">
+            <Icon name={nodeTypeHeaderIconName(node?.type)} className="learning-node-header-icon" />
+          </span>
+          <div className="learning-node-page-heading-copy">
+            <h2>{node?.title ?? session?.node_title ?? "Learning Node"}</h2>
+            <p>{asText(node?.description, "This node currently has no description.")}</p>
+          </div>
+        </div>
         {node ? renderMetadataTags(node, learningPath) : null}
       </header>
 
@@ -963,6 +1383,151 @@ export function LearningNodePage({
             </section>
           ) : null}
 
+          {!showInitialGenerationLoader && isLessonNodeType ? (
+            <section className="learning-node-section learning-node-lesson-shell">
+              {isLessonStartStep ? (
+                <div className="learning-node-guided-start learning-node-lesson-start">
+                  <div className="learning-node-guided-start-icon">
+                    <Icon name={node?.type === "review" ? "archive" : "book"} />
+                  </div>
+                  <strong>{node?.type === "review" ? "Review flow overview" : "Learning unit overview"}</strong>
+                  <small>{node?.type === "review" ? "This node will recap and reinforce your previous progress." : "This node will guide you through mini-topic lessons."}</small>
+                  {node?.type !== "review" && lessonStartTopics.length > 0 ? (
+                    <div className="learning-node-lesson-meta-block">
+                      <h4>Topics</h4>
+                      <ul className="learning-node-lesson-plain-list">
+                        {lessonStartTopics.map((topic, index) => (
+                          <li key={`lesson-topic-${index}`}>{topic}</li>
+                        ))}
+                      </ul>
+                    </div>
+                  ) : null}
+                  {node?.type === "review" ? (
+                    <ul className="learning-node-guided-start-list">
+                      {lessonStartTopics.length === 0 ? (
+                        <li>
+                          <span>No generated review topics available yet.</span>
+                        </li>
+                      ) : (
+                        lessonStartTopics.map((topic, index) => (
+                          <li key={`review-start-topic-${index}`}>
+                            <Icon name="check" />
+                            <span>{topic}</span>
+                          </li>
+                        ))
+                      )}
+                    </ul>
+                  ) : (
+                    <div className="learning-node-lesson-meta-block planned">
+                      <h4>Planned steps</h4>
+                      <ul className="learning-node-lesson-plain-list">
+                        {lessonSteps.length === 0 ? (
+                          <li>No generated mini-topic lessons available yet.</li>
+                        ) : (
+                          lessonSteps.map((step, index) => (
+                            <li key={step.id}>{`${index + 1}. ${step.title}`}</li>
+                          ))
+                        )}
+                      </ul>
+                    </div>
+                  )}
+                </div>
+              ) : null}
+              {isLessonContentStep ? (
+                <>
+                  <article className="learning-node-lesson-content-card">
+                    <header className="learning-node-lesson-step-head">
+                      <h3>{lessonCurrentStep?.title ?? "Lesson step"}</h3>
+                      {lessonCurrentStep?.goal ? <p>{lessonCurrentStep.goal}</p> : null}
+                    </header>
+                    <DownloadableFiles files={lessonCurrentStep?.downloadFiles ?? []} />
+                    {lessonCurrentStep?.mediaKind === "video" ? (
+                      <div className="learning-node-video-shell">
+                        <div className="learning-node-video-wrap" ref={lessonVideoWrapRef}>
+                          <button
+                            className="learning-node-video-transcript-toggle"
+                            type="button"
+                            aria-label={lessonTranscriptOpen ? "Collapse transcript" : "Expand transcript"}
+                            onClick={() => setLessonTranscriptOpen((current) => !current)}
+                          >
+                            <Icon name="transcript" />
+                          </button>
+                          <video controls preload="metadata">
+                            <source src={DUMMY_VIDEO_URL} type="video/mp4" />
+                          </video>
+                        </div>
+                        {lessonTranscriptOpen ? (
+                          <aside className="learning-node-video-transcript" aria-label="Video transcript" style={lessonVideoHeight > 0 ? { height: `${lessonVideoHeight}px` } : undefined}>
+                            <h4>Transcript</h4>
+                            <div className="learning-node-video-transcript-scroll">
+                              {[
+                                "00:00 - Introduction to this learning step and expected outcome.",
+                                "00:12 - Key concept walkthrough with a practical context example.",
+                                "00:38 - Why this concept matters in day-to-day operations.",
+                                "01:04 - Common mistakes and quick correction strategies.",
+                                "01:31 - Recap and what to pay attention to in the next step.",
+                                "02:00 - Additional transcript placeholder line for scroll testing.",
+                              ].map((line, index) => (
+                                <p key={`transcript-line-${index}`}>{line}</p>
+                              ))}
+                            </div>
+                          </aside>
+                        ) : null}
+                      </div>
+                    ) : (
+                      <div className="learning-node-lesson-content-scroll">
+                        <p>
+                          This lesson section uses generated runtime structure and currently renders styled placeholder teaching text.
+                          Pay special attention to <span className="learning-node-term" title="A deployment strategy that shifts user traffic from old to new environments in controlled phases." data-definition="A deployment strategy that shifts user traffic from old to new environments in controlled phases.">blue-green deployment</span> and how it connects to your node goal.
+                        </p>
+                        {lessonCurrentStep?.summary ? <p>{lessonCurrentStep.summary}</p> : null}
+                        {lessonCurrentStep?.topics.length ? (
+                          <ul>
+                            {lessonCurrentStep.topics.map((topic, index) => <li key={`lesson-topic-point-${index}`}>{topic}</li>)}
+                          </ul>
+                        ) : null}
+                        {lessonCurrentStep?.mediaKind === "image" ? (
+                          <figure className="learning-node-media-block">
+                            <img src={DUMMY_DEVOPS_IMAGE} alt="Dummy lesson diagram preview" />
+                            <figcaption>Dummy media block: example visual placeholder for this generated lesson step.</figcaption>
+                          </figure>
+                        ) : null}
+                        <p>
+                          More runtime-powered text content will be introduced in the next step. For now this shell verifies layout, navigation,
+                          scroll behavior, sources placement, media rendering, and technical-term tooltips.
+                        </p>
+                      </div>
+                    )}
+                    {lessonCurrentStep?.mediaKind === "video" ? (
+                      <p className="learning-node-video-description">
+                        Dummy video description: this short clip introduces the main concept of this learning step.
+                      </p>
+                    ) : null}
+                  </article>
+                </>
+              ) : null}
+              {isLessonResultStep ? (
+                <section className="learning-node-section learning-node-lesson-result">
+                  <div className="learning-node-milestone-hero">
+                    <div className="learning-node-milestone-badge">
+                      <Icon name="certificate" />
+                      <strong>{node?.type === "review" ? "Review Completed" : "Learning Unit Completed"}</strong>
+                      <small>Result preview</small>
+                    </div>
+                  </div>
+                  <div className="learning-node-page-placeholder">
+                    Summary preview:
+                    <ul>
+                      <li>You progressed through the planned learning flow.</li>
+                      <li>Runtime package steps were rendered successfully.</li>
+                      <li>Interactive evaluation details will be added in the next step.</li>
+                    </ul>
+                  </div>
+                </section>
+              ) : null}
+            </section>
+          ) : null}
+
           {!showInitialGenerationLoader && isGuidedNodeType ? (
             <section className="learning-node-section">
               {guidedStep === "start" ? (
@@ -1004,6 +1569,8 @@ export function LearningNodePage({
                       answers={textAnswers}
                       setAnswers={setTextAnswers}
                       answerKeyPrefix={currentGuidedItem.prefix}
+                      uploads={uploads}
+                      setUploads={setUploads}
                       showHeading={node?.type !== "quiz"}
                     />
                   ) : null}
@@ -1082,7 +1649,7 @@ export function LearningNodePage({
             </section>
           ) : null}
 
-          {!showInitialGenerationLoader && node && !["unlock_gate", "milestone", "assessment_hook", "quiz", "practice", "checkpoint", "capstone"].includes(node.type) ? (
+          {!showInitialGenerationLoader && node && !["unlock_gate", "milestone", "assessment_hook", "quiz", "practice", "checkpoint", "capstone", "learning_unit", "review"].includes(node.type) ? (
             <div className="learning-node-page-placeholder">
               Node type <strong>{node.type}</strong> is intentionally not rendered in this step.
             </div>
@@ -1090,29 +1657,51 @@ export function LearningNodePage({
         </div>
       ) : null}
 
-      {showAssessmentProgress || showGuidedProgress ? (
-        <div className="learning-node-progress-floating" aria-label="Assessment progress">
+      {!error && session && showLessonContentActions ? (
+        <div className="learning-node-page-actions-outside-card">
+          <div className="learning-node-lesson-feedback-row">
+            <div className="sources-wrap assistant-evidence-wrap learning-node-inline-sources">
+              <button
+                className={`sources-button assistant-evidence-trigger${lessonSourcesOpen ? " active" : ""}`}
+                type="button"
+                aria-expanded={lessonSourcesOpen}
+                onClick={() => setLessonSourcesOpen((current) => !current)}
+              >
+                <span className="assistant-evidence-trigger-icon" aria-hidden="true">
+                  <Icon name="files" />
+                </span>
+                <small>Sources ({lessonSources.length})</small>
+              </button>
+              <SourcesPanel open={lessonSourcesOpen} onClose={() => setLessonSourcesOpen(false)} sources={lessonSources} direction="up" />
+            </div>
+            <button className="icon-button" type="button" aria-label="Like this explanation" title="Like (coming soon)">
+              <Icon name="thumb-up" />
+            </button>
+            <button className="icon-button" type="button" aria-label="Dislike this explanation" title="Dislike (coming soon)">
+              <Icon name="thumb-down" />
+            </button>
+          </div>
+        </div>
+      ) : null}
+
+      {showAssessmentProgress || showGuidedProgress || showLessonProgress ? (
+        <div className="learning-node-progress-floating" aria-label="Learning node progress">
           <div
             className="learning-node-progress-track"
             role="progressbar"
             aria-valuemin={0}
             aria-valuemax={100}
-            aria-valuenow={showAssessmentProgress ? assessmentProgressPercent : guidedProgressPercent}
+            aria-valuenow={showAssessmentProgress ? assessmentProgressPercent : showGuidedProgress ? guidedProgressPercent : lessonProgressPercent}
           >
-            <div className="learning-node-progress-fill" style={{ width: `${showAssessmentProgress ? assessmentProgressPercent : guidedProgressPercent}%` }} />
+            <div className="learning-node-progress-fill" style={{ width: `${showAssessmentProgress ? assessmentProgressPercent : showGuidedProgress ? guidedProgressPercent : lessonProgressPercent}%` }} />
           </div>
-          <small>
-            {showAssessmentProgress
-              ? `${assessmentQuestionIndex + 1} / ${drillQuestions.length}`
-              : `${guidedItemIndex + 1} / ${guidedItems.length}`}
-          </small>
         </div>
       ) : null}
 
-      {showMilestoneFooterActions || showAssessmentFooterActions || showGuidedFooterActions ? (
+      {showMilestoneFooterActions || showAssessmentFooterActions || showGuidedFooterActions || showLessonFooterActions ? (
         <div className="learning-node-fixed-footer">
           <div className="learning-node-fixed-footer-inner">
-            <div className="learning-node-footer-actions">
+            <div className={`learning-node-footer-actions${showLessonFooterActions ? " lesson-mode" : ""}`}>
               {showMilestoneFooterActions ? (
                 <>
                   <button className="secondary-button" type="button" disabled>
@@ -1273,6 +1862,73 @@ export function LearningNodePage({
                           ? "Finish"
                           : "Restart"}
                   </button>
+                </>
+              ) : null}
+              {showLessonFooterActions ? (
+                <>
+                  {isLessonContentStep && !lessonCompleted ? (
+                    <div className="learning-node-footer-left-actions">
+                      <button className="secondary-button" type="button" disabled>
+                        <Icon name="chalkboard" />
+                        Audio
+                      </button>
+                      <button className="secondary-button" type="button">
+                        <Icon name="reset" />
+                        Explain again
+                      </button>
+                    </div>
+                  ) : <div />}
+                  <div className="learning-node-footer-right-actions">
+                    {(isLessonContentStep && !isLessonFirstContentStep) || isLessonResultStep ? (
+                      <button
+                        className="secondary-button"
+                        type="button"
+                        onClick={() => setLessonFlowStepIndex((value) => Math.max(0, value - 1))}
+                      >
+                        Back
+                      </button>
+                    ) : null}
+                    <button
+                      className="primary-button"
+                      type="button"
+                      disabled={lessonFlowTotalSteps === 0 || lessonClosing || lessonCompleting}
+                      onClick={() => {
+                        if (isLessonStartStep) {
+                          void onAssessmentStart?.();
+                        }
+                        if (isLessonResultStep) {
+                          void onLessonClose?.();
+                          return;
+                        }
+                        if (isLessonLastContentStep) {
+                          setLessonCompleted(true);
+                          setLessonFlowStepIndex(Math.min(boundedLessonStep + 1, Math.max(lessonFlowTotalSteps - 1, 0)));
+                          void (async () => {
+                            try {
+                              await onLessonComplete?.(lessonCompletionPayload);
+                            } catch {
+                              setLessonCompleted(false);
+                              setLessonFlowStepIndex(Math.max(1, Math.max(lessonFlowTotalSteps - 2, 0)));
+                            }
+                          })();
+                          return;
+                        }
+                        setLessonFlowStepIndex((value) => Math.min(value + 1, Math.max(lessonFlowTotalSteps - 1, 0)));
+                      }}
+                    >
+                      {lessonClosing
+                        ? "Closing..."
+                        : lessonCompleting
+                          ? "Finishing..."
+                          : isLessonStartStep
+                            ? "Start"
+                            : isLessonLastContentStep
+                              ? "Finish"
+                              : isLessonResultStep
+                                ? "Close"
+                                : "Next"}
+                    </button>
+                  </div>
                 </>
               ) : null}
             </div>

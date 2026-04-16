@@ -236,10 +236,18 @@ Additional focused checks:
   - reset/download placeholders
 - frontend production build with:
   - `Learning Nodes` sidebar section
-  - dedicated learning-node route renderer for `milestone`, `assessment_hook`, `quiz`, `practice`, `checkpoint`, `capstone`
-  - top metadata tags (type/chapter/branch/required/KSA)
+  - dedicated learning-node route renderer for `milestone`, `assessment_hook`, `quiz`, `practice`, `checkpoint`, `capstone`, `learning_unit`, `review`
+  - top metadata tags (type/chapter/branch/route/required)
   - combined checkpoint/capstone section composition
   - milestone celebratory page layout
+  - `learning_unit`/`review` multi-step lesson flow:
+    - start step
+    - top progress bar updates
+    - scrollable content area
+    - placeholder media rendering (image/video)
+    - fixed action footer (`Audio` disabled, `Explain again`, `Back`/`Next`)
+    - in-content like/dislike and sources popover
+    - technical-term tooltip style (orange dotted underline + hover tooltip)
   - unlock_gate route guard and no-action behavior from course detail panel
   - Preferences archive integration for archived learning-node sessions
 
@@ -264,3 +272,10 @@ Smoke validation (manual, API):
    - `content_aware_recap_summary`
    - `recap_structure`
    - `interaction_hooks`
+3. Open each node in `/learning/nodes/:sessionId` and verify UI flow:
+   - start step is shown before content
+   - `Next` enters content, `Back` hidden on start and first content step
+   - progress bar reflects current step index
+   - long content scrolls within the lesson card
+   - Sources button opens the same popover treatment used by assistant messages
+   - technical term styling shows dotted orange underline and hover tooltip

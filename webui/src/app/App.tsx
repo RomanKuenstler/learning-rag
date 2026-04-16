@@ -830,6 +830,8 @@ function LearningNodeRoute({
   const [assessmentRestarting, setAssessmentRestarting] = useState(false);
   const [guidedCompleting, setGuidedCompleting] = useState(false);
   const [guidedRestarting, setGuidedRestarting] = useState(false);
+  const [lessonCompleting, setLessonCompleting] = useState(false);
+  const [lessonClosing, setLessonClosing] = useState(false);
 
   const isStaleGeneratingAttempt = (attemptRecord: Awaited<ReturnType<typeof app.getLatestLearningNodeExecution>>) => {
     if (String(attemptRecord.status ?? "") !== "generating") {
@@ -915,6 +917,8 @@ function LearningNodeRoute({
     setAssessmentRestarting(false);
     setGuidedCompleting(false);
     setGuidedRestarting(false);
+    setLessonCompleting(false);
+    setLessonClosing(false);
     void (async () => {
       try {
         const payload = await app.getLearningNodeSession(sessionId, false);
@@ -1142,6 +1146,53 @@ function LearningNodeRoute({
     }
   };
 
+  const handleLessonClose = async () => {
+    if (!session) {
+      return;
+    }
+    setLessonClosing(true);
+    try {
+      await app.archiveLearningNodeSession(session.id);
+      await app.loadLearningNodeSessions();
+      navigate("/courses", { replace: true });
+    } finally {
+      setLessonClosing(false);
+    }
+  };
+
+  const handleLessonComplete = async (responses: Record<string, unknown>) => {
+    if (!session || !attempt) {
+      return;
+    }
+    setLessonCompleting(true);
+    setAttemptError(null);
+    try {
+      const savedAttempt = await app.submitLearningNodeExecutionResponses(
+        session.learning_path_id,
+        session.node_id,
+        attempt.attempt_id,
+        responses,
+      );
+      setAttempt(savedAttempt);
+      const completed = await app.completeLearningNodeExecution(
+        session.learning_path_id,
+        session.node_id,
+        attempt.attempt_id,
+      );
+      setAttempt(completed.attempt);
+      const opened = await app.getLearningNodeSession(session.id, false);
+      setSession(opened);
+      await app.loadLearningNodeSessions();
+      const refreshedDetails = await app.getLearningPathDetails(session.learning_path_id);
+      setLearningPath(refreshedDetails);
+    } catch (nextError: unknown) {
+      setAttemptError(nextError instanceof Error ? nextError.message : "Failed to complete learning node");
+      throw nextError;
+    } finally {
+      setLessonCompleting(false);
+    }
+  };
+
   return (
     <LearningNodePage
       loading={loading}
@@ -1166,6 +1217,10 @@ function LearningNodeRoute({
       guidedCompleting={guidedCompleting}
       onGuidedRestart={handleGuidedRestart}
       guidedRestarting={guidedRestarting}
+      onLessonComplete={handleLessonComplete}
+      lessonCompleting={lessonCompleting}
+      onLessonClose={handleLessonClose}
+      lessonClosing={lessonClosing}
     />
   );
 }

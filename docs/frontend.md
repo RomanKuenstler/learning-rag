@@ -71,7 +71,7 @@
 ## Learning Node Page Rendering
 
 - `LearningNodePage` now renders from real node + runtime package data instead of shell placeholders.
-- Top-of-page uses node title/description and metadata tags (`type`, `chapter`, `branch`, required/optional, KSA `dimension: topic/subtopic`).
+- Top-of-page uses node title/description and metadata tags (`type`, `chapter`, `branch`, `route`, required/optional).
 - Rendered node types in this step:
   - `milestone`
   - `assessment_hook`
@@ -79,10 +79,20 @@
   - `practice`
   - `checkpoint`
   - `capstone`
+- `learning_unit`
+- `review`
 - `assessment_hook` uses KSA drill-style question cards directly on the page (no manual topic input).
 - `quiz` reuses existing option-card and textarea styles for single/multi choice + free-text questions.
 - `practice` reuses existing textarea style and attachment-chip language, with split text/upload layout for upload tasks.
 - `checkpoint`/`capstone` compose quiz + practice + assessment sections into one page layout.
+- `learning_unit` and `review` now use a shared multi-step lesson shell:
+  - start step (topics + planned steps)
+  - package-driven lesson steps (`mini_topic_lessons` for `learning_unit`, `recap_structure.mini_recaps` for `review`)
+  - top progress bar
+  - scrollable content body
+  - fixed action footer with disabled `Audio`, `Explain again`, and right-side `Back`/`Next` navigation
+  - bottom lesson controls for like/dislike and `Sources` menu (same popover pattern as assistant messages)
+  - placeholder orange dotted technical-term tooltip and dummy media support (image/video)
 - `unlock_gate` is route-guarded away from page rendering and has no normal learning-session entry path.
 
 ## Styling Approach

@@ -364,3 +364,25 @@ Prompt sources:
 
 - node-generation/evaluation prompts are externalized under `prompts/learning-node-*.md`
 - runtime loader reads prompt files directly from disk for easy iteration
+
+## Learning Node Frontend Composition (`learning_unit`/`review`)
+
+`LearningNodePage` now includes a shared lesson-flow renderer for plan-first node packages:
+
+- route: `/learning/nodes/:sessionId`
+- shared top metadata: node title/description + contextual tags (type/chapter/branch/route/required)
+- shared flow shell:
+  - start step + package-driven content steps
+  - top progress bar
+  - scrollable lesson content container
+  - fixed bottom action footer
+- package-to-steps mapping:
+  - `learning_unit` -> `package.mini_topic_lessons`
+  - `review` -> `package.recap_structure.mini_recaps` (with safe fallback)
+- low-risk placeholder interactions are local-only for now:
+  - disabled audio button
+  - explain-again button (no backend action yet)
+  - like/dislike controls (no persistence yet)
+  - assistant-style sources popover reused from `MessageBubble`/`SourcesPanel`
+
+This keeps runtime-package rendering data-driven while remaining compatible with later real-content delivery and feedback integration.

@@ -5,9 +5,10 @@ type SourcesPanelProps = {
   open: boolean;
   onClose: () => void;
   sources: Source[];
+  direction?: "up" | "down";
 };
 
-export function SourcesPanel({ open, onClose, sources }: SourcesPanelProps) {
+export function SourcesPanel({ open, onClose, sources, direction = "down" }: SourcesPanelProps) {
   const ref = useRef<HTMLDivElement | null>(null);
 
   useEffect(() => {
@@ -30,7 +31,7 @@ export function SourcesPanel({ open, onClose, sources }: SourcesPanelProps) {
   }
 
   return (
-    <section className="sources-panel assistant-evidence-menu down" ref={ref} role="menu" aria-label="Sources">
+    <section className={`sources-panel assistant-evidence-menu ${direction}`} ref={ref} role="menu" aria-label="Sources">
       <h4 className="sources-panel-header assistant-evidence-heading">Sources</h4>
       <p className="assistant-evidence-summary">{sources.length} retrieved matches</p>
       <div className="sources-list assistant-evidence-list">

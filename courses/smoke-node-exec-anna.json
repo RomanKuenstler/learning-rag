@@ -840,6 +840,95 @@
         "requires_review_recommended": false,
         "recommended_only": false
       }
+    },
+    {
+      "id": "node-smoke-review",
+      "title": "Smoke Review Walkthrough",
+      "description": "Review and reinforce smoke-course outcomes with recap-focused learning steps and terminology refresh.",
+      "type": "review",
+      "chapter_id": "chapter-advanced",
+      "branch_id": "branch-core",
+      "required": false,
+      "prerequisites": {
+        "requires_all": [],
+        "requires_any": [],
+        "recommended": []
+      },
+      "completion_mode": "review_complete",
+      "estimated_duration_minutes": 35,
+      "layout": {
+        "x": 1260.0,
+        "y": 120.0
+      },
+      "metadata": {
+        "focus": "smoke recap"
+      },
+      "display": {},
+      "ksa": [
+        {
+          "dimension": "S",
+          "topic": "Operational Skills",
+          "subtopic": "Technical Troubleshooting",
+          "start_level": 2,
+          "target_level": 3,
+          "contribution_weight": 0.45,
+          "unlocks_assessment_check": false,
+          "recommends_assessment_check": true
+        },
+        {
+          "dimension": "A",
+          "topic": "Executive Function",
+          "subtopic": "Working Memory Span",
+          "start_level": 2,
+          "target_level": 3,
+          "contribution_weight": 0.2,
+          "unlocks_assessment_check": false,
+          "recommends_assessment_check": false
+        }
+      ],
+      "unlocks": {
+        "node_ids": [],
+        "branch_ids": [],
+        "recommended_next_node_ids": [
+          "node-devops-capstone"
+        ]
+      },
+      "rewards": {
+        "estimated_ksa_gain": {
+          "S.Operational Skills.Technical Troubleshooting": 0.08,
+          "A.Executive Function.Working Memory Span": 0.04
+        },
+        "effort_score": 26.0,
+        "reward_tags": [
+          "review",
+          "smoke"
+        ]
+      },
+      "retrospective_hooks": {
+        "retrospective_after": false,
+        "review_recommended": true,
+        "recap_checkpoint_available": false
+      },
+      "ksa_hooks": {
+        "mini_assessment_available": false,
+        "recommended_reassessment_topics": [],
+        "unlocks_deeper_refinement": false
+      },
+      "remediation": {
+        "is_remediation_node": true,
+        "recommended_if_failed_node_ids": [],
+        "supports_review_for_node_ids": [
+          "node-platform-checkpoint",
+          "node-devops-capstone"
+        ]
+      },
+      "adaptive_unlock": {
+        "ksa_thresholds": [],
+        "requires_branch_completion_ids": [],
+        "requires_checkpoint_node_ids": [],
+        "requires_review_recommended": false,
+        "recommended_only": false
+      }
     }
   ],
   "edges": [
@@ -867,6 +956,16 @@
       "from_node_id": "node-platform-checkpoint",
       "to_node_id": "node-devops-capstone",
       "relationship": "recommended"
+    },
+    {
+      "from_node_id": "node-platform-checkpoint",
+      "to_node_id": "node-smoke-review",
+      "relationship": "recommended"
+    },
+    {
+      "from_node_id": "node-smoke-review",
+      "to_node_id": "node-devops-capstone",
+      "relationship": "recommended"
     }
   ],
   "entry_node_ids": [
@@ -879,7 +978,8 @@
     "node-docker",
     "node-docker-practice",
     "node-platform-checkpoint",
-    "node-devops-capstone"
+    "node-devops-capstone",
+    "node-smoke-review"
   ],
   "completion_rules": {
     "required_completion": "all_required_nodes"
