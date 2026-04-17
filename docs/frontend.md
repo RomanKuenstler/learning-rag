@@ -55,6 +55,46 @@
 - Preview history is cleared locally whenever any GPT config field changes.
 - Persistent GPT chats lock the header assistant-mode picker because mode comes from the GPT itself.
 
+## Learning Node Sessions UI Shell
+
+- Sidebar now includes a dedicated `Learning Nodes` section.
+- Items are not normal chats and not GPT chats; they map to dedicated learning-node sessions.
+- Each item shows status icon state:
+  - blue dotted circle (`created`)
+  - orange/yellow half-filled circle (`in_progress`)
+  - green check-in-circle (`completed`)
+- Each item menu includes: `Archive`, `Reset` (placeholder), `Download` (placeholder), `Delete` (soft-delete).
+- Dedicated learning-node route added: `/learning/nodes/:sessionId`.
+- Courses node Start/Continue now ensures a reusable session for that user/node and navigates to that route.
+- Archive tab in Preferences now includes archived learning-node sessions alongside archived chats.
+
+## Learning Node Page Rendering
+
+- `LearningNodePage` now renders from real node + runtime package data instead of shell placeholders.
+- Top-of-page uses node title/description and metadata tags (`type`, `chapter`, `branch`, `route`, required/optional).
+- Rendered node types in this step:
+  - `milestone`
+  - `assessment_hook`
+  - `quiz`
+  - `practice`
+  - `checkpoint`
+  - `capstone`
+- `learning_unit`
+- `review`
+- `assessment_hook` uses KSA drill-style question cards directly on the page (no manual topic input).
+- `quiz` reuses existing option-card and textarea styles for single/multi choice + free-text questions.
+- `practice` reuses existing textarea style and attachment-chip language, with split text/upload layout for upload tasks.
+- `checkpoint`/`capstone` compose quiz + practice + assessment sections into one page layout.
+- `learning_unit` and `review` now use a shared multi-step lesson shell:
+  - start step (topics + planned steps)
+  - package-driven lesson steps (`mini_topic_lessons` for `learning_unit`, `recap_structure.mini_recaps` for `review`)
+  - top progress bar
+  - scrollable content body
+  - fixed action footer with disabled `Audio`, `Explain again`, and right-side `Back`/`Next` navigation
+  - bottom lesson controls for like/dislike and `Sources` menu (same popover pattern as assistant messages)
+  - placeholder orange dotted technical-term tooltip and dummy media support (image/video)
+- `unlock_gate` is route-guarded away from page rendering and has no normal learning-session entry path.
+
 ## Styling Approach
 
 - Styling remains centralized in `webui/src/styles/index.css`.
@@ -78,3 +118,32 @@ npm run dev
 ```
 
 `VITE_API_BASE_URL` defaults to `http://localhost:8000`.
+
+## Course Editor UI
+
+New route:
+
+- `/courses/:courseId/edit`
+
+Implemented page behavior:
+
+- GPT-style editor shell header (`Back`, `Save`)
+- attachment table above JSON editor (images/videos/downloadable files)
+- `Add Attachments` button with multi-file upload
+- inline raw JSON text editor (monospace + syntax pre-check)
+- attachment reference diagnostics section (`missing` / `ambiguous`)
+
+Courses table integration:
+
+- row menu `Edit` now navigates to `/courses/:courseId/edit`
+
+API calls used by the page:
+
+- `getCourseEditor(courseId)`
+- `saveCourseEditor(courseId, rawJson)`
+- `uploadCourseAttachments(courseId, files)`
+
+Notes:
+
+- the page is JSON-first by design (no visual node/tree authoring in this phase)
+- JSON should reference media by file name only; backend resolves the concrete MinIO path

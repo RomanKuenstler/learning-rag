@@ -38,7 +38,9 @@ export function ChatPage() {
         <Sidebar
           chats={chats}
           gpts={[]}
+          learningNodeSessions={[]}
           activeChatId={activeChatId}
+          activeLearningNodeSessionId={null}
           activeView="chat"
           currentUser={currentUser}
           canUseStandardChat
@@ -63,6 +65,11 @@ export function ChatPage() {
           onOpenChatFilter={() => undefined}
           onDownloadChat={(chatId) => void downloadChat(chatId)}
           onDeleteChat={(chatId) => void deleteChat(chatId)}
+          onSelectLearningNodeSession={() => undefined}
+          onArchiveLearningNodeSession={() => undefined}
+          onResetLearningNodeSession={() => undefined}
+          onDownloadLearningNodeSession={() => undefined}
+          onDeleteLearningNodeSession={() => undefined}
           onEditGpt={() => undefined}
           onClearGpt={() => undefined}
           onDownloadGpt={() => undefined}

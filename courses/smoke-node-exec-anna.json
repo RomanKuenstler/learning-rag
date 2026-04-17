@@ -1,0 +1,989 @@
+{
+  "schema_version": 2,
+  "source_schema_version": 2,
+  "id": "smoke-node-exec-anna",
+  "title": "Smoke Node Execution Anna",
+  "description": "Local smoke path for node execution",
+  "scope": "user",
+  "owner_user_id": 3,
+  "subject": "DevOps",
+  "difficulty_level": "intermediate",
+  "estimated_duration_minutes": null,
+  "status": "published",
+  "allowed_file_ids": [],
+  "allowed_tags": [],
+  "chapters": [
+    {
+      "id": "chapter-foundations",
+      "title": "Foundations",
+      "description": "Core operating system, networking, scripting, programming, and version control skills.",
+      "order_index": 0,
+      "metadata": {}
+    },
+    {
+      "id": "ch-1",
+      "title": "Smoke",
+      "description": "Smoke chapter",
+      "order_index": 0,
+      "metadata": {}
+    },
+    {
+      "id": "chapter-platform",
+      "title": "Containers and Platform",
+      "description": "Containerization, orchestration, and production platform basics.",
+      "order_index": 1,
+      "metadata": {}
+    },
+    {
+      "id": "chapter-advanced",
+      "title": "Advanced Architecture",
+      "description": "Advanced runtime patterns, service mesh, serverless, and integrative delivery challenges.",
+      "order_index": 4,
+      "metadata": {}
+    }
+  ],
+  "branches": [
+    {
+      "id": "br-1",
+      "title": "Main",
+      "description": "Main branch",
+      "required": true,
+      "metadata": {}
+    },
+    {
+      "id": "branch-core",
+      "title": "Core Route",
+      "description": "Recommended primary learning route.",
+      "required": true,
+      "metadata": {}
+    }
+  ],
+  "nodes": [
+    {
+      "id": "smoke-assessment",
+      "title": "Smoke Assessment Hook",
+      "description": "Assess prior operations knowledge including monitoring, alerting, incident response, and release controls.",
+      "type": "assessment_hook",
+      "chapter_id": "ch-1",
+      "branch_id": "br-1",
+      "required": true,
+      "prerequisites": {
+        "requires_all": [],
+        "requires_any": [],
+        "recommended": []
+      },
+      "completion_mode": "assessment_threshold",
+      "estimated_duration_minutes": 20,
+      "layout": {
+        "x": 0.0,
+        "y": 0.0
+      },
+      "metadata": {
+        "topics": [
+          "monitoring",
+          "incident response",
+          "release safety"
+        ],
+        "goals": [
+          "validate operational readiness"
+        ]
+      },
+      "display": {},
+      "ksa": [],
+      "unlocks": {
+        "node_ids": [],
+        "branch_ids": [],
+        "recommended_next_node_ids": []
+      },
+      "rewards": {
+        "estimated_ksa_gain": {},
+        "effort_score": null,
+        "reward_tags": []
+      },
+      "retrospective_hooks": {
+        "retrospective_after": false,
+        "review_recommended": false,
+        "recap_checkpoint_available": false
+      },
+      "ksa_hooks": {
+        "mini_assessment_available": false,
+        "recommended_reassessment_topics": [],
+        "unlocks_deeper_refinement": false
+      },
+      "remediation": {
+        "is_remediation_node": false,
+        "recommended_if_failed_node_ids": [],
+        "supports_review_for_node_ids": []
+      },
+      "adaptive_unlock": {
+        "ksa_thresholds": [],
+        "requires_branch_completion_ids": [],
+        "requires_checkpoint_node_ids": [],
+        "requires_review_recommended": false,
+        "recommended_only": false
+      }
+    },
+    {
+      "id": "smoke-quiz",
+      "title": "Quiz",
+      "description": "Validate foundational DevOps knowledge before moving forward.",
+      "type": "quiz",
+      "chapter_id": "ch-1",
+      "branch_id": "br-1",
+      "required": true,
+      "prerequisites": {
+        "requires_all": [],
+        "requires_any": [],
+        "recommended": []
+      },
+      "completion_mode": "quiz_pass",
+      "estimated_duration_minutes": 25,
+      "layout": {
+        "x": 0.0,
+        "y": 0.0
+      },
+      "metadata": {
+        "topics": [
+          "ci/cd",
+          "containers",
+          "infrastructure as code"
+        ],
+        "goals": [
+          "demonstrate baseline understanding"
+        ]
+      },
+      "display": {},
+      "ksa": [],
+      "unlocks": {
+        "node_ids": [],
+        "branch_ids": [],
+        "recommended_next_node_ids": []
+      },
+      "rewards": {
+        "estimated_ksa_gain": {},
+        "effort_score": null,
+        "reward_tags": []
+      },
+      "retrospective_hooks": {
+        "retrospective_after": false,
+        "review_recommended": false,
+        "recap_checkpoint_available": false
+      },
+      "ksa_hooks": {
+        "mini_assessment_available": false,
+        "recommended_reassessment_topics": [],
+        "unlocks_deeper_refinement": false
+      },
+      "remediation": {
+        "is_remediation_node": false,
+        "recommended_if_failed_node_ids": [],
+        "supports_review_for_node_ids": []
+      },
+      "adaptive_unlock": {
+        "ksa_thresholds": [],
+        "requires_branch_completion_ids": [],
+        "requires_checkpoint_node_ids": [],
+        "requires_review_recommended": false,
+        "recommended_only": false
+      }
+    },
+    {
+      "id": "smoke-gate",
+      "title": "Smoke Unlock Gate",
+      "description": "Structural gate",
+      "type": "unlock_gate",
+      "chapter_id": "ch-1",
+      "branch_id": "br-1",
+      "required": true,
+      "prerequisites": {
+        "requires_all": [],
+        "requires_any": [],
+        "recommended": []
+      },
+      "completion_mode": "gate_unlock",
+      "estimated_duration_minutes": 5,
+      "layout": {
+        "x": 0.0,
+        "y": 0.0
+      },
+      "metadata": {},
+      "display": {},
+      "ksa": [],
+      "unlocks": {
+        "node_ids": [],
+        "branch_ids": [],
+        "recommended_next_node_ids": []
+      },
+      "rewards": {
+        "estimated_ksa_gain": {},
+        "effort_score": null,
+        "reward_tags": []
+      },
+      "retrospective_hooks": {
+        "retrospective_after": false,
+        "review_recommended": false,
+        "recap_checkpoint_available": false
+      },
+      "ksa_hooks": {
+        "mini_assessment_available": false,
+        "recommended_reassessment_topics": [],
+        "unlocks_deeper_refinement": false
+      },
+      "remediation": {
+        "is_remediation_node": false,
+        "recommended_if_failed_node_ids": [],
+        "supports_review_for_node_ids": []
+      },
+      "adaptive_unlock": {
+        "ksa_thresholds": [],
+        "requires_branch_completion_ids": [],
+        "requires_checkpoint_node_ids": [],
+        "requires_review_recommended": false,
+        "recommended_only": false
+      }
+    },
+    {
+      "id": "smoke-milestone",
+      "title": "Smoke Milestone Example",
+      "description": "Milestone example content for UI verification.",
+      "type": "milestone",
+      "chapter_id": "ch-1",
+      "branch_id": "br-1",
+      "required": true,
+      "prerequisites": {
+        "requires_all": [],
+        "requires_any": [],
+        "recommended": []
+      },
+      "completion_mode": "manual",
+      "estimated_duration_minutes": 5,
+      "layout": {
+        "x": 0.0,
+        "y": 0.0
+      },
+      "metadata": {
+        "example_source": "milestone example.json"
+      },
+      "display": {},
+      "ksa": [],
+      "unlocks": {
+        "node_ids": [],
+        "branch_ids": [],
+        "recommended_next_node_ids": []
+      },
+      "rewards": {
+        "estimated_ksa_gain": {},
+        "effort_score": null,
+        "reward_tags": []
+      },
+      "retrospective_hooks": {
+        "retrospective_after": false,
+        "review_recommended": false,
+        "recap_checkpoint_available": false
+      },
+      "ksa_hooks": {
+        "mini_assessment_available": false,
+        "recommended_reassessment_topics": [],
+        "unlocks_deeper_refinement": false
+      },
+      "remediation": {
+        "is_remediation_node": false,
+        "recommended_if_failed_node_ids": [],
+        "supports_review_for_node_ids": []
+      },
+      "adaptive_unlock": {
+        "ksa_thresholds": [],
+        "requires_branch_completion_ids": [],
+        "requires_checkpoint_node_ids": [],
+        "requires_review_recommended": false,
+        "recommended_only": false
+      }
+    },
+    {
+      "id": "node-linux",
+      "title": "Linux Fundamentals",
+      "description": "Filesystem, processes, packages, services, permissions, users, shell basics, and day-to-day Linux administration.",
+      "type": "learning_unit",
+      "chapter_id": "chapter-foundations",
+      "branch_id": "branch-core",
+      "required": false,
+      "prerequisites": {
+        "requires_all": [],
+        "requires_any": [],
+        "recommended": []
+      },
+      "completion_mode": "lesson_complete",
+      "estimated_duration_minutes": 90,
+      "layout": {
+        "x": 120.0,
+        "y": 120.0
+      },
+      "metadata": {},
+      "display": {},
+      "ksa": [
+        {
+          "dimension": "K",
+          "topic": "Information Technology",
+          "subtopic": "Networking Protocols",
+          "start_level": 1,
+          "target_level": 2,
+          "contribution_weight": 0.25,
+          "unlocks_assessment_check": false,
+          "recommends_assessment_check": false
+        },
+        {
+          "dimension": "S",
+          "topic": "Digital Craft",
+          "subtopic": "DevOps/Version Control",
+          "start_level": 1,
+          "target_level": 2,
+          "contribution_weight": 0.45,
+          "unlocks_assessment_check": false,
+          "recommends_assessment_check": true
+        },
+        {
+          "dimension": "S",
+          "topic": "Operational Skills",
+          "subtopic": "Technical Troubleshooting",
+          "start_level": 1,
+          "target_level": 2,
+          "contribution_weight": 0.2,
+          "unlocks_assessment_check": false,
+          "recommends_assessment_check": false
+        }
+      ],
+      "unlocks": {
+        "node_ids": [],
+        "branch_ids": [],
+        "recommended_next_node_ids": []
+      },
+      "rewards": {
+        "estimated_ksa_gain": {
+          "K.Information Technology.Networking Protocols": 0.08,
+          "S.Digital Craft.DevOps/Version Control": 0.16,
+          "S.Operational Skills.Technical Troubleshooting": 0.08
+        },
+        "effort_score": 55.0,
+        "reward_tags": [
+          "foundation",
+          "linux"
+        ]
+      },
+      "retrospective_hooks": {
+        "retrospective_after": false,
+        "review_recommended": false,
+        "recap_checkpoint_available": false
+      },
+      "ksa_hooks": {
+        "mini_assessment_available": false,
+        "recommended_reassessment_topics": [],
+        "unlocks_deeper_refinement": false
+      },
+      "remediation": {
+        "is_remediation_node": false,
+        "recommended_if_failed_node_ids": [],
+        "supports_review_for_node_ids": []
+      },
+      "adaptive_unlock": {
+        "ksa_thresholds": [],
+        "requires_branch_completion_ids": [],
+        "requires_checkpoint_node_ids": [],
+        "requires_review_recommended": false,
+        "recommended_only": false
+      }
+    },
+    {
+      "id": "node-foundations-quiz",
+      "title": "Foundations Quiz",
+      "description": "Scored validation of Linux, networking, shell, and Git essentials.",
+      "type": "quiz",
+      "chapter_id": "chapter-foundations",
+      "branch_id": "branch-core",
+      "required": false,
+      "prerequisites": {
+        "requires_all": [],
+        "requires_any": [],
+        "recommended": []
+      },
+      "completion_mode": "quiz_pass",
+      "estimated_duration_minutes": 30,
+      "layout": {
+        "x": 310.0,
+        "y": 240.0
+      },
+      "metadata": {
+        "pass_threshold": 0.75
+      },
+      "display": {},
+      "ksa": [],
+      "unlocks": {
+        "node_ids": [],
+        "branch_ids": [],
+        "recommended_next_node_ids": []
+      },
+      "rewards": {
+        "estimated_ksa_gain": {
+          "K.Information Technology.Networking Protocols": 0.07,
+          "S.Digital Craft.DevOps/Version Control": 0.06
+        },
+        "effort_score": 24.0,
+        "reward_tags": [
+          "quiz",
+          "validation"
+        ]
+      },
+      "retrospective_hooks": {
+        "retrospective_after": true,
+        "review_recommended": true,
+        "recap_checkpoint_available": true
+      },
+      "ksa_hooks": {
+        "mini_assessment_available": true,
+        "recommended_reassessment_topics": [
+          "K.Information Technology.Networking Protocols",
+          "S.Digital Craft.DevOps/Version Control"
+        ],
+        "unlocks_deeper_refinement": true
+      },
+      "remediation": {
+        "is_remediation_node": false,
+        "recommended_if_failed_node_ids": [],
+        "supports_review_for_node_ids": []
+      },
+      "adaptive_unlock": {
+        "ksa_thresholds": [],
+        "requires_branch_completion_ids": [],
+        "requires_checkpoint_node_ids": [],
+        "requires_review_recommended": false,
+        "recommended_only": false
+      }
+    },
+    {
+      "id": "node-docker",
+      "title": "Docker",
+      "description": "Images, containers, volumes, networks, registries, Dockerfiles, and container lifecycle management.",
+      "type": "learning_unit",
+      "chapter_id": "chapter-platform",
+      "branch_id": "branch-core",
+      "required": false,
+      "prerequisites": {
+        "requires_all": [],
+        "requires_any": [],
+        "recommended": []
+      },
+      "completion_mode": "lesson_complete",
+      "estimated_duration_minutes": 90,
+      "layout": {
+        "x": 500.0,
+        "y": 120.0
+      },
+      "metadata": {},
+      "display": {},
+      "ksa": [
+        {
+          "dimension": "K",
+          "topic": "Information Technology",
+          "subtopic": "Cloud Architecture",
+          "start_level": 1,
+          "target_level": 2,
+          "contribution_weight": 0.25,
+          "unlocks_assessment_check": false,
+          "recommends_assessment_check": false
+        },
+        {
+          "dimension": "S",
+          "topic": "Digital Craft",
+          "subtopic": "DevOps/Version Control",
+          "start_level": 2,
+          "target_level": 3,
+          "contribution_weight": 0.55,
+          "unlocks_assessment_check": false,
+          "recommends_assessment_check": true
+        },
+        {
+          "dimension": "S",
+          "topic": "Operational Skills",
+          "subtopic": "Technical Troubleshooting",
+          "start_level": 1,
+          "target_level": 2,
+          "contribution_weight": 0.15,
+          "unlocks_assessment_check": false,
+          "recommends_assessment_check": false
+        }
+      ],
+      "unlocks": {
+        "node_ids": [
+          "node-docker-practice"
+        ],
+        "branch_ids": [],
+        "recommended_next_node_ids": []
+      },
+      "rewards": {
+        "estimated_ksa_gain": {
+          "K.Information Technology.Cloud Architecture": 0.08,
+          "S.Digital Craft.DevOps/Version Control": 0.18,
+          "S.Operational Skills.Technical Troubleshooting": 0.05
+        },
+        "effort_score": 62.0,
+        "reward_tags": [
+          "docker",
+          "containers"
+        ]
+      },
+      "retrospective_hooks": {
+        "retrospective_after": false,
+        "review_recommended": false,
+        "recap_checkpoint_available": false
+      },
+      "ksa_hooks": {
+        "mini_assessment_available": false,
+        "recommended_reassessment_topics": [],
+        "unlocks_deeper_refinement": false
+      },
+      "remediation": {
+        "is_remediation_node": false,
+        "recommended_if_failed_node_ids": [],
+        "supports_review_for_node_ids": []
+      },
+      "adaptive_unlock": {
+        "ksa_thresholds": [],
+        "requires_branch_completion_ids": [],
+        "requires_checkpoint_node_ids": [],
+        "requires_review_recommended": false,
+        "recommended_only": false
+      }
+    },
+    {
+      "id": "node-docker-practice",
+      "title": "Docker Practice Lab",
+      "description": "Containerize an app, build images, attach volumes and networks, publish artifacts, and debug broken builds.",
+      "type": "practice",
+      "chapter_id": "chapter-platform",
+      "branch_id": "branch-core",
+      "required": false,
+      "prerequisites": {
+        "requires_all": [],
+        "requires_any": [],
+        "recommended": []
+      },
+      "completion_mode": "practice_complete",
+      "estimated_duration_minutes": 95,
+      "layout": {
+        "x": 690.0,
+        "y": 240.0
+      },
+      "metadata": {},
+      "display": {},
+      "ksa": [
+        {
+          "dimension": "S",
+          "topic": "Operational Skills",
+          "subtopic": "Technical Troubleshooting",
+          "start_level": 2,
+          "target_level": 3,
+          "contribution_weight": 0.45,
+          "unlocks_assessment_check": false,
+          "recommends_assessment_check": false
+        },
+        {
+          "dimension": "S",
+          "topic": "Digital Craft",
+          "subtopic": "DevOps/Version Control",
+          "start_level": 2,
+          "target_level": 3,
+          "contribution_weight": 0.35,
+          "unlocks_assessment_check": false,
+          "recommends_assessment_check": false
+        }
+      ],
+      "unlocks": {
+        "node_ids": [],
+        "branch_ids": [],
+        "recommended_next_node_ids": []
+      },
+      "rewards": {
+        "estimated_ksa_gain": {
+          "S.Operational Skills.Technical Troubleshooting": 0.16,
+          "S.Digital Craft.DevOps/Version Control": 0.12
+        },
+        "effort_score": 76.0,
+        "reward_tags": [
+          "hands_on",
+          "containers"
+        ]
+      },
+      "retrospective_hooks": {
+        "retrospective_after": true,
+        "review_recommended": false,
+        "recap_checkpoint_available": false
+      },
+      "ksa_hooks": {
+        "mini_assessment_available": false,
+        "recommended_reassessment_topics": [],
+        "unlocks_deeper_refinement": false
+      },
+      "remediation": {
+        "is_remediation_node": false,
+        "recommended_if_failed_node_ids": [
+          "node-docker"
+        ],
+        "supports_review_for_node_ids": []
+      },
+      "adaptive_unlock": {
+        "ksa_thresholds": [],
+        "requires_branch_completion_ids": [],
+        "requires_checkpoint_node_ids": [],
+        "requires_review_recommended": false,
+        "recommended_only": false
+      }
+    },
+    {
+      "id": "node-platform-checkpoint",
+      "title": "Containers and Orchestration Checkpoint",
+      "description": "Validation gate for production-ready container and cluster fundamentals.",
+      "type": "checkpoint",
+      "chapter_id": "chapter-platform",
+      "branch_id": "branch-core",
+      "required": false,
+      "prerequisites": {
+        "requires_all": [],
+        "requires_any": [],
+        "recommended": []
+      },
+      "completion_mode": "checkpoint_pass",
+      "estimated_duration_minutes": 30,
+      "layout": {
+        "x": 880.0,
+        "y": 120.0
+      },
+      "metadata": {
+        "pass_threshold": 0.72
+      },
+      "display": {},
+      "ksa": [
+        {
+          "dimension": "A",
+          "topic": "Executive Function",
+          "subtopic": "Working Memory Span",
+          "start_level": 2,
+          "target_level": 3,
+          "contribution_weight": 0.2,
+          "unlocks_assessment_check": true,
+          "recommends_assessment_check": true
+        }
+      ],
+      "unlocks": {
+        "node_ids": [],
+        "branch_ids": [],
+        "recommended_next_node_ids": []
+      },
+      "rewards": {
+        "estimated_ksa_gain": {
+          "A.Executive Function.Working Memory Span": 0.08
+        },
+        "effort_score": 22.0,
+        "reward_tags": [
+          "checkpoint",
+          "platform"
+        ]
+      },
+      "retrospective_hooks": {
+        "retrospective_after": true,
+        "review_recommended": true,
+        "recap_checkpoint_available": true
+      },
+      "ksa_hooks": {
+        "mini_assessment_available": true,
+        "recommended_reassessment_topics": [
+          "K.Information Technology.Cloud Architecture",
+          "S.Operational Skills.Technical Troubleshooting"
+        ],
+        "unlocks_deeper_refinement": true
+      },
+      "remediation": {
+        "is_remediation_node": false,
+        "recommended_if_failed_node_ids": [],
+        "supports_review_for_node_ids": []
+      },
+      "adaptive_unlock": {
+        "ksa_thresholds": [
+          {
+            "dimension": "K",
+            "topic": "Information Technology",
+            "min_level": 3
+          }
+        ],
+        "requires_branch_completion_ids": [],
+        "requires_checkpoint_node_ids": [],
+        "requires_review_recommended": false,
+        "recommended_only": false
+      }
+    },
+    {
+      "id": "node-devops-capstone",
+      "title": "DevOps Capstone",
+      "description": "Integrate Git, CI/CD, containers, Kubernetes, IaC, observability, secrets, and cloud architecture in a production-style system.",
+      "type": "capstone",
+      "chapter_id": "chapter-advanced",
+      "branch_id": "branch-core",
+      "required": false,
+      "prerequisites": {
+        "requires_all": [],
+        "requires_any": [],
+        "recommended": []
+      },
+      "completion_mode": "checkpoint_pass",
+      "estimated_duration_minutes": 180,
+      "layout": {
+        "x": 1070.0,
+        "y": 240.0
+      },
+      "metadata": {
+        "pass_threshold": 0.85
+      },
+      "display": {},
+      "ksa": [
+        {
+          "dimension": "S",
+          "topic": "Strategic Execution",
+          "subtopic": "Risk Mitigation Planning",
+          "start_level": 1,
+          "target_level": 3,
+          "contribution_weight": 0.2,
+          "unlocks_assessment_check": true,
+          "recommends_assessment_check": true
+        },
+        {
+          "dimension": "S",
+          "topic": "Operational Skills",
+          "subtopic": "Technical Troubleshooting",
+          "start_level": 3,
+          "target_level": 4,
+          "contribution_weight": 0.25,
+          "unlocks_assessment_check": true,
+          "recommends_assessment_check": true
+        },
+        {
+          "dimension": "K",
+          "topic": "Information Technology",
+          "subtopic": "Cloud Architecture",
+          "start_level": 3,
+          "target_level": 4,
+          "contribution_weight": 0.25,
+          "unlocks_assessment_check": true,
+          "recommends_assessment_check": true
+        },
+        {
+          "dimension": "S",
+          "topic": "Literacy & Numeracy",
+          "subtopic": "Technical Documentation",
+          "start_level": 2,
+          "target_level": 3,
+          "contribution_weight": 0.1,
+          "unlocks_assessment_check": false,
+          "recommends_assessment_check": false
+        }
+      ],
+      "unlocks": {
+        "node_ids": [],
+        "branch_ids": [],
+        "recommended_next_node_ids": []
+      },
+      "rewards": {
+        "estimated_ksa_gain": {
+          "S.Strategic Execution.Risk Mitigation Planning": 0.1,
+          "S.Operational Skills.Technical Troubleshooting": 0.12,
+          "K.Information Technology.Cloud Architecture": 0.12,
+          "S.Literacy & Numeracy.Technical Documentation": 0.05
+        },
+        "effort_score": 140.0,
+        "reward_tags": [
+          "capstone",
+          "production",
+          "integration"
+        ]
+      },
+      "retrospective_hooks": {
+        "retrospective_after": true,
+        "review_recommended": true,
+        "recap_checkpoint_available": true
+      },
+      "ksa_hooks": {
+        "mini_assessment_available": true,
+        "recommended_reassessment_topics": [
+          "K.Information Technology.Cloud Architecture",
+          "S.Operational Skills.Technical Troubleshooting",
+          "S.Strategic Execution.Risk Mitigation Planning"
+        ],
+        "unlocks_deeper_refinement": true
+      },
+      "remediation": {
+        "is_remediation_node": false,
+        "recommended_if_failed_node_ids": [],
+        "supports_review_for_node_ids": []
+      },
+      "adaptive_unlock": {
+        "ksa_thresholds": [
+          {
+            "dimension": "K",
+            "topic": "Information Technology",
+            "min_level": 4
+          },
+          {
+            "dimension": "S",
+            "topic": "Operational Skills",
+            "min_level": 3
+          }
+        ],
+        "requires_branch_completion_ids": [],
+        "requires_checkpoint_node_ids": [],
+        "requires_review_recommended": false,
+        "recommended_only": false
+      }
+    },
+    {
+      "id": "node-smoke-review",
+      "title": "Smoke Review Walkthrough",
+      "description": "Review and reinforce smoke-course outcomes with recap-focused learning steps and terminology refresh.",
+      "type": "review",
+      "chapter_id": "chapter-advanced",
+      "branch_id": "branch-core",
+      "required": false,
+      "prerequisites": {
+        "requires_all": [],
+        "requires_any": [],
+        "recommended": []
+      },
+      "completion_mode": "review_complete",
+      "estimated_duration_minutes": 35,
+      "layout": {
+        "x": 1260.0,
+        "y": 120.0
+      },
+      "metadata": {
+        "focus": "smoke recap"
+      },
+      "display": {},
+      "ksa": [
+        {
+          "dimension": "S",
+          "topic": "Operational Skills",
+          "subtopic": "Technical Troubleshooting",
+          "start_level": 2,
+          "target_level": 3,
+          "contribution_weight": 0.45,
+          "unlocks_assessment_check": false,
+          "recommends_assessment_check": true
+        },
+        {
+          "dimension": "A",
+          "topic": "Executive Function",
+          "subtopic": "Working Memory Span",
+          "start_level": 2,
+          "target_level": 3,
+          "contribution_weight": 0.2,
+          "unlocks_assessment_check": false,
+          "recommends_assessment_check": false
+        }
+      ],
+      "unlocks": {
+        "node_ids": [],
+        "branch_ids": [],
+        "recommended_next_node_ids": [
+          "node-devops-capstone"
+        ]
+      },
+      "rewards": {
+        "estimated_ksa_gain": {
+          "S.Operational Skills.Technical Troubleshooting": 0.08,
+          "A.Executive Function.Working Memory Span": 0.04
+        },
+        "effort_score": 26.0,
+        "reward_tags": [
+          "review",
+          "smoke"
+        ]
+      },
+      "retrospective_hooks": {
+        "retrospective_after": false,
+        "review_recommended": true,
+        "recap_checkpoint_available": false
+      },
+      "ksa_hooks": {
+        "mini_assessment_available": false,
+        "recommended_reassessment_topics": [],
+        "unlocks_deeper_refinement": false
+      },
+      "remediation": {
+        "is_remediation_node": true,
+        "recommended_if_failed_node_ids": [],
+        "supports_review_for_node_ids": [
+          "node-platform-checkpoint",
+          "node-devops-capstone"
+        ]
+      },
+      "adaptive_unlock": {
+        "ksa_thresholds": [],
+        "requires_branch_completion_ids": [],
+        "requires_checkpoint_node_ids": [],
+        "requires_review_recommended": false,
+        "recommended_only": false
+      }
+    }
+  ],
+  "edges": [
+    {
+      "from_node_id": "node-docker",
+      "to_node_id": "node-docker-practice",
+      "relationship": "recommended"
+    },
+    {
+      "from_node_id": "node-docker-practice",
+      "to_node_id": "node-platform-checkpoint",
+      "relationship": "recommended"
+    },
+    {
+      "from_node_id": "node-foundations-quiz",
+      "to_node_id": "node-docker",
+      "relationship": "recommended"
+    },
+    {
+      "from_node_id": "node-linux",
+      "to_node_id": "node-foundations-quiz",
+      "relationship": "recommended"
+    },
+    {
+      "from_node_id": "node-platform-checkpoint",
+      "to_node_id": "node-devops-capstone",
+      "relationship": "recommended"
+    },
+    {
+      "from_node_id": "node-platform-checkpoint",
+      "to_node_id": "node-smoke-review",
+      "relationship": "recommended"
+    },
+    {
+      "from_node_id": "node-smoke-review",
+      "to_node_id": "node-devops-capstone",
+      "relationship": "recommended"
+    }
+  ],
+  "entry_node_ids": [
+    "smoke-assessment",
+    "smoke-quiz",
+    "smoke-gate",
+    "smoke-milestone",
+    "node-linux",
+    "node-foundations-quiz",
+    "node-docker",
+    "node-docker-practice",
+    "node-platform-checkpoint",
+    "node-devops-capstone",
+    "node-smoke-review"
+  ],
+  "completion_rules": {
+    "required_completion": "all_required_nodes"
+  },
+  "visual_layout": {},
+  "metadata": {}
+}

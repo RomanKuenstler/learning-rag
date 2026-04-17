@@ -1,5 +1,55 @@
 # Courses And Skilltree Schema
 
+## Persistent User Node Context
+
+A dedicated user-node-context layer now precomputes graph + learner state for each node.
+
+Persistence model:
+
+- table: `user_learning_node_contexts`
+- unique key: `(user_id, learning_path_id, node_id)`
+- stores grouped sections and an aggregate context payload
+- stores `source_hash`, `generation_reason`, and `generated_at` for traceability
+
+Context categories:
+
+- course-level context
+- chapter/branch placement context
+- backward-looking prior-node coverage context
+- targeted-node local metadata context
+- forward-looking successor/checkpoint context
+- related KSA capability/drill context
+- readiness and derived assumption context
+
+Design goal:
+
+- later node-type handlers can consume one stable context object without repeating graph traversal and KSA matching.
+
+## Node Execution Attempts
+
+Node runtime execution now persists attempt artifacts in:
+
+- `user_learning_node_execution_attempts`
+
+Each attempt stores:
+
+- generated runtime package
+- responses
+- evaluation result
+- node context snapshot used at generation time
+- source node window/scope metadata
+- status/timestamps
+
+Execution semantics:
+
+- runtime node packages are generated only on explicit `start`.
+- default `start` resumes an active attempt for that user/path/node.
+- `force_new_attempt=true` starts a new attempt and marks the previous active attempt as superseded.
+- users can inspect attempt history through `GET /api/learning-paths/{learning_path_id}/nodes/{node_id}/execution/attempts`.
+- upload-based tasks are attached to attempts through `POST /api/learning-paths/{learning_path_id}/nodes/{node_id}/execution/attempts/{attempt_id}/uploads`.
+
+This enables resumability, reproducible scoring/completion decisions, and later analytics.
+
 ## Overview
 
 Courses are represented as graph-based skilltrees (`schema_version: 2`).
@@ -180,3 +230,53 @@ Not included yet:
 - retrospective graph generation
 - AI-generated branch authoring
 - full in-node assessment engine execution for all node types
+
+## Runtime Node Plans
+
+Node start execution now includes structured-plan runtime generation for:
+
+- `learning_unit`: phased teaching-plan package with mini-topic lesson briefs and recap plan.
+- `review`: recap/remediation plan package over the bounded backward review window.
+
+These plans are persisted per attempt and designed for later delivery orchestration, questions, and feedback handling.
+
+## Edit Course Page (JSON + Attachments)
+
+The Courses table `Edit` action now opens a dedicated editor route:
+
+- `GET /courses/:courseId/edit` (frontend route)
+
+Editor layout follows the GPT editor shell pattern:
+
+- sticky header with `Back` and `Save`
+- attachment management section at the top
+- inline raw JSON editor below
+
+### Backend API
+
+- `GET /api/learning-paths/{learning_path_id}/editor`
+  - returns raw editable JSON (`raw_json`)
+  - returns course-scoped attachment list
+  - returns filename-reference issues (`missing` / `ambiguous`)
+- `PUT /api/learning-paths/{learning_path_id}/editor`
+  - validates JSON syntax
+  - validates course schema via `CourseFileParser`
+  - rejects mismatched course IDs
+  - blocks save if filename references point to missing attachments
+- `GET /api/learning-paths/{learning_path_id}/attachments`
+- `POST /api/learning-paths/{learning_path_id}/attachments/upload`
+- `GET /api/learning-paths/{learning_path_id}/attachments/resolve?file_name=...`
+
+### Attachment Storage Convention
+
+Course attachments are stored in MinIO with a per-course namespace:
+
+- `courses/<course_id>/attachments/<asset_id>/<name.extension>`
+
+JSON authors keep references human-readable (name only, no object path):
+
+- `diagram.png`
+- `overview.mp4`
+- `worksheet.pdf`
+
+Resolution is performed server-side using `(learning_path_id, normalized filename)` and exposed via the resolve endpoint and runtime catalogs.

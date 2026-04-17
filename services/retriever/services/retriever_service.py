@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import logging
+import mimetypes
 import re
 from datetime import datetime, timezone
 from concurrent.futures import ThreadPoolExecutor
@@ -15,6 +16,7 @@ from services.common.config import Settings
 from services.common.models import (
     LearningLesson,
     LearningModule,
+    LearningNodeSession,
     LearningPath,
     UserAccount,
     UserLearningGoal,
@@ -55,6 +57,22 @@ from services.retriever.schemas.chat import (
     SystemServiceStatusRead,
 )
 from services.retriever.schemas.learning import (
+    CourseAttachmentReferenceIssueRead,
+    CourseEditorRead,
+    CourseEditorUpdateRequest,
+    LearningNodeSessionDownloadRead,
+    LearningNodeSessionListResponse,
+    LearningNodeSessionRead,
+    LearningNodeExecutionAttemptRead,
+    LearningNodeExecutionAttemptListResponse,
+    LearningNodeExecutionCompleteResponse,
+    LearningNodeExecutionStartResponse,
+    LearningNodeExecutionSubmitRequest,
+    ContentAssetRead,
+    ContentAssetListResponse,
+    ContentAssetUploadResponse,
+    LearningNodeContextListResponse,
+    LearningNodeContextRead,
     LearningNodeProgressUpdateRequest,
     LearningLessonCreateRequest,
     LearningLessonRead,
@@ -99,6 +117,8 @@ from services.retriever.schemas.learning_profile import (
     LearningGoalUpdateRequest,
     LearningPreferencesRead,
     LearningPreferencesUpdateRequest,
+    PersonalizationLayerGroupRead,
+    PersonalizationLayersRead,
     LearningProfileBundleRead,
     LearningProfileContextRead,
     LearningProfileContextUpdateRequest,
@@ -160,6 +180,10 @@ from services.retriever.services.ksa_drills import (
     list_drill_topics,
     plan_dynamic_drill_rounds,
 )
+from services.retriever.services.node_context import LearningNodeContextEngine
+from services.retriever.services.node_execution import LearningNodeExecutionService
+from services.retriever.services.content_asset_service import ContentAssetService
+from services.retriever.services.personalization_layers import GROUP_COLUMNS, GROUP_ORDER, LearningPersonalizationLayerEngine
 
 RUNTIME_SETTING_KEYS = {
     "chat_history_messages_count",
@@ -214,6 +238,8 @@ LEARNING_CONTEXT_DEFAULTS = {
     "preferred_form_of_address": "",
     "learning_context_notes": "",
 }
+
+ASYNC_HEAVY_NODE_TYPES = {"assessment_hook", "checkpoint", "capstone", "quiz", "practice"}
 
 SUPPORTED_ROLES = {"admin", "user", "student"}
 EXAMPLE_LEARNING_PATH_TITLE = "Example: Docker Fundamentals"
@@ -301,6 +327,7 @@ class RetrieverDependencies:
     llm_client: LlmClient
     library_manager: LibraryManager
     attachment_client: AttachmentProcessingClient
+    content_asset_service: ContentAssetService
     settings: Settings
     auth_manager: AuthManager | None = None
 
@@ -314,10 +341,25 @@ class RetrieverAppService:
         self.llm_client = deps.llm_client
         self.library_manager = deps.library_manager
         self.attachment_client = deps.attachment_client
+        self.content_asset_service = deps.content_asset_service
         self.auth_manager = deps.auth_manager
         self.settings = deps.settings
+        self.personalization_layer_engine = LearningPersonalizationLayerEngine(
+            self.chat_repository,
+            available_assistant_modes=self.settings.available_assistant_modes,
+            default_assistant_mode=self.settings.default_assistant_mode,
+        )
+        self.node_context_engine = LearningNodeContextEngine(self.chat_repository)
+        self.node_execution_service = LearningNodeExecutionService(
+            self.chat_repository,
+            llm_invoke=self.llm_client.invoke,
+            prompts_dir=self.prompt_builder.prompts_dir,
+            asset_service=self.content_asset_service,
+        )
         self.course_file_parser = CourseFileParser()
         self._ksa_validation_executor = ThreadPoolExecutor(max_workers=2, thread_name_prefix="ksa-validate")
+        self._node_execution_executor = ThreadPoolExecutor(max_workers=2, thread_name_prefix="node-exec")
+        self.data_dir = Path(self.settings.data_dir)
         self.courses_dir = Path(self.settings.courses_dir)
         self.courses_dir.mkdir(parents=True, exist_ok=True)
         if self.auth_manager is not None:
@@ -551,6 +593,111 @@ class RetrieverAppService:
         if chat is None:
             return None
         return map_chat(chat)
+
+    def list_learning_node_sessions(self, user: UserAccount) -> LearningNodeSessionListResponse:
+        records = self.chat_repository.list_learning_node_sessions(user_id=user.id, archived=False, include_deleted=False)
+        sessions = [self._build_learning_node_session_read(user, record) for record in records]
+        return LearningNodeSessionListResponse(sessions=[session for session in sessions if session is not None])
+
+    def list_archived_learning_node_sessions(self, user: UserAccount) -> LearningNodeSessionListResponse:
+        records = self.chat_repository.list_learning_node_sessions(user_id=user.id, archived=True, include_deleted=False)
+        sessions = [self._build_learning_node_session_read(user, record) for record in records]
+        return LearningNodeSessionListResponse(sessions=[session for session in sessions if session is not None])
+
+    def ensure_learning_node_session(self, user: UserAccount, learning_path_id: str, node_id: str) -> LearningNodeSessionRead | None:
+        path = self.chat_repository.get_learning_path(learning_path_id)
+        if path is None or not self._can_view_learning_path(user, path):
+            return None
+
+        definition = self._course_definition_from_learning_path(path)
+        node = next((item for item in definition.nodes if item.id == node_id), None)
+        if node is None:
+            raise ValueError(f"Unknown node_id '{node_id}'")
+        if node.type == "unlock_gate":
+            raise ValueError("unlock_gate nodes do not create learning sessions")
+
+        route_path = f"/learning/nodes/{learning_path_id}/{node_id}"
+        record = self.chat_repository.ensure_learning_node_session(
+            user_id=user.id,
+            learning_path_id=learning_path_id,
+            node_id=node_id,
+            node_type=node.type,
+            route_path=route_path,
+        )
+
+        progress_entries = self.chat_repository.list_user_learning_node_progress(user_id=user.id, learning_path_id=learning_path_id)
+        progress_by_node = {item.node_id: item.status for item in progress_entries}
+        self.chat_repository.sync_learning_node_session_completion(
+            user_id=user.id,
+            learning_path_id=learning_path_id,
+            node_id=node_id,
+            node_progress_status=progress_by_node.get(node_id, "available"),
+        )
+        refreshed = self.chat_repository.get_learning_node_session(user_id=user.id, session_id=record.id)
+        assert refreshed is not None
+        built = self._build_learning_node_session_read(user, refreshed)
+        return built
+
+    def get_learning_node_session(
+        self,
+        user: UserAccount,
+        session_id: str,
+        *,
+        mark_opened: bool = False,
+    ) -> LearningNodeSessionRead | None:
+        record = self.chat_repository.get_learning_node_session(user_id=user.id, session_id=session_id)
+        if record is None:
+            return None
+        if mark_opened:
+            opened = self.chat_repository.mark_learning_node_session_opened(user_id=user.id, session_id=session_id)
+            if opened is not None:
+                record = opened
+        return self._build_learning_node_session_read(user, record)
+
+    def archive_learning_node_session(self, user: UserAccount, session_id: str) -> LearningNodeSessionRead | None:
+        record = self.chat_repository.set_learning_node_session_archived(
+            user_id=user.id,
+            session_id=session_id,
+            is_archived=True,
+        )
+        if record is None:
+            return None
+        return self._build_learning_node_session_read(user, record)
+
+    def unarchive_learning_node_session(self, user: UserAccount, session_id: str) -> LearningNodeSessionRead | None:
+        record = self.chat_repository.set_learning_node_session_archived(
+            user_id=user.id,
+            session_id=session_id,
+            is_archived=False,
+        )
+        if record is None:
+            return None
+        return self._build_learning_node_session_read(user, record)
+
+    def soft_delete_learning_node_session(self, user: UserAccount, session_id: str) -> LearningNodeSessionRead | None:
+        record = self.chat_repository.set_learning_node_session_deleted(
+            user_id=user.id,
+            session_id=session_id,
+            is_deleted=True,
+        )
+        if record is None:
+            return None
+        return self._build_learning_node_session_read(user, record)
+
+    def reset_learning_node_session(self, user: UserAccount, session_id: str) -> LearningNodeSessionRead | None:
+        record = self.chat_repository.get_learning_node_session(user_id=user.id, session_id=session_id)
+        if record is None:
+            return None
+        return self._build_learning_node_session_read(user, record)
+
+    def download_learning_node_session(self, user: UserAccount, session_id: str) -> LearningNodeSessionDownloadRead | None:
+        record = self.chat_repository.get_learning_node_session(user_id=user.id, session_id=session_id)
+        if record is None:
+            return None
+        built = self._build_learning_node_session_read(user, record)
+        if built is None:
+            return None
+        return LearningNodeSessionDownloadRead(session=built)
 
     def download_chat(self, user: UserAccount, chat_id: str):
         self._ensure_student_cannot_use_standard_chat(user)
@@ -861,6 +1008,7 @@ class RetrieverAppService:
     def update_personalization(self, user: UserAccount, payload: PersonalizationUpdateRequest) -> PersonalizationRead:
         for key, value in payload.model_dump().items():
             self.chat_repository.upsert_setting(user.id, key, json.dumps(str(value).strip()))
+        self._safe_recompute_personalization_layers(user=user, reasons=["personalization_updated"])
         return self.get_personalization(user)
 
     def get_learning_profile_bundle(self, user: UserAccount) -> LearningProfileBundleRead:
@@ -878,6 +1026,18 @@ class RetrieverAppService:
             goals=[self._build_learning_goal_read(goal) for goal in goals],
             diagnostics_status=diagnostics_status,
         )
+
+    def get_personalization_layers(self, user: UserAccount) -> PersonalizationLayersRead:
+        if self._can_recompute_personalization_layers():
+            record = self.chat_repository.get_user_learning_personalization_layers(user_id=user.id)
+            if record is None:
+                record = self.personalization_layer_engine.recompute_for_reasons(
+                    user=user,
+                    reasons=["initial_bootstrap"],
+                    force_all=True,
+                )
+            return self._build_personalization_layers_read(record)
+        return PersonalizationLayersRead(user_id=user.id)
 
     def get_ksa_profile(self, user: UserAccount) -> KSAProfileRead:
         persisted = self.chat_repository.get_user_ksa_profile(user.id)
@@ -989,6 +1149,8 @@ class RetrieverAppService:
             assessment_version=ASSESSMENT_VERSION,
             profile_json=evaluation.profile_json,
         )
+        self._safe_recompute_personalization_layers(user=user, reasons=["ksa_updated"])
+        self._safe_recompute_user_node_contexts_for_user(user=user, reason="ksa_updated")
         return self._build_ksa_profile_read(
             user_id=user.id,
             profile_json=evaluation.profile_json,
@@ -1144,6 +1306,8 @@ class RetrieverAppService:
             assessment_version=DRILL_ASSESSMENT_VERSION,
             profile_json=profile_json,
         )
+        self._safe_recompute_personalization_layers(user=user, reasons=["ksa_updated"])
+        self._safe_recompute_user_node_contexts_for_user(user=user, reason="ksa_updated")
         return self._build_ksa_profile_read(
             user_id=user.id,
             profile_json=profile_json,
@@ -1174,6 +1338,7 @@ class RetrieverAppService:
                 "custom_preference_note": next_values["custom_preference_note"],
             },
         )
+        self._safe_recompute_personalization_layers(user=user, reasons=["learning_preferences_updated"])
         return self._build_learning_preferences_read(updated)
 
     def update_learning_context(self, user: UserAccount, payload: LearningProfileContextUpdateRequest) -> LearningProfileContextRead:
@@ -1223,6 +1388,7 @@ class RetrieverAppService:
                 "learning_context_notes": next_values["learning_context_notes"],
             },
         )
+        self._safe_recompute_personalization_layers(user=user, reasons=["learning_context_updated"])
         return self._build_learning_context_read(updated)
 
     def create_learning_goal(self, user: UserAccount, payload: LearningGoalCreateRequest) -> LearningGoalRead:
@@ -1238,6 +1404,7 @@ class RetrieverAppService:
                 "is_active": payload.is_active,
             }
         )
+        self._safe_recompute_personalization_layers(user=user, reasons=["learning_goal_updated"])
         return self._build_learning_goal_read(record)
 
     def update_learning_goal(self, user: UserAccount, goal_id: str, payload: LearningGoalUpdateRequest) -> LearningGoalRead | None:
@@ -1248,12 +1415,14 @@ class RetrieverAppService:
         updated = self.chat_repository.update_user_learning_goal(user.id, goal_id, fields)
         if updated is None:
             return None
+        self._safe_recompute_personalization_layers(user=user, reasons=["learning_goal_updated"])
         return self._build_learning_goal_read(updated)
 
     def delete_learning_goal(self, user: UserAccount, goal_id: str) -> LearningGoalRead | None:
         deleted = self.chat_repository.delete_user_learning_goal(user.id, goal_id)
         if deleted is None:
             return None
+        self._safe_recompute_personalization_layers(user=user, reasons=["learning_goal_updated"])
         return self._build_learning_goal_read(deleted)
 
     def list_diagnostic_definitions(self) -> DiagnosticCatalogRead:
@@ -1353,6 +1522,7 @@ class RetrieverAppService:
         computed = score_attempt(definitions, answers_by_type)
         persisted = self.chat_repository.upsert_user_diagnostic_result(attempt_id=attempt.id, result_json=computed)
         self.chat_repository.mark_user_diagnostic_attempt_completed(attempt_id=attempt.id)
+        self._safe_recompute_personalization_layers(user=user, reasons=["diagnostic_completed"])
         return DiagnosticResultRead(attempt_id=attempt.id, result=dict(persisted.result_json or {}))
 
     def create_learning_state_check(self, user: UserAccount, payload: LearningStateCheckCreateRequest) -> LearningStateCheckRead:
@@ -1367,6 +1537,7 @@ class RetrieverAppService:
                 "notes": payload.notes.strip(),
             }
         )
+        self._safe_recompute_personalization_layers(user=user, reasons=["learning_state_check_created"])
         return self._build_learning_state_check_read(record)
 
     def list_learning_state_checks(self, user: UserAccount, limit: int = 20) -> list[LearningStateCheckRead]:
@@ -1385,6 +1556,7 @@ class RetrieverAppService:
                 "re_explain_requested": payload.re_explain_requested,
             }
         )
+        self._safe_recompute_personalization_layers(user=user, reasons=["explanation_feedback_created"])
         return self._build_explanation_feedback_read(record)
 
     def list_learning_paths(self, user: UserAccount) -> LearningPathListResponse:
@@ -1499,6 +1671,10 @@ class RetrieverAppService:
                     enforce_owner=True,
                 )
                 self._write_course_file_for_path(upserted.id)
+                self._safe_invalidate_user_node_contexts_for_path(
+                    learning_path_id=upserted.id,
+                    reason="course_imported",
+                )
                 results.append(
                     CourseImportFileResultRead(
                         file_name=file_name,
@@ -1526,6 +1702,165 @@ class RetrieverAppService:
             file_name=self.course_file_parser.TEMPLATE_FILE_NAME,
             template=self.course_file_parser.template_payload(),
         )
+
+    def get_course_editor(self, user: UserAccount, learning_path_id: str) -> CourseEditorRead | None:
+        path = self.chat_repository.get_learning_path(learning_path_id)
+        if path is None:
+            return None
+        self._ensure_learning_path_edit_allowed(user, path)
+        definition = self._course_definition_from_learning_path(path).model_copy(
+            update={
+                "id": path.id,
+                "scope": path.scope,
+                "owner_user_id": path.owner_user_id,
+                "title": path.title,
+                "description": path.description or "",
+                "subject": path.subject or "",
+                "difficulty_level": path.difficulty_level or "",
+                "estimated_duration_minutes": path.estimated_duration_minutes,
+                "status": path.status,
+                "allowed_file_ids": [item.file_id for item in self.chat_repository.list_learning_path_allowed_files(path.id)],
+                "allowed_tags": [item.tag for item in self.chat_repository.list_learning_path_allowed_tags(path.id)],
+            }
+        )
+        attachments = self._list_course_attachment_records(path.id)
+        issues = self._resolve_course_attachment_reference_issues(definition.model_dump(), attachments)
+        return CourseEditorRead(
+            learning_path_id=path.id,
+            title=path.title,
+            description=path.description or "",
+            scope=path.scope,
+            status=path.status,
+            can_edit=self._can_edit_learning_path(user, path),
+            raw_json=json.dumps(definition.model_dump(), indent=2),
+            attachments=[self._build_content_asset_read(item) for item in attachments],
+            attachment_reference_issues=issues,
+            created_at=path.created_at,
+            updated_at=path.updated_at,
+        )
+
+    def save_course_editor(
+        self,
+        user: UserAccount,
+        learning_path_id: str,
+        payload: CourseEditorUpdateRequest,
+    ) -> CourseEditorRead | None:
+        path = self.chat_repository.get_learning_path(learning_path_id)
+        if path is None:
+            return None
+        self._ensure_learning_path_edit_allowed(user, path)
+        try:
+            parsed_payload = json.loads(payload.raw_json)
+        except json.JSONDecodeError as error:
+            raise ValueError(f"Invalid JSON syntax: {error.msg} (line {error.lineno}, column {error.colno})") from error
+        if not isinstance(parsed_payload, dict):
+            raise ValueError("Course JSON must be a JSON object")
+        definition = self.course_file_parser.parse_payload(f"{learning_path_id}.json", parsed_payload)
+        if definition.id and definition.id != learning_path_id:
+            raise ValueError(f"Course id mismatch: expected '{learning_path_id}' but found '{definition.id}'")
+        self._validate_course_scope_for_user(user, definition.scope)
+        self._validate_embedded_course_ids(
+            definition,
+            file_name=f"{learning_path_id}.json",
+            target_learning_path_id=learning_path_id,
+        )
+        definition_for_save = definition.model_copy(
+            update={
+                "id": learning_path_id,
+                "owner_user_id": path.owner_user_id if definition.scope == "user" else None,
+            }
+        )
+        attachments = self._list_course_attachment_records(learning_path_id)
+        issues = self._resolve_course_attachment_reference_issues(definition_for_save.model_dump(), attachments)
+        missing_issues = [item for item in issues if item.issue == "missing"]
+        if missing_issues:
+            sample = ", ".join(item.file_name for item in missing_issues[:6])
+            raise ValueError(f"Course JSON references missing attachments: {sample}")
+        self._upsert_course_definition(
+            definition_for_save,
+            owner_user_id=path.owner_user_id,
+            enforce_owner=False,
+            target_learning_path_id=learning_path_id,
+        )
+        self._write_course_file_for_path(learning_path_id)
+        self._safe_invalidate_user_node_contexts_for_path(
+            learning_path_id=learning_path_id,
+            reason="course_editor_saved",
+        )
+        refreshed = self.get_course_editor(user, learning_path_id)
+        return refreshed
+
+    def list_course_attachments(self, user: UserAccount, learning_path_id: str) -> ContentAssetListResponse:
+        path = self.chat_repository.get_learning_path(learning_path_id)
+        if path is None:
+            raise ValueError("Learning path not found")
+        self._ensure_learning_path_edit_allowed(user, path)
+        records = self._list_course_attachment_records(learning_path_id)
+        return ContentAssetListResponse(assets=[self._build_content_asset_read(item) for item in records])
+
+    def upload_course_attachments(
+        self,
+        user: UserAccount,
+        learning_path_id: str,
+        uploads: list[UploadFilePayload],
+    ) -> ContentAssetListResponse:
+        path = self.chat_repository.get_learning_path(learning_path_id)
+        if path is None:
+            raise ValueError("Learning path not found")
+        self._ensure_learning_path_edit_allowed(user, path)
+        created: list[ContentAssetRead] = []
+        for upload in uploads:
+            safe_name = Path(upload.file_name).name or "attachment.bin"
+            content = upload.content
+            if not content:
+                continue
+            lowered = safe_name.lower()
+            guessed_mime = mimetypes.guess_type(safe_name)[0] or "application/octet-stream"
+            if lowered.endswith((".png", ".jpg", ".jpeg", ".gif", ".svg", ".webp")):
+                asset_kind = "image"
+            elif lowered.endswith((".mp4", ".webm", ".mov", ".mkv", ".avi")):
+                asset_kind = "video"
+            else:
+                asset_kind = "downloadable_file"
+            uploaded = self.content_asset_service.upload_bytes(
+                content=content,
+                file_name=safe_name,
+                asset_kind=asset_kind,
+                media_kind=asset_kind,
+                mime_type=guessed_mime,
+                source_type="course_attachment",
+                scope_type="course",
+                owner_user_id=path.owner_user_id,
+                learning_path_id=learning_path_id,
+                uploaded_by_user_id=user.id,
+                download_label=safe_name,
+                file_category="course_attachment",
+                reuse_existing=False,
+            )
+            created.append(self._build_content_asset_read(uploaded.asset))
+        return ContentAssetListResponse(assets=created)
+
+    def resolve_course_attachment(
+        self,
+        user: UserAccount,
+        learning_path_id: str,
+        file_name: str,
+    ) -> ContentAssetRead:
+        path = self.chat_repository.get_learning_path(learning_path_id)
+        if path is None or not self._can_view_learning_path(user, path):
+            raise PermissionError("You do not have permission to access this learning path")
+        normalized = self._normalize_attachment_file_name(file_name)
+        if not normalized:
+            raise ValueError("file_name is required")
+        matches = [item for item in self._list_course_attachment_records(learning_path_id) if self._normalize_attachment_file_name(item.normalized_filename or item.original_filename or "") == normalized]
+        if not matches:
+            raise ValueError(f"Attachment not found: {file_name}")
+        if len(matches) > 1:
+            raise ValueError(f"Attachment reference is ambiguous for '{file_name}'")
+        asset = matches[0]
+        if not self.content_asset_service.can_read_asset(user=user, learning_path=path, asset=asset):
+            raise PermissionError("You do not have permission to access this attachment")
+        return self._build_content_asset_read(asset)
 
     def create_learning_path(self, user: UserAccount, payload: LearningPathCreateRequest) -> LearningPathRead:
         self._ensure_learning_path_create_allowed(user, payload.scope)
@@ -1566,7 +1901,462 @@ class RetrieverAppService:
         record = self.chat_repository.get_learning_path(learning_path_id)
         if record is None or not self._can_view_learning_path(user, record):
             return None
+        definition = self._course_definition_from_learning_path(record)
+        if self._auto_complete_unlock_gate_nodes(user=user, path=record, definition=definition):
+            refreshed = self.chat_repository.get_learning_path(learning_path_id)
+            if refreshed is not None:
+                record = refreshed
         return self._build_learning_path_read(user, record)
+
+    def _auto_complete_unlock_gate_nodes(self, *, user: UserAccount, path: LearningPath, definition: CourseDefinition) -> bool:
+        progress_entries = self.chat_repository.list_user_learning_node_progress(user_id=user.id, learning_path_id=path.id)
+        progress_map = {entry.node_id: entry.status for entry in progress_entries}
+        runtime = build_skilltree_runtime(definition, persisted_node_progress=progress_map)
+        profile = self.chat_repository.get_user_ksa_profile(user.id)
+        profile_json = dict(profile.profile_json or {}) if profile else {}
+        dimension_group = {"K": "knowledge", "S": "skills", "A": "abilities"}
+        now = datetime.now(timezone.utc)
+        changed = False
+        for node in definition.nodes:
+            if node.type != "unlock_gate":
+                continue
+            if progress_map.get(node.id) in COMPLETED_STATES:
+                continue
+            node_state = runtime.node_progress.get(node.id, "locked")
+            if node_state not in {"available", "in_progress"}:
+                continue
+            prereq_ids = list(node.prerequisites.requires_all) + list(node.prerequisites.requires_any)
+            prereq_completed = all(progress_map.get(item) in COMPLETED_STATES for item in prereq_ids) if prereq_ids else True
+            if not prereq_completed:
+                continue
+            requirements_met = True
+            for rule in list(node.adaptive_unlock.ksa_thresholds or []):
+                section = dimension_group.get(str(rule.dimension).upper(), "skills")
+                current_level = int(dict(profile_json.get(section) or {}).get(rule.topic, 1))
+                if current_level < int(rule.min_level):
+                    requirements_met = False
+                    break
+            if not requirements_met:
+                continue
+            for checkpoint_id in list(node.adaptive_unlock.requires_checkpoint_node_ids or []):
+                if progress_map.get(checkpoint_id) not in COMPLETED_STATES:
+                    requirements_met = False
+                    break
+            if not requirements_met:
+                continue
+            self.chat_repository.upsert_user_learning_node_progress(
+                user_id=user.id,
+                learning_path_id=path.id,
+                node_id=node.id,
+                status="completed",
+                started_at=now,
+                completed_at=now,
+            )
+            progress_map[node.id] = "completed"
+            changed = True
+        return changed
+
+    def get_learning_node_context(
+        self,
+        user: UserAccount,
+        learning_path_id: str,
+        node_id: str,
+        *,
+        refresh: bool = False,
+    ) -> LearningNodeContextRead | None:
+        path = self.chat_repository.get_learning_path(learning_path_id)
+        if path is None or not self._can_view_learning_path(user, path):
+            return None
+        definition = self._course_definition_from_learning_path(path)
+        if node_id not in {node.id for node in definition.nodes}:
+            raise ValueError(f"Unknown node_id '{node_id}'")
+        record = None
+        if not refresh:
+            record = self.chat_repository.get_user_learning_node_context(
+                user_id=user.id,
+                learning_path_id=learning_path_id,
+                node_id=node_id,
+            )
+        if record is None:
+            record = self._safe_recompute_user_node_context(
+                user=user,
+                path=path,
+                definition=definition,
+                node_id=node_id,
+                reason="on_demand_refresh" if refresh else "on_demand",
+            )
+        if record is None:
+            return None
+        return self._build_learning_node_context_read(record)
+
+    def list_available_learning_node_contexts(
+        self,
+        user: UserAccount,
+        learning_path_id: str,
+        *,
+        refresh: bool = False,
+    ) -> LearningNodeContextListResponse | None:
+        path = self.chat_repository.get_learning_path(learning_path_id)
+        if path is None or not self._can_view_learning_path(user, path):
+            return None
+        if refresh:
+            self._safe_recompute_user_node_contexts_for_available_nodes(
+                user=user,
+                path=path,
+                reason="on_demand_available_refresh",
+            )
+        records = self.chat_repository.list_user_learning_node_contexts(
+            user_id=user.id,
+            learning_path_id=learning_path_id,
+        )
+        if not refresh and not records:
+            self._safe_recompute_user_node_contexts_for_available_nodes(
+                user=user,
+                path=path,
+                reason="on_demand_available",
+            )
+            records = self.chat_repository.list_user_learning_node_contexts(
+                user_id=user.id,
+                learning_path_id=learning_path_id,
+            )
+        return LearningNodeContextListResponse(
+            contexts=[self._build_learning_node_context_read(item) for item in records]
+        )
+
+    def start_learning_node_execution(
+        self,
+        user: UserAccount,
+        learning_path_id: str,
+        node_id: str,
+        *,
+        force_new_attempt: bool = False,
+    ) -> LearningNodeExecutionStartResponse | None:
+        path = self.chat_repository.get_learning_path(learning_path_id)
+        if path is None or not self._can_view_learning_path(user, path):
+            return None
+        definition = self._course_definition_from_learning_path(path)
+        node_by_id = {node.id: node for node in definition.nodes}
+        node = node_by_id.get(node_id)
+        if node is None:
+            raise ValueError(f"Unknown node_id '{node_id}'")
+        context_record = self.get_learning_node_context(user, learning_path_id, node_id, refresh=True)
+        if context_record is None:
+            raise ValueError("Node context is not available for execution")
+        node_context = dict(context_record.context or {})
+        if node.type in {"assessment_hook", "quiz", "practice", "checkpoint", "capstone"} and force_new_attempt:
+            result = self.node_execution_service.restart_with_existing_package(
+                user=user,
+                learning_path=path,
+                definition=definition,
+                node=node,
+                node_context=node_context,
+            )
+        elif node.type in ASYNC_HEAVY_NODE_TYPES:
+            result = self.node_execution_service.start_placeholder(
+                user=user,
+                learning_path=path,
+                definition=definition,
+                node=node,
+                node_context=node_context,
+                force_new_attempt=force_new_attempt,
+            )
+            attempt_id = str(result.attempt.id)
+            self._node_execution_executor.submit(
+                self._run_async_node_generation_job,
+                user.id,
+                path.id,
+                node.id,
+                attempt_id,
+                node_context,
+            )
+        else:
+            result = self.node_execution_service.start(
+                user=user,
+                learning_path=path,
+                definition=definition,
+                node=node,
+                node_context=node_context,
+                force_new_attempt=force_new_attempt,
+            )
+        if result.node_status in {"completed", "mastered"}:
+            self.chat_repository.sync_learning_node_session_completion(
+                user_id=user.id,
+                learning_path_id=learning_path_id,
+                node_id=node_id,
+                node_progress_status=result.node_status,
+            )
+        self._safe_recompute_personalization_layers(user=user, reasons=["learning_node_progress_updated"])
+        self._safe_recompute_user_node_contexts_for_available_nodes(
+            user=user,
+            path=path,
+            reason="node_execution_started",
+        )
+        return LearningNodeExecutionStartResponse(
+            attempt=self._build_learning_node_execution_attempt_read(result.attempt),
+            auto_completed=result.auto_completed,
+            completion_reason=result.completion_reason,
+        )
+
+    def get_latest_learning_node_execution(
+        self,
+        user: UserAccount,
+        learning_path_id: str,
+        node_id: str,
+    ) -> LearningNodeExecutionAttemptRead | None:
+        path = self.chat_repository.get_learning_path(learning_path_id)
+        if path is None or not self._can_view_learning_path(user, path):
+            return None
+        attempt = self.chat_repository.get_latest_user_learning_node_execution_attempt(
+            user_id=user.id,
+            learning_path_id=learning_path_id,
+            node_id=node_id,
+        )
+        if attempt is None:
+            return None
+        return self._build_learning_node_execution_attempt_read(attempt)
+
+    def list_learning_node_execution_attempts(
+        self,
+        user: UserAccount,
+        learning_path_id: str,
+        node_id: str,
+        *,
+        limit: int = 20,
+    ) -> LearningNodeExecutionAttemptListResponse | None:
+        path = self.chat_repository.get_learning_path(learning_path_id)
+        if path is None or not self._can_view_learning_path(user, path):
+            return None
+        attempts = self.chat_repository.list_user_learning_node_execution_attempts(
+            user_id=user.id,
+            learning_path_id=learning_path_id,
+            node_id=node_id,
+            limit=max(1, min(limit, 100)),
+        )
+        return LearningNodeExecutionAttemptListResponse(
+            attempts=[self._build_learning_node_execution_attempt_read(item) for item in attempts]
+        )
+
+    def submit_learning_node_execution(
+        self,
+        user: UserAccount,
+        learning_path_id: str,
+        node_id: str,
+        attempt_id: str,
+        payload: LearningNodeExecutionSubmitRequest,
+    ) -> LearningNodeExecutionAttemptRead | None:
+        path = self.chat_repository.get_learning_path(learning_path_id)
+        if path is None or not self._can_view_learning_path(user, path):
+            return None
+        attempt = self.node_execution_service.submit_responses(
+            user=user,
+            attempt_id=attempt_id,
+            responses=dict(payload.responses or {}),
+        )
+        if attempt is None:
+            return None
+        if attempt.learning_path_id != learning_path_id or attempt.node_id != node_id:
+            raise ValueError("Attempt does not belong to this node")
+        return self._build_learning_node_execution_attempt_read(attempt)
+
+    def upload_learning_node_execution_files(
+        self,
+        user: UserAccount,
+        learning_path_id: str,
+        node_id: str,
+        attempt_id: str,
+        uploads: list[tuple[str, bytes]],
+        *,
+        task_id: str | None = None,
+    ) -> LearningNodeExecutionAttemptRead | None:
+        path = self.chat_repository.get_learning_path(learning_path_id)
+        if path is None or not self._can_view_learning_path(user, path):
+            return None
+        attempt = self.chat_repository.get_user_learning_node_execution_attempt(user_id=user.id, attempt_id=attempt_id)
+        if attempt is None:
+            return None
+        if attempt.learning_path_id != learning_path_id or attempt.node_id != node_id:
+            raise ValueError("Attempt does not belong to this node")
+        if attempt.status not in {"in_progress"}:
+            raise ValueError("Only active execution attempts can receive uploads")
+        if not uploads:
+            raise ValueError("No files uploaded")
+        if len(uploads) > self.settings.attachment_max_files:
+            raise ValueError(f"Maximum {self.settings.attachment_max_files} files allowed per upload")
+
+        max_bytes = self.settings.upload_max_file_size_mb * 1024 * 1024
+        validated: list[tuple[str, bytes]] = []
+        for file_name, content in uploads:
+            safe_name = Path(file_name).name
+            if safe_name != file_name:
+                raise ValueError(f"Invalid file name: {file_name}")
+            suffix = Path(safe_name).suffix.lower()
+            if suffix not in self.settings.attachment_allowed_extension_set:
+                raise ValueError(f"Unsupported attachment type: {suffix or safe_name}")
+            if len(content) > max_bytes:
+                raise ValueError(f"File exceeds {self.settings.upload_max_file_size_mb} MB limit: {safe_name}")
+            validated.append((safe_name, content))
+
+        processed = self.attachment_client.process_files(validated)
+        if not processed:
+            raise ValueError("Uploaded files could not be processed")
+
+        uploaded_artifacts: list[dict[str, object]] = []
+        for idx, (safe_name, content) in enumerate(validated):
+            processed_item = processed[idx] if idx < len(processed) else {}
+            uploaded_asset = self.content_asset_service.upload_bytes(
+                content=content,
+                file_name=safe_name,
+                asset_kind="downloadable_file",
+                media_kind="downloadable_file",
+                source_type="learner_submission_artifact",
+                scope_type="user_attempt",
+                owner_user_id=user.id,
+                learning_path_id=learning_path_id,
+                node_id=node_id,
+                uploaded_by_user_id=user.id,
+                attempt_id=attempt_id,
+                file_category="submission",
+                caption="Learner uploaded submission artifact",
+                description=f"Submission upload for node {node_id}",
+                reuse_existing=False,
+            )
+            uploaded_artifacts.append(
+                {
+                    "task_id": (task_id or "").strip() or None,
+                    "asset_id": uploaded_asset.asset.id,
+                    "file_name": safe_name,
+                    "stored_relative_path": uploaded_asset.asset.storage_key,
+                    "bucket_name": uploaded_asset.asset.bucket_name,
+                    "size_bytes": len(content),
+                    "type": str(processed_item.get("type") or ""),
+                    "extraction_method": str(processed_item.get("extraction_method") or ""),
+                    "quality": dict(processed_item.get("quality") or {}),
+                    "extracted_content": str(processed_item.get("content") or ""),
+                    "uploaded_at": datetime.now(timezone.utc).isoformat(),
+                }
+            )
+        updated = self.node_execution_service.submit_responses(
+            user=user,
+            attempt_id=attempt_id,
+            responses={"uploaded_artifacts": uploaded_artifacts},
+        )
+        if updated is None:
+            return None
+        return self._build_learning_node_execution_attempt_read(updated)
+
+    def complete_learning_node_execution(
+        self,
+        user: UserAccount,
+        learning_path_id: str,
+        node_id: str,
+        attempt_id: str,
+    ) -> LearningNodeExecutionCompleteResponse | None:
+        path = self.chat_repository.get_learning_path(learning_path_id)
+        if path is None or not self._can_view_learning_path(user, path):
+            return None
+        definition = self._course_definition_from_learning_path(path)
+        node_by_id = {node.id: node for node in definition.nodes}
+        node = node_by_id.get(node_id)
+        if node is None:
+            raise ValueError(f"Unknown node_id '{node_id}'")
+        result = self.node_execution_service.complete(
+            user=user,
+            learning_path=path,
+            definition=definition,
+            node=node,
+            attempt_id=attempt_id,
+        )
+        if result is None:
+            return None
+        self.chat_repository.sync_learning_node_session_completion(
+            user_id=user.id,
+            learning_path_id=learning_path_id,
+            node_id=node_id,
+            node_progress_status=result.node_status,
+        )
+        self._safe_recompute_personalization_layers(user=user, reasons=["learning_node_progress_updated", "ksa_updated"])
+        self._safe_recompute_user_node_contexts_for_available_nodes(
+            user=user,
+            path=path,
+            reason="node_execution_completed",
+        )
+        return LearningNodeExecutionCompleteResponse(
+            attempt=self._build_learning_node_execution_attempt_read(result.attempt),
+            node_completed=result.node_completed,
+            node_status=result.node_status,
+        )
+
+    def list_learning_node_assets(
+        self,
+        user: UserAccount,
+        learning_path_id: str,
+        node_id: str,
+    ) -> ContentAssetListResponse:
+        path = self.chat_repository.get_learning_path(learning_path_id)
+        if path is None or not self._can_view_learning_path(user, path):
+            raise PermissionError("You do not have permission to view this learning path")
+        assets = self.chat_repository.list_content_assets(
+            learning_path_id=learning_path_id,
+            node_id=node_id,
+            limit=500,
+        )
+        visible = [item for item in assets if self.content_asset_service.can_read_asset(user=user, learning_path=path, asset=item)]
+        return ContentAssetListResponse(assets=[self._build_content_asset_read(item) for item in visible])
+
+    def upload_learning_node_asset(
+        self,
+        user: UserAccount,
+        learning_path_id: str,
+        node_id: str,
+        *,
+        file_name: str,
+        content: bytes,
+        asset_kind: str,
+        media_kind: str | None = None,
+        download_label: str | None = None,
+        caption: str | None = None,
+        description: str | None = None,
+        alt_text: str | None = None,
+        file_category: str | None = None,
+    ) -> ContentAssetUploadResponse:
+        path = self.chat_repository.get_learning_path(learning_path_id)
+        if path is None:
+            raise ValueError("Learning path not found")
+        self._ensure_learning_path_edit_allowed(user, path)
+        definition = self._course_definition_from_learning_path(path)
+        node = next((item for item in definition.nodes if item.id == node_id), None)
+        if node is None:
+            raise ValueError("Node not found in learning path")
+        uploaded = self.content_asset_service.upload_bytes(
+            content=content,
+            file_name=file_name,
+            asset_kind=asset_kind,
+            media_kind=media_kind or asset_kind,
+            source_type="seeded_course_asset",
+            scope_type="course",
+            owner_user_id=path.owner_user_id,
+            learning_path_id=learning_path_id,
+            node_id=node_id,
+            chapter_id=node.chapter_id,
+            branch_id=node.branch_id,
+            uploaded_by_user_id=user.id,
+            download_label=download_label,
+            caption=caption,
+            description=description,
+            alt_text=alt_text,
+            file_category=file_category,
+            reuse_existing=False,
+        )
+        return ContentAssetUploadResponse(asset=self._build_content_asset_read(uploaded.asset))
+
+    def get_content_asset(self, user: UserAccount, asset_id: str) -> ContentAssetRead:
+        asset = self.chat_repository.get_content_asset(asset_id=asset_id)
+        if asset is None:
+            raise ValueError("Asset not found")
+        path = self.chat_repository.get_learning_path(asset.learning_path_id) if asset.learning_path_id else None
+        if not self.content_asset_service.can_read_asset(user=user, learning_path=path, asset=asset):
+            raise PermissionError("You do not have permission to access this asset")
+        return self._build_content_asset_read(asset)
 
     def update_learning_node_progress(
         self,
@@ -1700,7 +2490,21 @@ class RetrieverAppService:
 
         refreshed = self.chat_repository.get_learning_path(path.id)
         assert refreshed is not None
-        return self._build_learning_path_read(user, refreshed)
+        refreshed_read = self._build_learning_path_read(user, refreshed)
+        node_status_after_update = str(refreshed_read.node_progress.get(node_id, "available"))
+        self.chat_repository.sync_learning_node_session_completion(
+            user_id=user.id,
+            learning_path_id=path.id,
+            node_id=node_id,
+            node_progress_status=node_status_after_update,
+        )
+        self._safe_recompute_personalization_layers(user=user, reasons=["learning_node_progress_updated"])
+        self._safe_recompute_user_node_contexts_for_available_nodes(
+            user=user,
+            path=refreshed,
+            reason="learning_node_progress_updated",
+        )
+        return refreshed_read
 
     def update_learning_path(
         self,
@@ -1723,6 +2527,8 @@ class RetrieverAppService:
             fields["difficulty_level"] = fields["difficulty_level"].strip()
         fields.pop("allowed_file_ids", None)
         fields.pop("allowed_tags", None)
+        current_schema_version = int(record.schema_version or 2)
+        fields["schema_version"] = current_schema_version + 1
         updated = self.chat_repository.update_learning_path(learning_path_id, fields)
         if updated is None:
             return None
@@ -1733,6 +2539,10 @@ class RetrieverAppService:
         refreshed = self.chat_repository.get_learning_path(updated.id)
         assert refreshed is not None
         self._write_course_file_for_path(refreshed.id)
+        self._safe_invalidate_user_node_contexts_for_path(
+            learning_path_id=refreshed.id,
+            reason="learning_path_updated",
+        )
         return self._build_learning_path_read(user, refreshed)
 
     def delete_learning_path(self, user: UserAccount, learning_path_id: str) -> LearningPathRead | None:
@@ -1744,6 +2554,10 @@ class RetrieverAppService:
         if deleted is None:
             return None
         self._delete_course_file_for_course_id(learning_path_id)
+        self._safe_invalidate_user_node_contexts_for_path(
+            learning_path_id=learning_path_id,
+            reason="learning_path_deleted",
+        )
         return self._build_learning_path_read(user, deleted)
 
     def create_learning_module(
@@ -1768,6 +2582,10 @@ class RetrieverAppService:
         )
         self._sync_skilltree_from_linear_path(learning_path_id)
         self._write_course_file_for_path(learning_path_id)
+        self._safe_invalidate_user_node_contexts_for_path(
+            learning_path_id=learning_path_id,
+            reason="module_created",
+        )
         return self._build_learning_module_read(module, lessons=[])
 
     def update_learning_module(
@@ -1798,6 +2616,10 @@ class RetrieverAppService:
         lessons = self.chat_repository.list_learning_lessons(updated.id)
         self._sync_skilltree_from_linear_path(learning_path.id)
         self._write_course_file_for_path(learning_path.id)
+        self._safe_invalidate_user_node_contexts_for_path(
+            learning_path_id=learning_path.id,
+            reason="module_updated",
+        )
         return self._build_learning_module_read(updated, lessons=lessons)
 
     def delete_learning_module(self, user: UserAccount, module_id: str) -> LearningModuleRead | None:
@@ -1813,6 +2635,10 @@ class RetrieverAppService:
             return None
         self._sync_skilltree_from_linear_path(learning_path.id)
         self._write_course_file_for_path(learning_path.id)
+        self._safe_invalidate_user_node_contexts_for_path(
+            learning_path_id=learning_path.id,
+            reason="module_deleted",
+        )
         return self._build_learning_module_read(deleted, lessons=[])
 
     def reorder_learning_modules(
@@ -1833,6 +2659,10 @@ class RetrieverAppService:
         }
         self._sync_skilltree_from_linear_path(learning_path_id)
         self._write_course_file_for_path(learning_path_id)
+        self._safe_invalidate_user_node_contexts_for_path(
+            learning_path_id=learning_path_id,
+            reason="modules_reordered",
+        )
         return [self._build_learning_module_read(module, lessons=lessons_by_module.get(module.id, [])) for module in modules]
 
     def create_learning_lesson(
@@ -1861,6 +2691,10 @@ class RetrieverAppService:
         )
         self._sync_skilltree_from_linear_path(learning_path.id)
         self._write_course_file_for_path(learning_path.id)
+        self._safe_invalidate_user_node_contexts_for_path(
+            learning_path_id=learning_path.id,
+            reason="lesson_created",
+        )
         return self._build_learning_lesson_read(lesson)
 
     def update_learning_lesson(
@@ -1893,6 +2727,10 @@ class RetrieverAppService:
             return None
         self._sync_skilltree_from_linear_path(learning_path.id)
         self._write_course_file_for_path(learning_path.id)
+        self._safe_invalidate_user_node_contexts_for_path(
+            learning_path_id=learning_path.id,
+            reason="lesson_updated",
+        )
         return self._build_learning_lesson_read(updated)
 
     def delete_learning_lesson(self, user: UserAccount, lesson_id: str) -> LearningLessonRead | None:
@@ -1911,6 +2749,10 @@ class RetrieverAppService:
             return None
         self._sync_skilltree_from_linear_path(learning_path.id)
         self._write_course_file_for_path(learning_path.id)
+        self._safe_invalidate_user_node_contexts_for_path(
+            learning_path_id=learning_path.id,
+            reason="lesson_deleted",
+        )
         return self._build_learning_lesson_read(deleted)
 
     def reorder_learning_lessons(
@@ -1930,6 +2772,10 @@ class RetrieverAppService:
         lessons = self.chat_repository.reorder_learning_lessons(module_id, lesson_orders)
         self._sync_skilltree_from_linear_path(learning_path.id)
         self._write_course_file_for_path(learning_path.id)
+        self._safe_invalidate_user_node_contexts_for_path(
+            learning_path_id=learning_path.id,
+            reason="lessons_reordered",
+        )
         return [self._build_learning_lesson_read(lesson) for lesson in lessons]
 
     def send_message(
@@ -2343,6 +3189,134 @@ class RetrieverAppService:
             return sorted(items, key=lambda item: (0 if item.scope == "user" else 1, item.title.lower()))
         return sorted(items, key=lambda item: item.updated_at, reverse=True)
 
+    def _list_course_attachment_records(self, learning_path_id: str):
+        return self.chat_repository.list_content_assets(
+            learning_path_id=learning_path_id,
+            source_type="course_attachment",
+            scope_type="course",
+            limit=2000,
+        )
+
+    def _normalize_attachment_file_name(self, value: str) -> str:
+        name = Path(str(value or "")).name.strip().lower()
+        return re.sub(r"\s+", "-", name)
+
+    def _collect_attachment_reference_names(self, payload: object) -> set[str]:
+        references: set[str] = set()
+        key_hints = {
+            "file",
+            "file_name",
+            "filename",
+            "download",
+            "downloads",
+            "attachment",
+            "attachments",
+            "image",
+            "images",
+            "video",
+            "videos",
+            "media",
+            "resource",
+            "resources",
+            "download_files",
+            "supporting_files",
+            "template_file",
+        }
+
+        def _looks_like_file_name(value: str) -> bool:
+            text = value.strip()
+            if not text or "/" in text or "\\" in text:
+                return False
+            return bool(re.fullmatch(r"[A-Za-z0-9._ -]+\.[A-Za-z0-9]{2,8}", text))
+
+        def _visit(value: object, parent_key: str | None = None) -> None:
+            if isinstance(value, dict):
+                for key, child in value.items():
+                    _visit(child, str(key))
+                return
+            if isinstance(value, list):
+                for child in value:
+                    _visit(child, parent_key)
+                return
+            if isinstance(value, str):
+                key = (parent_key or "").strip().lower()
+                if key in key_hints and _looks_like_file_name(value):
+                    references.add(self._normalize_attachment_file_name(value))
+
+        _visit(payload)
+        return references
+
+    def _resolve_course_attachment_reference_issues(
+        self,
+        payload: object,
+        attachments: list,
+    ) -> list[CourseAttachmentReferenceIssueRead]:
+        requested = self._collect_attachment_reference_names(payload)
+        if not requested:
+            return []
+        index: dict[str, int] = {}
+        for item in attachments:
+            key = self._normalize_attachment_file_name(item.normalized_filename or item.original_filename or "")
+            if not key:
+                continue
+            index[key] = index.get(key, 0) + 1
+        issues: list[CourseAttachmentReferenceIssueRead] = []
+        for file_name in sorted(requested):
+            match_count = index.get(file_name, 0)
+            if match_count == 0:
+                issues.append(
+                    CourseAttachmentReferenceIssueRead(
+                        file_name=file_name,
+                        issue="missing",
+                        details="No course attachment with this file name exists.",
+                    )
+                )
+            elif match_count > 1:
+                issues.append(
+                    CourseAttachmentReferenceIssueRead(
+                        file_name=file_name,
+                        issue="ambiguous",
+                        details=f"{match_count} attachments share this file name.",
+                    )
+                )
+        return issues
+
+    def _build_course_attachment_catalog_for_payload(
+        self,
+        *,
+        learning_path_id: str,
+        payload: object,
+    ) -> dict[str, dict[str, object]]:
+        requested = self._collect_attachment_reference_names(payload)
+        if not requested:
+            return {}
+        records = self._list_course_attachment_records(learning_path_id)
+        by_name: dict[str, list] = {}
+        for record in records:
+            key = self._normalize_attachment_file_name(record.normalized_filename or record.original_filename or "")
+            if not key:
+                continue
+            by_name.setdefault(key, []).append(record)
+        catalog: dict[str, dict[str, object]] = {}
+        for file_name in sorted(requested):
+            matches = by_name.get(file_name, [])
+            if len(matches) != 1:
+                continue
+            record = matches[0]
+            catalog[file_name] = {
+                "asset_id": record.id,
+                "file_name": record.normalized_filename or record.original_filename or file_name,
+                "asset_kind": record.asset_kind,
+                "media_kind": record.media_kind,
+                "mime_type": record.mime_type or "",
+                "download_label": record.download_label or "",
+                "url": self.content_asset_service.presigned_url(record),
+                "storage_key": record.storage_key,
+                "bucket_name": record.bucket_name,
+                "size_bytes": int(record.size_bytes or 0),
+            }
+        return catalog
+
     def _parse_course_scope_mapping(self, raw_value: str | None) -> dict[str, str]:
         if not raw_value:
             return {}
@@ -2377,6 +3351,10 @@ class RetrieverAppService:
                     target_learning_path_id=target_course_id,
                 )
                 self._write_course_file_for_path(upserted.id)
+                self._safe_invalidate_user_node_contexts_for_path(
+                    learning_path_id=upserted.id,
+                    reason="course_bootstrap_sync",
+                )
                 canonical_file_name = self.course_file_parser.safe_file_name(upserted.id, upserted.title)
                 if path.name != canonical_file_name:
                     path.unlink(missing_ok=True)
@@ -2440,6 +3418,10 @@ class RetrieverAppService:
         self.chat_repository.replace_learning_path_structure(existing.id, modules_payload)
         self.chat_repository.replace_learning_path_allowed_files(existing.id, definition.allowed_file_ids)
         self.chat_repository.replace_learning_path_allowed_tags(existing.id, definition.allowed_tags)
+        self._safe_invalidate_user_node_contexts_for_path(
+            learning_path_id=existing.id,
+            reason="course_definition_upserted",
+        )
         refreshed = self.chat_repository.get_learning_path(existing.id)
         if refreshed is None:
             raise ValueError(f"Learning path not found after upsert: {existing.id}")
@@ -3453,6 +4435,10 @@ class RetrieverAppService:
         allowed_files = self.chat_repository.list_learning_path_allowed_files(path.id)
         allowed_tags = self.chat_repository.list_learning_path_allowed_tags(path.id)
         progress_entries = self.chat_repository.list_user_learning_node_progress(user_id=user.id, learning_path_id=path.id)
+        node_attempt_counts = self.chat_repository.count_user_learning_node_execution_attempts_by_node(
+            user_id=user.id,
+            learning_path_id=path.id,
+        )
         progress_map = {entry.node_id: entry.status for entry in progress_entries}
         runtime = build_skilltree_runtime(definition, persisted_node_progress=progress_map)
         return LearningPathRead(
@@ -3575,6 +4561,7 @@ class RetrieverAppService:
             visual_layout=dict(definition.visual_layout or {}),
             metadata=dict(definition.metadata or {}),
             node_progress=dict(runtime.node_progress),
+            node_attempt_counts=dict(node_attempt_counts),
             node_runtime={
                 node_id: SkilltreeNodeRuntimeRead(
                     blocked_by_all=list(item.blocked_by_all),
@@ -3649,6 +4636,225 @@ class RetrieverAppService:
             updated_at=path.updated_at,
         )
 
+    def _build_learning_node_session_read(
+        self,
+        user: UserAccount,
+        record: LearningNodeSession,
+    ) -> LearningNodeSessionRead | None:
+        path = self.chat_repository.get_learning_path(record.learning_path_id)
+        if path is None or not self._can_view_learning_path(user, path):
+            return None
+        definition = self._course_definition_from_learning_path(path)
+        node = next((item for item in definition.nodes if item.id == record.node_id), None)
+        if node is None:
+            return None
+        if node.type == "unlock_gate":
+            return None
+        status = str(record.status or "created")
+        if status not in {"created", "in_progress", "completed"}:
+            status = "created"
+        return LearningNodeSessionRead(
+            id=record.id,
+            user_id=record.user_id,
+            learning_path_id=record.learning_path_id,
+            node_id=record.node_id,
+            node_type=record.node_type,
+            route_path=f"/learning/nodes/{record.id}",
+            node_title=node.title,
+            course_title=path.title,
+            status=status,
+            is_archived=bool(record.is_archived),
+            is_deleted=bool(record.is_deleted),
+            is_completed=status == "completed",
+            started_at=record.started_at,
+            completed_at=record.completed_at,
+            last_opened_at=record.last_opened_at,
+            created_at=record.created_at,
+            updated_at=record.updated_at,
+        )
+
+    def _build_learning_node_context_read(self, record) -> LearningNodeContextRead:
+        return LearningNodeContextRead(
+            user_id=record.user_id,
+            learning_path_id=record.learning_path_id,
+            node_id=record.node_id,
+            node_type=record.node_type,
+            generation_reason=record.generation_reason,
+            source_hash=record.source_hash,
+            generated_at=record.generated_at,
+            context=dict(record.context_json or {}),
+            course_context=dict(record.course_context_json or {}),
+            chapter_branch_context=dict(record.chapter_branch_context_json or {}),
+            prior_node_context=dict(record.prior_node_context_json or {}),
+            target_node_context=dict(record.target_node_context_json or {}),
+            next_node_context=dict(record.next_node_context_json or {}),
+            ksa_context=dict(record.ksa_context_json or {}),
+            readiness_context=dict(record.readiness_context_json or {}),
+            derived_assumptions=dict(record.derived_assumptions_json or {}),
+            created_at=record.created_at,
+            updated_at=record.updated_at,
+        )
+
+    def _build_learning_node_execution_attempt_sections_progress(self, package: dict[str, object], responses: dict[str, object]) -> dict[str, object]:
+        mc_questions = list(package.get("mc_questions") or [])
+        mc_answers = dict(responses.get("mc_answers") or {})
+        free_text_questions = list(
+            package.get("free_text_questions")
+            or package.get("free_text_quiz_questions")
+            or package.get("review_prompts")
+            or []
+        )
+        free_text_answers = dict(responses.get("free_text_answers") or {})
+        scenario_questions = list(package.get("scenario_practice_questions") or package.get("tasks") or [])
+        scenario_answers = dict(responses.get("scenario_answers") or responses.get("task_answers") or {})
+        drill_rounds = list(package.get("deep_dive_rounds") or package.get("rounds") or [])
+        deep_dive_answers = dict(responses.get("deep_dive_answers") or {})
+        uploaded_artifacts = list(responses.get("uploaded_artifacts") or [])
+        phase_flow = dict(package.get("phase_flow") or {})
+        phase_progress = dict(responses.get("phase_progress") or {})
+        recap_steps = list(dict(package.get("recap_structure") or {}).get("mini_recaps") or [])
+        return {
+            "mc": {"total": len(mc_questions), "answered": len(mc_answers)},
+            "free_text": {"total": len(free_text_questions), "answered": len(free_text_answers)},
+            "scenario": {"total": len(scenario_questions), "answered": len(scenario_answers)},
+            "drill": {"total_rounds": len(drill_rounds), "answered_items": len(deep_dive_answers)},
+            "uploads": {"count": len(uploaded_artifacts)},
+            "learning_phases": {
+                "total": len(phase_flow),
+                "completed": len([key for key in phase_progress.keys() if key in phase_flow]),
+            },
+            "review_steps": {
+                "total": len(recap_steps),
+                "acknowledged": len(list(responses.get("recap_step_feedback") or [])),
+            },
+        }
+
+    def _collect_asset_ids_from_payload(self, value: object) -> list[str]:
+        ids: list[str] = []
+        if isinstance(value, dict):
+            asset_id = str(value.get("asset_id") or "").strip()
+            if asset_id:
+                ids.append(asset_id)
+            for child in value.values():
+                ids.extend(self._collect_asset_ids_from_payload(child))
+            return ids
+        if isinstance(value, list):
+            for child in value:
+                ids.extend(self._collect_asset_ids_from_payload(child))
+            return ids
+        return ids
+
+    def _build_learning_node_execution_attempt_read(self, record) -> LearningNodeExecutionAttemptRead:
+        package = dict(record.package_json or {})
+        responses = dict(record.responses_json or {})
+        result = dict(record.result_json or {})
+        asset_ids = self._collect_asset_ids_from_payload(package) + self._collect_asset_ids_from_payload(responses)
+        if asset_ids:
+            package["asset_catalog"] = self.content_asset_service.resolve_asset_catalog(asset_ids)
+        attachment_catalog = self._build_course_attachment_catalog_for_payload(
+            learning_path_id=record.learning_path_id,
+            payload=package,
+        )
+        if attachment_catalog:
+            package["course_attachment_catalog"] = attachment_catalog
+        status = str(record.status or "")
+        is_active = bool(status in {"in_progress", "generating"} and record.completed_at is None)
+        is_resumable = bool(status == "in_progress" and record.completed_at is None)
+        return LearningNodeExecutionAttemptRead(
+            attempt_id=record.id,
+            user_id=record.user_id,
+            learning_path_id=record.learning_path_id,
+            node_id=record.node_id,
+            node_type=record.node_type,
+            status=record.status,
+            generation_reason=record.generation_reason,
+            package=package,
+            responses=responses,
+            result=result,
+            context_snapshot=dict(record.context_snapshot_json or {}),
+            source_node_window=list(record.source_node_window_json or []),
+            is_resumable=is_resumable,
+            is_active=is_active,
+            attempt_closed_reason=str(result.get("attempt_closed_reason") or "").strip() or None,
+            package_sections_progress=self._build_learning_node_execution_attempt_sections_progress(package, responses),
+            started_at=record.started_at,
+            completed_at=record.completed_at,
+            created_at=record.created_at,
+            updated_at=record.updated_at,
+        )
+
+    def _build_content_asset_read(self, record) -> ContentAssetRead:
+        return ContentAssetRead(
+            asset_id=record.id,
+            asset_kind=record.asset_kind,
+            media_kind=record.media_kind,
+            source_type=record.source_type,
+            scope_type=record.scope_type,
+            learning_path_id=record.learning_path_id,
+            node_id=record.node_id,
+            attempt_id=record.attempt_id,
+            bucket_name=record.bucket_name,
+            storage_key=record.storage_key,
+            mime_type=record.mime_type or "",
+            file_name=record.normalized_filename or record.original_filename or "",
+            file_extension=record.file_extension or "",
+            size_bytes=int(record.size_bytes or 0),
+            checksum_sha256=record.checksum_sha256 or "",
+            download_label=record.download_label or "",
+            file_category=record.file_category or "",
+            caption=record.caption or "",
+            description=record.description or "",
+            alt_text=record.alt_text or "",
+            width=record.width,
+            height=record.height,
+            duration_seconds=record.duration_seconds,
+            asset_status=record.asset_status or "ready",
+            metadata=dict(record.metadata_json or {}),
+            url=self.content_asset_service.presigned_url(record),
+            created_at=record.created_at,
+            updated_at=record.updated_at,
+        )
+
+    def _run_async_node_generation_job(
+        self,
+        user_id: int,
+        learning_path_id: str,
+        node_id: str,
+        attempt_id: str,
+        node_context: dict[str, object],
+    ) -> None:
+        try:
+            user = self.chat_repository.get_user_by_id(user_id)
+            path = self.chat_repository.get_learning_path(learning_path_id)
+            if user is None or path is None:
+                logger.warning(
+                    "Async node generation skipped due to missing user/path",
+                    extra={"user_id": user_id, "learning_path_id": learning_path_id, "node_id": node_id, "attempt_id": attempt_id},
+                )
+                return
+            definition = self._course_definition_from_learning_path(path)
+            node_by_id = {item.id: item for item in definition.nodes}
+            node = node_by_id.get(node_id)
+            if node is None:
+                logger.warning(
+                    "Async node generation skipped due to missing node",
+                    extra={"learning_path_id": learning_path_id, "node_id": node_id, "attempt_id": attempt_id},
+                )
+                return
+            self.node_execution_service.finalize_started_attempt_generation(
+                user=user,
+                attempt_id=attempt_id,
+                learning_path=path,
+                definition=definition,
+                node=node,
+                node_context=dict(node_context or {}),
+            )
+        except Exception:
+            logger.exception(
+                "Async node generation job failed",
+                extra={"user_id": user_id, "learning_path_id": learning_path_id, "node_id": node_id, "attempt_id": attempt_id},
+            )
+
     def _resolve_assistant_mode(self, assistant_mode: str | None) -> str:
         mode = (assistant_mode or self.settings.default_assistant_mode).strip().lower()
         if not mode:
@@ -3656,6 +4862,159 @@ class RetrieverAppService:
         if mode not in self.settings.available_assistant_modes:
             raise ValueError(f"Unsupported assistant mode: {mode}")
         return mode
+
+    def _can_recompute_personalization_layers(self) -> bool:
+        required_methods = {
+            "get_user_learning_profile",
+            "get_user_learning_preference",
+            "list_user_learning_goals",
+            "list_settings",
+            "get_latest_user_diagnostic_attempt",
+            "get_user_diagnostic_result",
+            "list_user_diagnostic_attempts",
+            "get_user_ksa_profile",
+            "get_latest_user_ksa_drill_attempt",
+            "list_user_ksa_drill_attempts",
+            "list_learning_state_checks",
+            "list_explanation_feedback",
+            "get_user_learning_personalization_layers",
+            "upsert_user_learning_personalization_layers",
+        }
+        return all(callable(getattr(self.chat_repository, method_name, None)) for method_name in required_methods)
+
+    def _can_compute_user_node_contexts(self) -> bool:
+        required_methods = {
+            "list_user_learning_node_progress",
+            "upsert_user_learning_node_context",
+            "list_user_learning_node_contexts",
+            "delete_user_learning_node_contexts_for_path",
+            "get_user_ksa_profile",
+            "list_user_ksa_drill_attempts",
+        }
+        return all(callable(getattr(self.chat_repository, method_name, None)) for method_name in required_methods)
+
+    def _safe_recompute_user_node_context(
+        self,
+        *,
+        user: UserAccount,
+        path: LearningPath,
+        definition: CourseDefinition,
+        node_id: str,
+        reason: str,
+    ):
+        if not self._can_compute_user_node_contexts():
+            return None
+        try:
+            return self.node_context_engine.recompute_for_node(
+                user_id=user.id,
+                learning_path=path,
+                definition=definition,
+                node_id=node_id,
+                generation_reason=reason,
+            )
+        except Exception as error:
+            logger.warning(
+                "node context recompute failed for user=%s path=%s node=%s reason=%s error=%s",
+                user.id,
+                path.id,
+                node_id,
+                reason,
+                error,
+            )
+            return None
+
+    def _safe_recompute_user_node_contexts_for_available_nodes(
+        self,
+        *,
+        user: UserAccount,
+        path: LearningPath,
+        reason: str,
+    ) -> None:
+        if not self._can_compute_user_node_contexts():
+            return
+        try:
+            definition = self._course_definition_from_learning_path(path)
+            self.node_context_engine.recompute_for_available_nodes(
+                user_id=user.id,
+                learning_path=path,
+                definition=definition,
+                generation_reason=reason,
+            )
+        except Exception as error:
+            logger.warning(
+                "node context recompute for available nodes failed user=%s path=%s reason=%s error=%s",
+                user.id,
+                path.id,
+                reason,
+                error,
+            )
+
+    def _safe_recompute_user_node_contexts_for_user(self, *, user: UserAccount, reason: str) -> None:
+        if not self._can_compute_user_node_contexts():
+            return
+        paths = self.chat_repository.list_learning_paths(user_id=user.id, role=user.role)
+        for path in paths:
+            if not self._can_view_learning_path(user, path):
+                continue
+            self._safe_recompute_user_node_contexts_for_available_nodes(user=user, path=path, reason=reason)
+
+    def _safe_invalidate_user_node_contexts_for_path(self, *, learning_path_id: str, reason: str) -> None:
+        if not self._can_compute_user_node_contexts():
+            return
+        try:
+            deleted = self.chat_repository.delete_user_learning_node_contexts_for_path(learning_path_id=learning_path_id)
+            logger.info(
+                "node context invalidated for path=%s reason=%s deleted_rows=%s",
+                learning_path_id,
+                reason,
+                deleted,
+            )
+        except Exception as error:
+            logger.warning(
+                "node context invalidation failed for path=%s reason=%s error=%s",
+                learning_path_id,
+                reason,
+                error,
+            )
+
+    def _safe_recompute_personalization_layers(self, *, user: UserAccount, reasons: list[str], force_all: bool = False) -> None:
+        if not self._can_recompute_personalization_layers():
+            return
+        try:
+            self.personalization_layer_engine.recompute_for_reasons(
+                user=user,
+                reasons=reasons,
+                force_all=force_all,
+            )
+        except Exception as error:
+            logger.warning("personalization layer recompute failed for user=%s reasons=%s error=%s", user.id, reasons, error)
+
+    def _build_personalization_layers_read(self, record) -> PersonalizationLayersRead:
+        if record is None:
+            return PersonalizationLayersRead(user_id=0)
+        trace = dict(getattr(record, "source_to_group_trace_json", {}) or {})
+        groups: list[PersonalizationLayerGroupRead] = []
+        for group_id in GROUP_ORDER:
+            snapshot_col, rules_col, updated_at_col = GROUP_COLUMNS[group_id]
+            group_trace = dict(trace.get(group_id) or {})
+            groups.append(
+                PersonalizationLayerGroupRead(
+                    group_id=group_id,
+                    snapshot=dict(getattr(record, snapshot_col, {}) or {}),
+                    resolved_rules=dict(getattr(record, rules_col, {}) or {}),
+                    updated_at=getattr(record, updated_at_col, None),
+                    last_reasons=[str(item) for item in list(group_trace.get("last_reasons") or [])],
+                )
+            )
+        return PersonalizationLayersRead(
+            user_id=int(getattr(record, "user_id", 0) or 0),
+            rule_engine_version=str(getattr(record, "rule_engine_version", "v1") or "v1"),
+            last_source_hashes={str(key): str(value) for key, value in dict(getattr(record, "last_source_hashes_json", {}) or {}).items()},
+            source_to_group_trace=trace,
+            change_log=list(getattr(record, "change_log_json", []) or []),
+            layers=groups,
+            updated_at=getattr(record, "updated_at", None),
+        )
 
     def _load_runtime_settings(self, user: UserAccount) -> None:
         stored_values = self._load_stored_setting_values(user)
@@ -3840,6 +5199,7 @@ def build_retriever_app_service(
         ),
         library_manager=LibraryManager(data_dir=data_dir, processor=library_processor, settings=settings),
         attachment_client=AttachmentProcessingClient(settings.embedder_service_url),
+        content_asset_service=ContentAssetService(chat_repository, settings),
         auth_manager=auth_manager,
         settings=settings,
     )

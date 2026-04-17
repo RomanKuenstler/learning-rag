@@ -353,6 +353,7 @@ export type LearningPath = {
   visual_layout: Record<string, unknown>;
   metadata: Record<string, unknown>;
   node_progress: Record<string, SkilltreeNodeProgressState | string>;
+  node_attempt_counts: Record<string, number>;
   node_runtime: Record<string, SkilltreeNodeRuntime>;
   chapter_progress: SkilltreeChapterProgress[];
   branch_progress: SkilltreeBranchProgress[];
@@ -368,6 +369,76 @@ export type LearningPath = {
 
 export type LearningPathResponse = {
   paths: LearningPath[];
+};
+
+export type LearningNodeSessionStatus = "created" | "in_progress" | "completed";
+
+export type LearningNodeSession = {
+  id: string;
+  user_id: number;
+  learning_path_id: string;
+  node_id: string;
+  node_type: SkilltreeNodeType | string;
+  route_path: string;
+  node_title: string;
+  course_title: string;
+  status: LearningNodeSessionStatus;
+  is_archived: boolean;
+  is_deleted: boolean;
+  is_completed: boolean;
+  started_at: string | null;
+  completed_at: string | null;
+  last_opened_at: string | null;
+  created_at: string;
+  updated_at: string;
+};
+
+export type LearningNodeSessionListResponse = {
+  sessions: LearningNodeSession[];
+};
+
+export type LearningNodeSessionDownload = {
+  session: LearningNodeSession;
+  message: string;
+};
+
+export type LearningNodeExecutionAttempt = {
+  attempt_id: string;
+  user_id: number;
+  learning_path_id: string;
+  node_id: string;
+  node_type: SkilltreeNodeType | string;
+  status: string;
+  generation_reason: string;
+  package: Record<string, unknown>;
+  responses: Record<string, unknown>;
+  result: Record<string, unknown>;
+  context_snapshot: Record<string, unknown>;
+  source_node_window: string[];
+  is_resumable: boolean;
+  is_active: boolean;
+  attempt_closed_reason: string | null;
+  package_sections_progress: Record<string, unknown>;
+  started_at: string;
+  completed_at: string | null;
+  created_at: string;
+  updated_at: string;
+};
+
+export type LearningNodeExecutionStartResponse = {
+  attempt: LearningNodeExecutionAttempt;
+  auto_completed: boolean;
+  completion_reason: string;
+};
+
+export type LearningNodeExecutionCompleteResponse = {
+  attempt: LearningNodeExecutionAttempt;
+  node_completed: boolean;
+  node_status: string;
+};
+
+export type LearningNodeExecutionAttemptListResponse = {
+  attempts: LearningNodeExecutionAttempt[];
 };
 
 export type CourseSort =
@@ -589,6 +660,61 @@ export type CourseImportResponse = {
 export type CourseTemplateResponse = {
   file_name: string;
   template: Record<string, unknown>;
+};
+
+export type CourseAttachmentReferenceIssue = {
+  file_name: string;
+  issue: "missing" | "ambiguous";
+  details: string;
+};
+
+export type ContentAsset = {
+  asset_id: string;
+  asset_kind: string;
+  media_kind: string;
+  source_type: string;
+  scope_type: string;
+  learning_path_id: string | null;
+  node_id: string | null;
+  attempt_id: string | null;
+  bucket_name: string;
+  storage_key: string;
+  mime_type: string;
+  file_name: string;
+  file_extension: string;
+  size_bytes: number;
+  checksum_sha256: string;
+  download_label: string;
+  file_category: string;
+  caption: string;
+  description: string;
+  alt_text: string;
+  width: number | null;
+  height: number | null;
+  duration_seconds: number | null;
+  asset_status: string;
+  metadata: Record<string, unknown>;
+  url: string;
+  created_at: string;
+  updated_at: string;
+};
+
+export type ContentAssetListResponse = {
+  assets: ContentAsset[];
+};
+
+export type CourseEditorData = {
+  learning_path_id: string;
+  title: string;
+  description: string;
+  scope: LearningPathScope | string;
+  status: LearningPathStatus | string;
+  can_edit: boolean;
+  raw_json: string;
+  attachments: ContentAsset[];
+  attachment_reference_issues: CourseAttachmentReferenceIssue[];
+  created_at: string;
+  updated_at: string;
 };
 
 export type LearningPreferencePace = "slow" | "balanced" | "fast";

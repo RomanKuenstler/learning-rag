@@ -227,6 +227,7 @@ class LearningPathRead(BaseModel):
     visual_layout: dict[str, object] = Field(default_factory=dict)
     metadata: dict[str, object] = Field(default_factory=dict)
     node_progress: dict[str, str] = Field(default_factory=dict)
+    node_attempt_counts: dict[str, int] = Field(default_factory=dict)
     node_runtime: dict[str, SkilltreeNodeRuntimeRead] = Field(default_factory=dict)
     chapter_progress: list[SkilltreeChapterProgressRead] = Field(default_factory=list)
     branch_progress: list[SkilltreeBranchProgressRead] = Field(default_factory=list)
@@ -322,6 +323,166 @@ class LearningNodeProgressUpdateRequest(BaseModel):
         "reset",
     ]
     evidence: dict[str, object] = Field(default_factory=dict)
+
+
+class LearningNodeSessionRead(BaseModel):
+    id: str
+    user_id: int
+    learning_path_id: str
+    node_id: str
+    node_type: str = ""
+    route_path: str = ""
+    node_title: str = ""
+    course_title: str = ""
+    status: Literal["created", "in_progress", "completed"] = "created"
+    is_archived: bool = False
+    is_deleted: bool = False
+    is_completed: bool = False
+    started_at: datetime | None = None
+    completed_at: datetime | None = None
+    last_opened_at: datetime | None = None
+    created_at: datetime
+    updated_at: datetime
+
+
+class LearningNodeSessionListResponse(BaseModel):
+    sessions: list[LearningNodeSessionRead] = Field(default_factory=list)
+
+
+class LearningNodeSessionDownloadRead(BaseModel):
+    session: LearningNodeSessionRead
+    message: str = "Download is not implemented yet."
+
+
+class LearningNodeContextRead(BaseModel):
+    user_id: int
+    learning_path_id: str
+    node_id: str
+    node_type: str = ""
+    generation_reason: str = ""
+    source_hash: str = ""
+    generated_at: datetime | None = None
+    course_context: dict[str, object] = Field(default_factory=dict)
+    chapter_branch_context: dict[str, object] = Field(default_factory=dict)
+    prior_node_context: dict[str, object] = Field(default_factory=dict)
+    target_node_context: dict[str, object] = Field(default_factory=dict)
+    next_node_context: dict[str, object] = Field(default_factory=dict)
+    ksa_context: dict[str, object] = Field(default_factory=dict)
+    readiness_context: dict[str, object] = Field(default_factory=dict)
+    derived_assumptions: dict[str, object] = Field(default_factory=dict)
+    context: dict[str, object] = Field(default_factory=dict)
+    created_at: datetime
+    updated_at: datetime
+
+
+class LearningNodeContextListResponse(BaseModel):
+    contexts: list[LearningNodeContextRead] = Field(default_factory=list)
+
+
+class LearningNodeExecutionAttemptRead(BaseModel):
+    attempt_id: str
+    user_id: int
+    learning_path_id: str
+    node_id: str
+    node_type: str
+    status: str
+    generation_reason: str
+    package: dict[str, object] = Field(default_factory=dict)
+    responses: dict[str, object] = Field(default_factory=dict)
+    result: dict[str, object] = Field(default_factory=dict)
+    context_snapshot: dict[str, object] = Field(default_factory=dict)
+    source_node_window: list[str] = Field(default_factory=list)
+    is_resumable: bool = False
+    is_active: bool = False
+    attempt_closed_reason: str | None = None
+    package_sections_progress: dict[str, object] = Field(default_factory=dict)
+    started_at: datetime
+    completed_at: datetime | None = None
+    created_at: datetime
+    updated_at: datetime
+
+
+class LearningNodeExecutionStartResponse(BaseModel):
+    attempt: LearningNodeExecutionAttemptRead
+    auto_completed: bool = False
+    completion_reason: str = ""
+
+
+class LearningNodeExecutionSubmitRequest(BaseModel):
+    responses: dict[str, object] = Field(default_factory=dict)
+
+
+class LearningNodeExecutionCompleteResponse(BaseModel):
+    attempt: LearningNodeExecutionAttemptRead
+    node_completed: bool = False
+    node_status: str = "in_progress"
+
+
+class LearningNodeExecutionAttemptListResponse(BaseModel):
+    attempts: list[LearningNodeExecutionAttemptRead] = Field(default_factory=list)
+
+
+class ContentAssetRead(BaseModel):
+    asset_id: str
+    asset_kind: str
+    media_kind: str
+    source_type: str
+    scope_type: str
+    learning_path_id: str | None = None
+    node_id: str | None = None
+    attempt_id: str | None = None
+    bucket_name: str
+    storage_key: str
+    mime_type: str = ""
+    file_name: str = ""
+    file_extension: str = ""
+    size_bytes: int = 0
+    checksum_sha256: str = ""
+    download_label: str = ""
+    file_category: str = ""
+    caption: str = ""
+    description: str = ""
+    alt_text: str = ""
+    width: int | None = None
+    height: int | None = None
+    duration_seconds: float | None = None
+    asset_status: str = "ready"
+    metadata: dict[str, object] = Field(default_factory=dict)
+    url: str = ""
+    created_at: datetime
+    updated_at: datetime
+
+
+class ContentAssetListResponse(BaseModel):
+    assets: list[ContentAssetRead] = Field(default_factory=list)
+
+
+class ContentAssetUploadResponse(BaseModel):
+    asset: ContentAssetRead
+
+
+class CourseAttachmentReferenceIssueRead(BaseModel):
+    file_name: str
+    issue: Literal["missing", "ambiguous"]
+    details: str = ""
+
+
+class CourseEditorRead(BaseModel):
+    learning_path_id: str
+    title: str
+    description: str = ""
+    scope: str
+    status: str
+    can_edit: bool = False
+    raw_json: str
+    attachments: list[ContentAssetRead] = Field(default_factory=list)
+    attachment_reference_issues: list[CourseAttachmentReferenceIssueRead] = Field(default_factory=list)
+    created_at: datetime
+    updated_at: datetime
+
+
+class CourseEditorUpdateRequest(BaseModel):
+    raw_json: str = Field(min_length=2)
 
 
 class LearningModuleCreateRequest(BaseModel):

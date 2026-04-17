@@ -12,6 +12,7 @@ from sqlalchemy import create_engine
 
 from services.common.migrations import run_migrations
 from services.common.models import (
+    ContentAsset,
     ChatMessage,
     ChatFileSetting,
     ChatSession,
@@ -27,6 +28,7 @@ from services.common.models import (
     GPTChatSession,
     GPTRecord,
     LearningLesson,
+    LearningNodeSession,
     LearningModule,
     LearningStateCheck,
     LearningPath,
@@ -37,10 +39,13 @@ from services.common.models import (
     SettingRecord,
     UserLearningGoal,
     UserLearningNodeProgress,
+    UserLearningNodeContext,
+    UserLearningNodeExecutionAttempt,
     UserKSAAssessmentAttempt,
     UserKSADrillAttempt,
     UserKSAProfile,
     UserLearningPreference,
+    UserLearningPersonalizationLayer,
     UserLearningProfile,
     UserAccount,
     UserFileSetting,
@@ -1336,6 +1341,25 @@ class PostgresClient:
             session.refresh(record)
             return record
 
+    def delete_user_ksa_drill_attempt(
+        self,
+        *,
+        user_id: int,
+        attempt_id: str,
+    ) -> bool:
+        with self.session() as session:
+            record = session.scalar(
+                select(UserKSADrillAttempt).where(
+                    UserKSADrillAttempt.id == attempt_id,
+                    UserKSADrillAttempt.user_id == user_id,
+                )
+            )
+            if record is None:
+                return False
+            session.delete(record)
+            session.flush()
+            return True
+
     def get_user_by_id(self, user_id: int) -> UserAccount | None:
         with self.session() as session:
             return session.get(UserAccount, user_id)
@@ -1818,6 +1842,456 @@ class PostgresClient:
                 )
             )
 
+    def list_learning_node_sessions(
+        self,
+        *,
+        user_id: int,
+        archived: bool = False,
+        include_deleted: bool = False,
+    ) -> list[LearningNodeSession]:
+        with self.session() as session:
+            stmt = (
+                select(LearningNodeSession)
+                .where(
+                    LearningNodeSession.user_id == user_id,
+                    LearningNodeSession.is_archived.is_(archived),
+                )
+                .order_by(LearningNodeSession.updated_at.desc(), LearningNodeSession.created_at.desc())
+            )
+            if not include_deleted:
+                stmt = stmt.where(LearningNodeSession.is_deleted.is_(False))
+            rows = session.scalars(stmt)
+            return list(rows)
+
+    def get_learning_node_session(
+        self,
+        *,
+        user_id: int,
+        session_id: str,
+    ) -> LearningNodeSession | None:
+        with self.session() as session:
+            return session.scalar(
+                select(LearningNodeSession).where(
+                    LearningNodeSession.id == session_id,
+                    LearningNodeSession.user_id == user_id,
+                )
+            )
+
+    def get_learning_node_session_by_node(
+        self,
+        *,
+        user_id: int,
+        learning_path_id: str,
+        node_id: str,
+    ) -> LearningNodeSession | None:
+        with self.session() as session:
+            return session.scalar(
+                select(LearningNodeSession).where(
+                    LearningNodeSession.user_id == user_id,
+                    LearningNodeSession.learning_path_id == learning_path_id,
+                    LearningNodeSession.node_id == node_id,
+                )
+            )
+
+    def ensure_learning_node_session(
+        self,
+        *,
+        user_id: int,
+        learning_path_id: str,
+        node_id: str,
+        node_type: str,
+        route_path: str,
+    ) -> LearningNodeSession:
+        with self.session() as session:
+            record = session.scalar(
+                select(LearningNodeSession).where(
+                    LearningNodeSession.user_id == user_id,
+                    LearningNodeSession.learning_path_id == learning_path_id,
+                    LearningNodeSession.node_id == node_id,
+                )
+            )
+            now = datetime.now(timezone.utc)
+            if record is None:
+                record = LearningNodeSession(
+                    user_id=user_id,
+                    learning_path_id=learning_path_id,
+                    node_id=node_id,
+                    node_type=node_type,
+                    route_path=route_path,
+                    status="created",
+                    is_archived=False,
+                    is_deleted=False,
+                )
+                session.add(record)
+            else:
+                record.node_type = node_type
+                record.route_path = route_path
+                record.is_archived = False
+                record.is_deleted = False
+                record.updated_at = now
+            session.flush()
+            session.refresh(record)
+            return record
+
+    def set_learning_node_session_archived(
+        self,
+        *,
+        user_id: int,
+        session_id: str,
+        is_archived: bool,
+    ) -> LearningNodeSession | None:
+        with self.session() as session:
+            record = session.scalar(
+                select(LearningNodeSession).where(
+                    LearningNodeSession.id == session_id,
+                    LearningNodeSession.user_id == user_id,
+                )
+            )
+            if record is None:
+                return None
+            record.is_archived = is_archived
+            record.updated_at = datetime.now(timezone.utc)
+            session.flush()
+            session.refresh(record)
+            return record
+
+    def set_learning_node_session_deleted(
+        self,
+        *,
+        user_id: int,
+        session_id: str,
+        is_deleted: bool,
+    ) -> LearningNodeSession | None:
+        with self.session() as session:
+            record = session.scalar(
+                select(LearningNodeSession).where(
+                    LearningNodeSession.id == session_id,
+                    LearningNodeSession.user_id == user_id,
+                )
+            )
+            if record is None:
+                return None
+            record.is_deleted = is_deleted
+            if is_deleted:
+                record.is_archived = False
+            record.updated_at = datetime.now(timezone.utc)
+            session.flush()
+            session.refresh(record)
+            return record
+
+    def mark_learning_node_session_opened(
+        self,
+        *,
+        user_id: int,
+        session_id: str,
+    ) -> LearningNodeSession | None:
+        with self.session() as session:
+            record = session.scalar(
+                select(LearningNodeSession).where(
+                    LearningNodeSession.id == session_id,
+                    LearningNodeSession.user_id == user_id,
+                )
+            )
+            if record is None:
+                return None
+            now = datetime.now(timezone.utc)
+            record.last_opened_at = now
+            if record.status == "created":
+                record.status = "in_progress"
+                if record.started_at is None:
+                    record.started_at = now
+            record.updated_at = now
+            session.flush()
+            session.refresh(record)
+            return record
+
+    def sync_learning_node_session_completion(
+        self,
+        *,
+        user_id: int,
+        learning_path_id: str,
+        node_id: str,
+        node_progress_status: str,
+    ) -> LearningNodeSession | None:
+        with self.session() as session:
+            record = session.scalar(
+                select(LearningNodeSession).where(
+                    LearningNodeSession.user_id == user_id,
+                    LearningNodeSession.learning_path_id == learning_path_id,
+                    LearningNodeSession.node_id == node_id,
+                )
+            )
+            if record is None:
+                return None
+            now = datetime.now(timezone.utc)
+            completed_statuses = {"completed", "mastered"}
+            if node_progress_status in completed_statuses:
+                record.status = "completed"
+                if record.started_at is None:
+                    record.started_at = now
+                record.completed_at = now
+            else:
+                if record.status == "completed":
+                    record.status = "in_progress"
+                record.completed_at = None
+            record.updated_at = now
+            session.flush()
+            session.refresh(record)
+            return record
+
+    def get_user_learning_node_context(
+        self,
+        *,
+        user_id: int,
+        learning_path_id: str,
+        node_id: str,
+    ) -> UserLearningNodeContext | None:
+        with self.session() as session:
+            return session.scalar(
+                select(UserLearningNodeContext).where(
+                    UserLearningNodeContext.user_id == user_id,
+                    UserLearningNodeContext.learning_path_id == learning_path_id,
+                    UserLearningNodeContext.node_id == node_id,
+                )
+            )
+
+    def list_user_learning_node_contexts(
+        self,
+        *,
+        user_id: int,
+        learning_path_id: str | None = None,
+    ) -> list[UserLearningNodeContext]:
+        with self.session() as session:
+            stmt = select(UserLearningNodeContext).where(UserLearningNodeContext.user_id == user_id)
+            if learning_path_id is not None:
+                stmt = stmt.where(UserLearningNodeContext.learning_path_id == learning_path_id)
+            rows = session.scalars(
+                stmt.order_by(
+                    UserLearningNodeContext.learning_path_id.asc(),
+                    UserLearningNodeContext.updated_at.desc(),
+                    UserLearningNodeContext.node_id.asc(),
+                )
+            )
+            return list(rows)
+
+    def upsert_user_learning_node_context(
+        self,
+        *,
+        user_id: int,
+        learning_path_id: str,
+        node_id: str,
+        fields: dict[str, object],
+    ) -> UserLearningNodeContext:
+        with self.session() as session:
+            record = session.scalar(
+                select(UserLearningNodeContext).where(
+                    UserLearningNodeContext.user_id == user_id,
+                    UserLearningNodeContext.learning_path_id == learning_path_id,
+                    UserLearningNodeContext.node_id == node_id,
+                )
+            )
+            now = datetime.now(timezone.utc)
+            if record is None:
+                payload = {
+                    **fields,
+                    "user_id": user_id,
+                    "learning_path_id": learning_path_id,
+                    "node_id": node_id,
+                }
+                payload.setdefault("generated_at", now)
+                record = UserLearningNodeContext(**payload)
+                session.add(record)
+            else:
+                for key, value in fields.items():
+                    setattr(record, key, value)
+                if "generated_at" not in fields:
+                    record.generated_at = now
+                record.updated_at = now
+            session.flush()
+            session.refresh(record)
+            return record
+
+    def delete_user_learning_node_contexts_for_path(self, *, learning_path_id: str) -> int:
+        with self.session() as session:
+            result = session.execute(
+                delete(UserLearningNodeContext).where(UserLearningNodeContext.learning_path_id == learning_path_id)
+            )
+            return int(result.rowcount or 0)
+
+    def create_user_learning_node_execution_attempt(self, payload: dict[str, object]) -> UserLearningNodeExecutionAttempt:
+        with self.session() as session:
+            record = UserLearningNodeExecutionAttempt(**payload)
+            session.add(record)
+            session.flush()
+            session.refresh(record)
+            return record
+
+    def get_user_learning_node_execution_attempt(
+        self,
+        *,
+        user_id: int,
+        attempt_id: str,
+    ) -> UserLearningNodeExecutionAttempt | None:
+        with self.session() as session:
+            return session.scalar(
+                select(UserLearningNodeExecutionAttempt).where(
+                    UserLearningNodeExecutionAttempt.id == attempt_id,
+                    UserLearningNodeExecutionAttempt.user_id == user_id,
+                )
+            )
+
+    def get_latest_user_learning_node_execution_attempt(
+        self,
+        *,
+        user_id: int,
+        learning_path_id: str,
+        node_id: str,
+    ) -> UserLearningNodeExecutionAttempt | None:
+        with self.session() as session:
+            return session.scalar(
+                select(UserLearningNodeExecutionAttempt)
+                .where(
+                    UserLearningNodeExecutionAttempt.user_id == user_id,
+                    UserLearningNodeExecutionAttempt.learning_path_id == learning_path_id,
+                    UserLearningNodeExecutionAttempt.node_id == node_id,
+                )
+                .order_by(UserLearningNodeExecutionAttempt.created_at.desc())
+                .limit(1)
+            )
+
+    def list_user_learning_node_execution_attempts(
+        self,
+        *,
+        user_id: int,
+        learning_path_id: str,
+        node_id: str,
+        limit: int = 20,
+    ) -> list[UserLearningNodeExecutionAttempt]:
+        with self.session() as session:
+            rows = session.scalars(
+                select(UserLearningNodeExecutionAttempt)
+                .where(
+                    UserLearningNodeExecutionAttempt.user_id == user_id,
+                    UserLearningNodeExecutionAttempt.learning_path_id == learning_path_id,
+                    UserLearningNodeExecutionAttempt.node_id == node_id,
+                )
+                .order_by(UserLearningNodeExecutionAttempt.created_at.desc())
+                .limit(limit)
+            )
+            return list(rows)
+
+    def count_user_learning_node_execution_attempts_by_node(
+        self,
+        *,
+        user_id: int,
+        learning_path_id: str,
+    ) -> dict[str, int]:
+        with self.session() as session:
+            rows = session.execute(
+                select(
+                    UserLearningNodeExecutionAttempt.node_id,
+                    func.count(UserLearningNodeExecutionAttempt.id),
+                )
+                .where(
+                    UserLearningNodeExecutionAttempt.user_id == user_id,
+                    UserLearningNodeExecutionAttempt.learning_path_id == learning_path_id,
+                )
+                .group_by(UserLearningNodeExecutionAttempt.node_id)
+            ).all()
+            return {str(node_id): int(total) for node_id, total in rows}
+
+    def update_user_learning_node_execution_attempt(
+        self,
+        *,
+        user_id: int,
+        attempt_id: str,
+        fields: dict[str, object],
+    ) -> UserLearningNodeExecutionAttempt | None:
+        with self.session() as session:
+            record = session.scalar(
+                select(UserLearningNodeExecutionAttempt).where(
+                    UserLearningNodeExecutionAttempt.id == attempt_id,
+                    UserLearningNodeExecutionAttempt.user_id == user_id,
+                )
+            )
+            if record is None:
+                return None
+            for key, value in fields.items():
+                setattr(record, key, value)
+            record.updated_at = datetime.now(timezone.utc)
+            session.flush()
+            session.refresh(record)
+            return record
+
+    def create_content_asset(self, payload: dict[str, object]) -> ContentAsset:
+        with self.session() as session:
+            record = ContentAsset(**payload)
+            session.add(record)
+            session.flush()
+            session.refresh(record)
+            return record
+
+    def get_content_asset(self, *, asset_id: str) -> ContentAsset | None:
+        with self.session() as session:
+            return session.scalar(select(ContentAsset).where(ContentAsset.id == asset_id))
+
+    def get_content_asset_by_storage_key(self, *, bucket_name: str, storage_key: str) -> ContentAsset | None:
+        with self.session() as session:
+            return session.scalar(
+                select(ContentAsset).where(ContentAsset.bucket_name == bucket_name, ContentAsset.storage_key == storage_key)
+            )
+
+    def list_content_assets(
+        self,
+        *,
+        learning_path_id: str | None = None,
+        node_id: str | None = None,
+        attempt_id: str | None = None,
+        source_type: str | None = None,
+        scope_type: str | None = None,
+        owner_user_id: int | None = None,
+        asset_kinds: list[str] | None = None,
+        limit: int = 200,
+    ) -> list[ContentAsset]:
+        with self.session() as session:
+            stmt = select(ContentAsset)
+            if learning_path_id is not None:
+                stmt = stmt.where(ContentAsset.learning_path_id == learning_path_id)
+            if node_id is not None:
+                stmt = stmt.where(ContentAsset.node_id == node_id)
+            if attempt_id is not None:
+                stmt = stmt.where(ContentAsset.attempt_id == attempt_id)
+            if source_type is not None:
+                stmt = stmt.where(ContentAsset.source_type == source_type)
+            if scope_type is not None:
+                stmt = stmt.where(ContentAsset.scope_type == scope_type)
+            if owner_user_id is not None:
+                stmt = stmt.where(ContentAsset.owner_user_id == owner_user_id)
+            if asset_kinds:
+                stmt = stmt.where(ContentAsset.asset_kind.in_(asset_kinds))
+            rows = session.scalars(stmt.order_by(ContentAsset.updated_at.desc()).limit(limit))
+            return list(rows)
+
+    def list_content_assets_by_ids(self, *, asset_ids: list[str]) -> list[ContentAsset]:
+        deduped = [asset_id for asset_id in dict.fromkeys(asset_ids) if asset_id]
+        if not deduped:
+            return []
+        with self.session() as session:
+            rows = session.scalars(select(ContentAsset).where(ContentAsset.id.in_(deduped)))
+            return list(rows)
+
+    def update_content_asset(self, *, asset_id: str, fields: dict[str, object]) -> ContentAsset | None:
+        with self.session() as session:
+            record = session.scalar(select(ContentAsset).where(ContentAsset.id == asset_id))
+            if record is None:
+                return None
+            for key, value in fields.items():
+                setattr(record, key, value)
+            record.updated_at = datetime.now(timezone.utc)
+            session.flush()
+            session.refresh(record)
+            return record
+
     def get_diagnostic_definition(self, diagnostic_type: str) -> DiagnosticDefinition | None:
         with self.session() as session:
             return session.scalar(
@@ -2137,6 +2611,47 @@ class PostgresClient:
         with self.session() as session:
             record = ExplanationFeedback(**payload)
             session.add(record)
+            session.flush()
+            session.refresh(record)
+            return record
+
+    def list_explanation_feedback(self, *, user_id: int, limit: int = 20) -> list[ExplanationFeedback]:
+        with self.session() as session:
+            rows = session.scalars(
+                select(ExplanationFeedback)
+                .where(ExplanationFeedback.user_id == user_id)
+                .order_by(ExplanationFeedback.created_at.desc())
+                .limit(limit)
+            )
+            return list(rows)
+
+    def get_user_learning_personalization_layers(self, *, user_id: int) -> UserLearningPersonalizationLayer | None:
+        with self.session() as session:
+            return session.scalar(
+                select(UserLearningPersonalizationLayer).where(UserLearningPersonalizationLayer.user_id == user_id)
+            )
+
+    def upsert_user_learning_personalization_layers(
+        self,
+        *,
+        user_id: int,
+        fields: dict[str, object],
+    ) -> UserLearningPersonalizationLayer:
+        with self.session() as session:
+            record = session.scalar(
+                select(UserLearningPersonalizationLayer).where(UserLearningPersonalizationLayer.user_id == user_id)
+            )
+            now = datetime.now(timezone.utc)
+            if record is None:
+                payload = {**fields, "user_id": user_id}
+                record = UserLearningPersonalizationLayer(**payload)
+                if "change_log_json" not in payload:
+                    record.change_log_json = []
+                session.add(record)
+            else:
+                for key, value in fields.items():
+                    setattr(record, key, value)
+                record.updated_at = now
             session.flush()
             session.refresh(record)
             return record

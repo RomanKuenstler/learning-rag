@@ -64,6 +64,97 @@ Future learning chat support is prepared through:
 - `chats.chat_type` (`normal|gpt|learning`)
 - `chats.learning_path_id` nullable foreign key
 
+## Learning Node Session Model
+
+A dedicated, non-chat learning session entity is now used for node-specific learning routes:
+
+- table: `learning_node_sessions`
+- uniqueness: one row per `(user_id, learning_path_id, node_id)`
+- key fields:
+  - `status` (`created|in_progress|completed`)
+  - `is_archived`
+  - `is_deleted` (soft-delete / hidden from sidebar)
+  - `started_at`, `completed_at`, `last_opened_at`
+  - timestamps (`created_at`, `updated_at`)
+
+This keeps node-session lifecycle separate from:
+
+- normal chats
+- GPT chats
+
+Lifecycle integration:
+
+- node Start/Continue ensures or reactivates the existing learning-node session
+- initial learning-node route open keeps session in `created` in this phase
+- node-progress updates (`completed|mastered`) synchronize session status to `completed`
+- soft-delete hides from active sidebar but keeps DB row restorable
+- `unlock_gate` nodes are excluded from learning-node session creation/list rendering
+
+## User Node Context Generation Layer
+
+A reusable node-context engine was added in:
+
+- `services/retriever/services/node_context.py`
+
+Responsibilities:
+
+- load graph structure for a course/node
+- resolve prior dependency completion and covered-topic summaries
+- resolve target node metadata and immediate successor lookahead
+- match node-relevant KSA profile/drill data
+- infer structured readiness context
+- persist grouped context snapshots for reuse
+
+Persistence + access:
+
+- ORM model/table: `UserLearningNodeContext` / `user_learning_node_contexts`
+- repository/postgres upsert/list/get/delete methods
+- API reads:
+  - `GET /api/learning-paths/{learning_path_id}/nodes/{node_id}/context`
+  - `GET /api/learning-paths/{learning_path_id}/node-contexts/available`
+
+Recompute strategy:
+
+- targeted recompute on node progress updates
+- user-wide available-node recompute on KSA updates
+- path-level invalidation when skilltree structure changes
+
+Current non-goal:
+
+- this layer does not execute node-type teaching logic yet; it only prepares structured context for later execution stages.
+
+## Node Execution Services Layer
+
+A dedicated node execution module is available in:
+
+- `services/retriever/services/node_execution.py`
+
+It implements modular execution logic for:
+
+- `assessment_hook`
+- `quiz`
+- `practice`
+- `checkpoint`
+- `capstone`
+- `unlock_gate`
+- `milestone`
+
+Key architecture points:
+
+- runtime generation is on-demand (at node start), not pre-generated
+- generated artifacts and results are persisted (`user_learning_node_execution_attempts`)
+- execution consumes persisted user node context + current KSA/profile state
+- start flow is resumable by default and supports repeat attempts via `force_new_attempt=true`
+- completion updates flow back into node progress and KSA profile refinement
+- upload-capable tasks persist artifact references and extracted summaries on the attempt payload
+- checkpoint/capstone scoring combines deterministic MC scoring, LLM rubric scoring, and KSA drill scoring
+- milestone auto-completion from execution start now synchronizes learning-node session completion state
+- unlock-gate auto-completion is enforced in course-load flows when structural/threshold requirements are satisfied
+
+Current non-goal:
+
+- execution services for `learning_unit` and `review`.
+
 ## Course File Bootstrap Layer
 
 Course/path definitions are represented as declarative JSON files in `courses/`.
@@ -230,3 +321,103 @@ Separation intent:
 - initial onboarding assessment and deep-dive drills are separate engines
 - visualization remains top-level radar based for now
 - persistence already supports future node-splitting/shatter visualizations without schema replacement
+
+## Personalization Layer Architecture
+
+A dedicated learning personalization layer engine has been added:
+
+- `services/retriever/services/personalization_layers.py`
+
+Responsibilities:
+
+- collect source data from profile, goals, preferences, diagnostics, KSA, and live adaptation inputs
+- resolve six grouped snapshots
+- compute six resolved rule sets
+- persist grouped outputs and trace metadata
+
+Persistence model:
+
+- `UserLearningPersonalizationLayer` (`user_learning_personalization_layers`)
+
+Integration point:
+
+- `RetrieverAppService` calls targeted recompute after relevant write operations
+- recompute is fail-open (warnings logged, primary learning APIs continue)
+
+Debug access:
+
+- `GET /api/learning-profile/personalization-layers`
+
+## Learning Node Execution Architecture (Plan-First)
+
+`LearningNodeExecutionService` now supports plan-first runtime generation for `learning_unit` and `review`.
+
+Key points:
+
+- generation is on-demand at node start (no pre-generation at import time)
+- package persistence remains in `user_learning_node_execution_attempts`
+- package shape is node-type-specific and includes structured planning artifacts
+- KSA/drill and personalization snapshots are injected as calibration signals
+- resume/repeat semantics stay consistent with existing node execution behavior
+
+Prompt sources:
+
+- node-generation/evaluation prompts are externalized under `prompts/learning-node-*.md`
+- runtime loader reads prompt files directly from disk for easy iteration
+
+## Learning Node Frontend Composition (`learning_unit`/`review`)
+
+`LearningNodePage` now includes a shared lesson-flow renderer for plan-first node packages:
+
+- route: `/learning/nodes/:sessionId`
+- shared top metadata: node title/description + contextual tags (type/chapter/branch/route/required)
+- shared flow shell:
+  - start step + package-driven content steps
+  - top progress bar
+  - scrollable lesson content container
+  - fixed bottom action footer
+- package-to-steps mapping:
+  - `learning_unit` -> `package.mini_topic_lessons`
+  - `review` -> `package.recap_structure.mini_recaps` (with safe fallback)
+- low-risk placeholder interactions are local-only for now:
+  - disabled audio button
+  - explain-again button (no backend action yet)
+  - like/dislike controls (no persistence yet)
+  - assistant-style sources popover reused from `MessageBubble`/`SourcesPanel`
+
+This keeps runtime-package rendering data-driven while remaining compatible with later real-content delivery and feedback integration.
+
+## Course Attachment Resolution Architecture
+
+Course editing now uses a JSON-first model with a dedicated course attachment domain.
+
+### Separation
+
+- storage layer: MinIO object keys
+- metadata layer: `content_assets` (Postgres)
+- authoring references in course JSON: `name.extension` only
+
+### Source typing
+
+Course editor uploads use:
+
+- `source_type = "course_attachment"`
+- `scope_type = "course"`
+
+This keeps course authoring attachments separate from:
+
+- seeded per-node runtime assets (`seeded_course_asset`)
+- learner submission artifacts (`learner_submission_artifact`)
+
+### MinIO key convention
+
+- `courses/<learning_path_id>/attachments/<asset_id>/<filename>`
+
+### Resolution path
+
+1. Course JSON contains a filename reference.
+2. Backend normalizes filename and scopes lookup to the course.
+3. Resolver maps `(learning_path_id, normalized filename)` to one attachment asset.
+4. Backend returns metadata + presigned URL for runtime/frontend renderers.
+
+Ambiguous or missing references are reported explicitly in editor diagnostics and missing references are blocked on save.

@@ -749,11 +749,17 @@ export function KsaPanel({
       .filter((item) => item.status === "completed")
       .slice(0, 12)
       .map((item) => {
+        const resultRecord = (item.result ?? {}) as Record<string, unknown>;
+        const courseNode = (resultRecord.course_node ?? {}) as Record<string, unknown>;
         const topicUpdates = ((item.result ?? {}) as Record<string, unknown>).topic_updates as Record<string, { delta?: number }> | undefined;
         const deltas = topicUpdates ? Object.values(topicUpdates).map((entry) => Number(entry?.delta ?? 0)) : [];
         const totalDelta = deltas.reduce((acc, value) => acc + value, 0);
         const topicKeys = item.selected_topic_keys ?? [];
-        const rounds = (item.rounds ?? []).slice(0, 4);
+        const rounds = item.rounds ?? [];
+        const sourceLabel = String(resultRecord.source_label ?? "").trim();
+        const sourceType = String(resultRecord.source ?? "").trim();
+        const nodeTitle = String(courseNode.node_title ?? "").trim();
+        const isCourseNodeSource = sourceType === "course_node_assessment_hook";
         const badges = rounds.length > 0
           ? rounds.map((round) => `${round.type_combo} - ${round.big_map_subdomain || round.big_map_group}`)
           : topicKeys.map((topicKey) => TOPIC_LABEL_BY_KEY[topicKey] ?? topicKey);
@@ -762,7 +768,9 @@ export function KsaPanel({
           completedAt: item.completed_at,
           topicKeys,
           rounds,
-          badges,
+          badges: isCourseNodeSource
+            ? [`Node: ${nodeTitle || sourceLabel || "Course Node"}`]
+            : badges,
           totalDelta,
         };
       });

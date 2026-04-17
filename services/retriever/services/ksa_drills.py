@@ -441,8 +441,9 @@ def generate_round_archetypes(
             }
         )
 
-    if len(question_set) != 16:
-        raise ValueError("Dynamic drill generation must produce exactly 16 questions")
+    expected_questions = max(1, len(rounds)) * 4
+    if len(question_set) != expected_questions:
+        raise ValueError(f"Dynamic drill generation must produce exactly {expected_questions} questions")
     return {
         "rounds": generated_rounds,
         "question_set": question_set,

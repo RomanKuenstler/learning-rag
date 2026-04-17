@@ -1,5 +1,189 @@
 # Learning And Courses
 
+## Learning Node Session Shell (This Step)
+
+Added a dedicated `Learning Node Session` concept for per-user, per-course-node learning routes.
+
+What this step now provides:
+
+- sidebar section: `Learning Nodes`
+- one reusable session per `(user_id, learning_path_id, node_id)`
+- Start/Continue on a course node now opens a dedicated node session route
+- dedicated route: `/learning/nodes/{session_id}`
+- per-item sidebar menu: `Archive`, `Reset`, `Download`, `Delete`
+
+Status icon semantics in sidebar:
+
+- blue dotted circle: session `created`
+- orange/yellow half-filled circle: session `in_progress`
+- green check-in-circle: session `completed`
+
+Session lifecycle behavior:
+
+- `created` on first node start from the course tree
+- `created` is intentionally preserved on initial page open in this step
+- `in_progress` is reserved for explicit progress-state transitions
+- `in_progress -> completed` when node progress becomes `completed` or `mastered`
+- archived sessions are removed from the active list and available in archive flows
+- delete is soft-delete (`is_deleted=true`), not physical DB deletion
+- soft-deleted sessions are reactivated (same row, no duplicate) when starting that node again from Courses
+
+Step boundary reminder:
+
+- this step only prepares routing/navigation/session lifecycle shell
+- final node content UI/interaction flow remains a later step
+
+## Learning Node Page Rendering (milestone, assessment_hook, quiz, practice, checkpoint, capstone)
+
+The dedicated node page now renders real runtime package data from node execution attempts.
+
+Top section behavior (all supported node types):
+
+- real node title + description from the skilltree definition
+- metadata tags:
+  - node type
+  - chapter id
+  - branch id
+  - required/optional state
+  - KSA tags in `dimension: topic/subtopic` format
+
+Special behaviors:
+
+- `unlock_gate`:
+  - never creates a learning-node session
+  - is filtered out of learning-node session listing/sidebar
+  - has no Start/Continue action in the course node detail panel
+  - is auto-completed in backend when requirements are satisfied
+- `milestone`:
+  - start flow triggers execution and auto-completion when milestone requirements are met
+  - page uses a celebratory layout with certificate placeholder, non-functional download button, scoped node status summary, and non-functional `Next` button
+
+Type-specific rendering from persisted runtime package:
+
+- `assessment_hook`: generated topics + deep-dive style assessment questions (direct page rendering, no manual topic-entry flow)
+- `quiz`: `mc_questions` + `free_text_questions` (or `free_text_quiz_questions`)
+- `practice`: `tasks` (including split textarea + upload surface for upload tasks)
+- `checkpoint`: combined quiz + practice + assessment-hook sections from package fields
+- `capstone`: same combined composition pattern as checkpoint, scaled for larger payloads
+
+Current non-goals in this step:
+
+- no scoring/validation-result UI
+- no finish/celebration flows for non-milestone node types
+- no final validation/result screens for `learning_unit`/`review`
+- no real audio or real explain-again generation for `learning_unit`/`review` yet
+
+`learning_unit` and `review` learning node pages now render as a shared multi-step learning flow:
+
+- steps are driven from persisted runtime package shape:
+  - `learning_unit`: `mini_topic_lessons`
+  - `review`: `recap_structure.mini_recaps` (fallback to `mini_topic_lessons` if needed)
+- each flow prepends a start step showing:
+  - node overview
+  - generated important topics
+  - planned step list
+- each content step provides:
+  - top progress bar
+  - scrollable lesson content area
+  - placeholder technical-term tooltip style (orange dotted underline + hover definition)
+  - dummy media rendering support (`image` and `video`)
+  - bottom interaction row with like/dislike and Sources popover
+- fixed footer actions for these node types:
+  - left: disabled `Audio`, `Explain again`
+  - right: `Back` / `Next`
+
+## User Node Context Foundation (Step)
+
+The backend now persists a per-user, per-course-node context snapshot that is generated before node execution.
+
+Endpoints:
+
+- `GET /api/learning-paths/{learning_path_id}/nodes/{node_id}/context`
+- `GET /api/learning-paths/{learning_path_id}/node-contexts/available`
+
+Persisted sections per node context:
+
+- `course_context`
+- `chapter_branch_context`
+- `prior_node_context`
+- `target_node_context`
+- `next_node_context`
+- `ksa_context`
+- `readiness_context`
+- `derived_assumptions`
+
+Generation behavior:
+
+- supports start nodes and non-start nodes
+- resolves prior dependency chain and completed relevant nodes
+- aggregates covered topics/goals/concepts from completed relevant nodes
+- resolves immediate lookahead (successors + near validations)
+- links node-relevant KSA state and related drill attempts
+- computes structured readiness flags (`likely_ready`, scaffold/review signals, support intensity)
+
+Recompute and invalidation behavior:
+
+- recomputes on node progress updates
+- recomputes on KSA profile/drill updates
+- invalidates cached node contexts for a course when course structure changes
+
+Non-goal in this step:
+
+- no node-type-specific execution/prompt behavior yet (`learning_unit`, `practice`, `quiz`, etc. execution remains separate)
+
+## Node-Type Execution Layer (assessment_hook, quiz, practice, checkpoint, capstone, unlock_gate, milestone)
+
+Node execution is now supported via runtime attempts for:
+
+- `assessment_hook`
+- `quiz`
+- `practice`
+- `checkpoint`
+- `capstone`
+- `unlock_gate`
+- `milestone`
+
+API:
+
+- `POST /api/learning-paths/{learning_path_id}/nodes/{node_id}/execution/start?force_new_attempt=true|false`
+- `GET /api/learning-paths/{learning_path_id}/nodes/{node_id}/execution/latest`
+- `GET /api/learning-paths/{learning_path_id}/nodes/{node_id}/execution/attempts`
+- `PUT /api/learning-paths/{learning_path_id}/nodes/{node_id}/execution/attempts/{attempt_id}/responses`
+- `POST /api/learning-paths/{learning_path_id}/nodes/{node_id}/execution/attempts/{attempt_id}/uploads`
+- `POST /api/learning-paths/{learning_path_id}/nodes/{node_id}/execution/attempts/{attempt_id}/complete`
+
+Runtime generation model:
+
+- runtime-generated node types generate packages only on `start`.
+- generated packages are persisted per user/node attempt.
+- `start` resumes active attempts by default and `force_new_attempt=true` creates a new attempt while preserving history.
+- completion and scoring are persisted on `complete`.
+
+Behavior:
+
+- `assessment_hook`: LLM-assisted selection of 8-16 targeted topics, 4-archetype round generation per topic, full-round completion requirement, result-linked KSA refinement.
+- `quiz`: backward node-window resolution, package with 12 MC/SC + 3 deep-dive rounds + 2 free-text questions, deterministic MC scoring, LLM free-text evaluation, persisted pass/fail result.
+- `practice`: 3-5 mixed application tasks (scenario free-text + upload-based practical tasks), rubric-based evaluation, required-task completion checks, and threshold-based completion.
+- `checkpoint`: mixed validation package with exact composition (10 MC/SC, 3 free-text quiz, 5 scenario practice, 4 deep-dive drill rounds), component-aware scoring, threshold + minimum-component pass logic.
+- `capstone`: larger integrative package with exact composition (24 MC/SC, 8 free-text quiz, 8 scenario practice, 8 deep-dive drill rounds), stricter threshold + component minima.
+- `unlock_gate`: structural requirement checks and auto-completion when requirements are met.
+- `milestone`: structural precursor checks and auto-completion when requirements are met.
+
+KSA-aware calibration:
+
+- generation prompts and deterministic fallbacks use a `difficulty_profile` derived from node context + KSA profile/drill signals.
+- package payloads persist this calibration snapshot for debugging/reproducibility.
+
+Upload-based practice/checkpoint/capstone support:
+
+- direct per-attempt uploads are supported via the execution upload endpoint.
+- uploaded files are stored in `data/uploads/<username>/node-execution/<attempt_id>/...`.
+- attempt responses persist artifact references + extracted summaries (not full binary payloads).
+
+Current non-goal:
+
+- `learning_unit` and `review` node execution logic.
+
 ## Learning Page Tabs
 
 The Learning page now contains:
@@ -219,3 +403,74 @@ At startup, definitions are versioned and persisted. Runtime data remains in:
 - `explanation_feedback`
 
 Scoring remains deterministic and backend-only.
+
+## Personalization Rule Engine Foundation
+
+A new resolver layer now computes stable grouped personalization outputs from existing learner data.
+
+Groups:
+
+1. `identity_context`
+2. `goal_intent`
+3. `declared_preferences`
+4. `diagnosed_learning`
+5. `capability_mastery`
+6. `live_adaptation`
+
+Each group persists:
+
+- normalized grouped snapshot
+- resolved rule set
+- per-group recompute timestamp
+- source hash + reason trace entries
+
+Storage:
+
+- `user_learning_personalization_layers`
+
+This foundation is prompt-free by design. It prepares rule inputs for later prompt/orchestration steps but does not yet generate final teaching prompts.
+
+Recompute triggers are targeted:
+
+- profile/context + personalization settings -> Group 1
+- goals add/update/delete -> Group 2
+- declared learning preferences updates -> Group 3
+- diagnostic completion (LAA/MOA/LTA) -> Group 4
+- KSA assessment/drill completion -> Group 5
+- live checks/feedback/node runtime signals -> Group 6
+
+## Learning Unit And Review Runtime Plans
+
+`learning_unit` and `review` now generate persisted runtime **plan packages** on node start.
+
+`learning_unit` package now includes:
+
+- context summary (course/branch, previous topics, target topics, next topics, KSA/drill signals)
+- learner niveau hypothesis with user-confirmable self-positioning step
+- topic self-explanation step (`high_level` and `why_it_matters`)
+- phase flow (`phase_1`..`phase_6`) with mini-topic lesson plan briefs
+- recap plan briefs (not full final lesson monologues)
+- interaction hooks (`questions`, `explanation_rating`, `reexplanation`, `node_feedback`)
+
+`review` package now includes:
+
+- backward review scope until last `review|checkpoint|milestone|unlock_gate`
+- learning-unit-emphasized topic aggregation
+- content-aware recap summary and recap goals
+- structured recap steps with interaction hooks
+
+For both node types:
+
+- generation happens only on start
+- package persists per user/path/node attempt
+- active attempts are resumable
+- forced new attempts preserve history
+- KSA big map + drill signals are used for calibration
+
+Prompt files used for this layer:
+
+- `prompts/learning-node-learning-unit-topic-extraction.md`
+- `prompts/learning-node-learning-unit-niveau-estimation.md`
+- `prompts/learning-node-learning-unit-lesson-plan-generation.md`
+- `prompts/learning-node-review-topic-aggregation.md`
+- `prompts/learning-node-review-recap-plan-generation.md`

@@ -1,5 +1,273 @@
 # Changelog
 
+## 2026-04-16 19:55 UTC
+
+- Implemented learning-node page UI flow for `learning_unit` and `review` using real runtime package structure:
+  - `learning_unit` step mapping from `package.mini_topic_lessons`
+  - `review` step mapping from `package.recap_structure.mini_recaps` (fallback-safe)
+- Added shared multi-step lesson shell:
+  - start overview step (topics + planned steps)
+  - top progress bar
+  - scrollable lesson content card
+  - fixed bottom action footer
+- Added lesson action/footer controls for `learning_unit`/`review`:
+  - left: disabled `Audio`, `Explain again` placeholder
+  - right: `Back` / `Next` navigation with start-step transition behavior
+- Added in-content assistant-style utility controls:
+  - icon-only like/dislike placeholders
+  - Sources button + popover using existing assistant evidence menu pattern
+- Added placeholder technical-term UI treatment:
+  - orange dotted underline
+  - hover tooltip definition
+- Added dummy media support in lesson content:
+  - placeholder image rendering
+  - video step rendering with short description
+  - DevOps roadmap course flow now includes a deterministic dummy image step in this renderer
+- Updated docs:
+  - `docs/frontend.md`
+  - `docs/learning.md`
+  - `docs/architecture.md`
+  - `docs/testing.md`
+
+## 2026-04-11 23:40 UTC
+
+- Implemented full learning-node page rendering shell for runtime-generated node packages:
+  - top metadata block now uses real node title/description plus tags (`type`, `chapter`, `branch`, `required`, KSA tags)
+  - type-specific page rendering for:
+    - `milestone`
+    - `assessment_hook`
+    - `quiz`
+    - `practice`
+    - `checkpoint`
+    - `capstone`
+- `assessment_hook` page now renders generated topics and deep-dive style questions directly on-page (no manual topic input UI).
+- `quiz` page renders real `mc_questions` + free-text package fields using existing option-card/textarea styles.
+- `practice` page renders mixed task packages, including split textarea/upload layout for upload tasks.
+- `checkpoint`/`capstone` pages compose quiz + practice + assessment sections from persisted package payloads.
+- Updated `milestone` behavior and page:
+  - start flow auto-triggers execution and completion sync when requirements are met
+  - celebratory layout with certificate placeholder, non-functional download, node status summary, and non-functional `Next`.
+- Added `unlock_gate` safeguards:
+  - no learning-node session creation (`POST /session` returns `422` for unlock_gate nodes)
+  - no sidebar session rendering for unlock_gate rows
+  - no Start/Continue action button in Courses node detail panel
+  - backend course-load auto-completion pass for eligible unlock_gate nodes.
+- Updated learning-node sidebar icon visuals:
+  - `created`: blue dotted circle
+  - `in_progress`: orange/yellow half-filled circle
+  - `completed`: green check-in-circle
+- Added test coverage update:
+  - `tests/test_learning_node_sessions_api.py` includes unlock_gate session creation rejection.
+- Updated docs:
+  - `docs/learning.md`
+  - `docs/frontend.md`
+  - `docs/architecture.md`
+  - `docs/testing.md`
+
+## 2026-04-11 22:20 UTC
+
+- Added dedicated learning-node session persistence and API shell for per-user, per-node learning routes.
+- Added migration:
+  - `20260411_0019_learning_node_sessions.py`
+  - new table `learning_node_sessions` with:
+    - unique `(user_id, learning_path_id, node_id)`
+    - lifecycle status (`created|in_progress|completed`)
+    - archive state (`is_archived`)
+    - soft-delete state (`is_deleted`)
+    - route/session metadata and timestamps (`started_at`, `completed_at`, `last_opened_at`)
+- Added backend session APIs:
+  - `GET /api/learning-node-sessions`
+  - `GET /api/learning-node-sessions/archived`
+  - `POST /api/learning-paths/{learning_path_id}/nodes/{node_id}/session`
+  - `GET /api/learning-node-sessions/{session_id}?mark_opened=true|false`
+  - `PATCH /api/learning-node-sessions/{session_id}/archive`
+  - `PATCH /api/learning-node-sessions/{session_id}/unarchive`
+  - `PATCH /api/learning-node-sessions/{session_id}/delete` (soft delete)
+  - `POST /api/learning-node-sessions/{session_id}/reset` (placeholder)
+  - `GET /api/learning-node-sessions/{session_id}/download` (placeholder)
+- Integrated completion sync with node progress updates and node execution completion so session sidebar status updates to `completed` when node is completed/mastered.
+- Added new frontend learning-node route shell:
+  - `/learning/nodes/:sessionId`
+  - page component: `LearningNodePage` (intentional placeholder shell, no final content UI yet)
+- Added sidebar `Learning Nodes` section with per-item status icon states:
+  - blue play (`created`)
+  - orange check-in-circle (`in_progress`)
+  - green check (`completed`)
+- Added per-learning-session sidebar menu actions:
+  - `Archive`
+  - `Reset` (placeholder)
+  - `Download` (placeholder)
+  - `Delete` (soft-delete/hide)
+- Updated Courses node Start/Continue behavior in the node detail panel:
+  - ensures single reusable session for user+node
+  - reactivates soft-deleted sessions instead of creating duplicates
+  - opens dedicated learning-node route
+- Updated Preferences Archive tab to include archived learning-node sessions with unarchive/download/delete actions.
+- Added API tests:
+  - `tests/test_learning_node_sessions_api.py`
+- Updated docs:
+  - `docs/learning.md`
+  - `docs/frontend.md`
+  - `docs/architecture.md`
+  - `docs/testing.md`
+
+## 2026-04-11 18:35 UTC
+
+- Added structured runtime plan generation for `learning_unit` execution:
+  - course/branch + previous/target/next topic context capture
+  - KSA/drill + personalization-informed niveau hypothesis
+  - phase-based node plan (`phase_1`..`phase_6`)
+  - mini-topic lesson briefs and recap plan briefs
+  - persisted interaction hooks for questions, explanation rating, re-explanation, and node feedback
+- Refactored `review` runtime generation to structured recap-plan mode:
+  - bounded backward scope until `review|checkpoint|milestone|unlock_gate`
+  - learning-unit-emphasized topic aggregation
+  - recap goals, mini-recap steps, and summary/takeaway plan persistence
+- Externalized additional generation prompts to `prompts/learning-node-*.md` for easy tuning.
+- Extended node execution tests with `learning_unit` and recap-mode `review` assertions.
+
+## 2026-04-11 01:05 UTC
+
+- Extended node execution runtime layer with full support for:
+  - `practice`
+  - `checkpoint`
+  - `capstone`
+- Added resumable/repeatable start semantics:
+  - `POST /api/learning-paths/{learning_path_id}/nodes/{node_id}/execution/start?force_new_attempt=true|false`
+  - default start resumes active attempt
+  - `force_new_attempt=true` creates a new attempt and supersedes previous active attempt.
+- Added attempt history endpoint:
+  - `GET /api/learning-paths/{learning_path_id}/nodes/{node_id}/execution/attempts`
+- Added per-attempt upload endpoint for practical tasks:
+  - `POST /api/learning-paths/{learning_path_id}/nodes/{node_id}/execution/attempts/{attempt_id}/uploads`
+  - validates extension/size with existing attachment policy
+  - stores binaries under `data/uploads/<username>/node-execution/<attempt_id>/...`
+  - persists artifact references + extracted summaries in attempt responses.
+- Added KSA-aware difficulty calibration profile in runtime package generation for all runtime-generated node types in this layer.
+- Implemented new package/evaluation behaviors:
+  - `practice`: 3-5 mixed scenario/upload tasks with rubric scoring and required-task completion checks.
+  - `checkpoint`: exact mixed package (10 MC/SC, 3 free-text quiz, 5 scenario, 4 deep-dive rounds) with component-aware pass logic.
+  - `capstone`: exact larger mixed package (24 MC/SC, 8 free-text quiz, 8 scenario, 8 deep-dive rounds) with stricter pass logic.
+- Extended execution attempt read schema with:
+  - `is_resumable`
+  - `is_active`
+  - `attempt_closed_reason`
+  - `package_sections_progress`.
+- Updated tests:
+  - `tests/test_node_execution_service.py`
+  - added coverage for practice/checkpoint/capstone package composition and resume/repeat semantics.
+- Updated docs:
+  - `docs/learning.md`
+  - `docs/courses.md`
+  - `docs/architecture.md`
+  - `docs/testing.md`
+
+## 2026-04-10 23:10 UTC
+
+- Implemented node-type execution layer for:
+  - `assessment_hook`
+  - `quiz`
+  - `unlock_gate`
+  - `milestone`
+- Added migration:
+  - `20260410_0018_learning_node_execution_attempts.py`
+  - table `user_learning_node_execution_attempts` for runtime package/response/result persistence.
+- Added execution service:
+  - `services/retriever/services/node_execution.py`
+  - on-demand runtime generation on node start
+  - modular execution/evaluation flow per supported node type.
+- Added API contracts/endpoints:
+  - `POST /api/learning-paths/{learning_path_id}/nodes/{node_id}/execution/start`
+  - `GET /api/learning-paths/{learning_path_id}/nodes/{node_id}/execution/latest`
+  - `PUT /api/learning-paths/{learning_path_id}/nodes/{node_id}/execution/attempts/{attempt_id}/responses`
+  - `POST /api/learning-paths/{learning_path_id}/nodes/{node_id}/execution/attempts/{attempt_id}/complete`
+- Added schema support for node execution attempts/responses/results in `services/retriever/schemas/learning.py`.
+- Extended repository/postgres layer with create/get/list/update methods for node execution attempts.
+- Updated dynamic drill archetype generation to support variable round counts (not fixed to 4 rounds / 16 questions).
+- Added tests:
+  - `tests/test_node_execution_service.py`
+  - validates assessment_hook topic/round generation, quiz package composition, and unlock_gate auto-completion behavior.
+- Updated docs:
+  - `docs/learning.md`
+  - `docs/courses.md`
+  - `docs/architecture.md`
+  - `docs/testing.md`
+
+## 2026-04-10 22:20 UTC
+
+- Added persistent per-user node context foundation for skilltree courses.
+- Added migration:
+  - `20260410_0017_user_learning_node_contexts.py`
+  - table `user_learning_node_contexts` with grouped context snapshots, `source_hash`, generation reason/timestamp, and per-user+path+node uniqueness.
+- Added node-context generation service:
+  - `services/retriever/services/node_context.py`
+  - computes and persists:
+    - `course_context`
+    - `chapter_branch_context`
+    - `prior_node_context`
+    - `target_node_context`
+    - `next_node_context`
+    - `ksa_context`
+    - `readiness_context`
+    - `derived_assumptions`
+- Added repository/postgres support:
+  - get/list/upsert node context rows
+  - invalidate node contexts by learning path.
+- Added API endpoints:
+  - `GET /api/learning-paths/{learning_path_id}/nodes/{node_id}/context`
+  - `GET /api/learning-paths/{learning_path_id}/node-contexts/available`
+- Integrated recomputation/invalidation triggers in `RetrieverAppService`:
+  - recompute available-node contexts after node progress updates
+  - recompute user contexts after KSA assessment/drill completion
+  - invalidate path contexts on learning path/module/lesson/course-structure updates.
+- Added tests:
+  - `tests/test_node_context_engine.py` (start-node and non-start-node context generation, KSA linkage, readiness shape).
+- Updated docs:
+  - `docs/learning.md`
+  - `docs/courses.md`
+  - `docs/architecture.md`
+  - `docs/testing.md`
+
+## 2026-04-10 18:35 UTC
+
+- Added a persisted learning personalization layer foundation with six grouped outputs:
+  - `identity_context`
+  - `goal_intent`
+  - `declared_preferences`
+  - `diagnosed_learning`
+  - `capability_mastery`
+  - `live_adaptation`
+- Added new model/table:
+  - SQLAlchemy model `UserLearningPersonalizationLayer`
+  - migration `20260410_0016_learning_personalization_layers.py`
+  - table `user_learning_personalization_layers` with snapshots, resolved rules, per-group update timestamps, and trace metadata.
+- Added resolver/orchestration service:
+  - `services/retriever/services/personalization_layers.py`
+  - computes grouped snapshots + resolved rules
+  - tracks source hashes and recompute reasons for debuggability.
+- Integrated targeted recomputation in `RetrieverAppService` after relevant writes:
+  - personalization updates
+  - learning context/preferences updates
+  - learning goal create/update/delete
+  - diagnostic completion
+  - KSA assessment/drill completion
+  - learning state checks
+  - explanation feedback
+  - node progress updates.
+- Added internal inspection API endpoint:
+  - `GET /api/learning-profile/personalization-layers`
+- Added repository/postgres support:
+  - get/upsert personalization layer rows
+  - list explanation feedback for live-pattern resolution.
+- Added tests:
+  - `tests/test_personalization_layers_engine.py`
+  - verifies declared preference rule mapping, capability confidence/competence separation, targeted recompute stability, and reason-map routing.
+- Updated docs:
+  - `docs/learning.md`
+  - `docs/personalization.md` (new)
+  - `docs/architecture.md`
+  - `docs/testing.md`
+
 ## 2026-04-10 13:45 UTC
 
 - Reworked LTA scoring into a channel-distribution model:
@@ -312,6 +580,28 @@
 - Added library API support for `include_other_users` and expanded library responses with ownership/global metadata and permission flags.
 - Added a library-page bottom switch to show or hide other users' files (default off), and ownership/global badges in the table rows.
 - Expanded tests and docs for ownership behavior, permission enforcement, retrieval defaults, and library visibility toggling.
+
+## 2026-04-17 20:30 UTC
+
+- Implemented full `Edit Course` flow from the Courses table action menu to a dedicated editor route (`/courses/:courseId/edit`).
+- Added a GPT-style course editor shell with `Back` and `Save`, an inline raw JSON editor, and a course attachment management section.
+- Added new backend course editor APIs:
+  - `GET /api/learning-paths/{id}/editor`
+  - `PUT /api/learning-paths/{id}/editor`
+  - `GET /api/learning-paths/{id}/attachments`
+  - `POST /api/learning-paths/{id}/attachments/upload`
+  - `GET /api/learning-paths/{id}/attachments/resolve`
+- Added JSON-first save validation for:
+  - strict JSON syntax
+  - `CourseFileParser` schema validation
+  - course ID consistency checks
+  - missing filename-based attachment reference checks
+- Added filename-based attachment diagnostics (`missing` / `ambiguous`) to support clean authoring without embedding storage keys or asset IDs.
+- Extended MinIO storage key strategy with a dedicated per-course attachment namespace:
+  - `courses/<course_id>/attachments/<asset_id>/<filename>`
+- Added course attachment resolution logic so runtime/frontend systems can map `name.extension` references to metadata + presigned URL.
+- Added API test coverage for the new course editor endpoints in `tests/test_step14_learning_api.py`.
+- Updated docs (`README.md`, `docs/courses.md`, `docs/frontend.md`, `docs/architecture.md`, `docs/testing.md`) for the new editor and attachment-resolution model.
 
 ## 2026-04-01 18:45 UTC
 

@@ -382,6 +382,132 @@ class UserLearningNodeProgress(Base):
     )
 
 
+class LearningNodeSession(Base):
+    __tablename__ = "learning_node_sessions"
+    __table_args__ = (
+        UniqueConstraint("user_id", "learning_path_id", "node_id", name="uq_learning_node_sessions_user_path_node"),
+    )
+
+    id: Mapped[str] = mapped_column(String(128), primary_key=True, default=lambda: str(uuid.uuid4()))
+    user_id: Mapped[int] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True)
+    learning_path_id: Mapped[str] = mapped_column(
+        ForeignKey("learning_paths.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    node_id: Mapped[str] = mapped_column(String(128), nullable=False, index=True)
+    node_type: Mapped[str] = mapped_column(String(32), nullable=False, default="")
+    route_path: Mapped[str] = mapped_column(String(255), nullable=False, default="")
+    status: Mapped[str] = mapped_column(String(32), nullable=False, default="created")
+    is_archived: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
+    is_deleted: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
+    started_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    completed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    last_opened_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, server_default=func.now())
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, server_default=func.now(), onupdate=func.now()
+    )
+
+
+class UserLearningNodeContext(Base):
+    __tablename__ = "user_learning_node_contexts"
+    __table_args__ = (
+        UniqueConstraint("user_id", "learning_path_id", "node_id", name="uq_user_learning_node_contexts_user_path_node"),
+    )
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    user_id: Mapped[int] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True)
+    learning_path_id: Mapped[str] = mapped_column(
+        ForeignKey("learning_paths.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    node_id: Mapped[str] = mapped_column(String(128), nullable=False, index=True)
+    node_type: Mapped[str] = mapped_column(String(32), nullable=False, default="")
+    generation_reason: Mapped[str] = mapped_column(String(64), nullable=False, default="on_demand")
+    context_json: Mapped[dict] = mapped_column(JSON, default=dict)
+    course_context_json: Mapped[dict] = mapped_column(JSON, default=dict)
+    chapter_branch_context_json: Mapped[dict] = mapped_column(JSON, default=dict)
+    prior_node_context_json: Mapped[dict] = mapped_column(JSON, default=dict)
+    target_node_context_json: Mapped[dict] = mapped_column(JSON, default=dict)
+    next_node_context_json: Mapped[dict] = mapped_column(JSON, default=dict)
+    ksa_context_json: Mapped[dict] = mapped_column(JSON, default=dict)
+    readiness_context_json: Mapped[dict] = mapped_column(JSON, default=dict)
+    derived_assumptions_json: Mapped[dict] = mapped_column(JSON, default=dict)
+    source_hash: Mapped[str] = mapped_column(String(128), nullable=False, default="")
+    generated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, server_default=func.now())
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, server_default=func.now())
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, server_default=func.now(), onupdate=func.now()
+    )
+
+
+class UserLearningNodeExecutionAttempt(Base):
+    __tablename__ = "user_learning_node_execution_attempts"
+
+    id: Mapped[str] = mapped_column(String(128), primary_key=True, default=lambda: str(uuid.uuid4()))
+    user_id: Mapped[int] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True)
+    learning_path_id: Mapped[str] = mapped_column(
+        ForeignKey("learning_paths.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    node_id: Mapped[str] = mapped_column(String(128), nullable=False, index=True)
+    node_type: Mapped[str] = mapped_column(String(32), nullable=False, default="")
+    status: Mapped[str] = mapped_column(String(32), nullable=False, default="in_progress")
+    generation_reason: Mapped[str] = mapped_column(String(64), nullable=False, default="on_start")
+    package_json: Mapped[dict] = mapped_column(JSON, default=dict)
+    responses_json: Mapped[dict] = mapped_column(JSON, default=dict)
+    result_json: Mapped[dict] = mapped_column(JSON, default=dict)
+    context_snapshot_json: Mapped[dict] = mapped_column(JSON, default=dict)
+    source_node_window_json: Mapped[list[str]] = mapped_column(JSON, default=list)
+    started_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, server_default=func.now())
+    completed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, server_default=func.now())
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, server_default=func.now(), onupdate=func.now()
+    )
+
+
+class ContentAsset(Base):
+    __tablename__ = "content_assets"
+
+    id: Mapped[str] = mapped_column(String(128), primary_key=True, default=lambda: str(uuid.uuid4()))
+    asset_kind: Mapped[str] = mapped_column(String(32), nullable=False, default="downloadable_file", index=True)
+    media_kind: Mapped[str] = mapped_column(String(32), nullable=False, default="", index=True)
+    bucket_name: Mapped[str] = mapped_column(String(128), nullable=False, default="")
+    storage_key: Mapped[str] = mapped_column(String(1024), nullable=False, unique=True)
+    mime_type: Mapped[str] = mapped_column(String(255), nullable=False, default="")
+    original_filename: Mapped[str] = mapped_column(String(512), nullable=False, default="")
+    normalized_filename: Mapped[str] = mapped_column(String(512), nullable=False, default="", index=True)
+    file_extension: Mapped[str] = mapped_column(String(32), nullable=False, default="")
+    size_bytes: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    checksum_sha256: Mapped[str] = mapped_column(String(64), nullable=False, default="", index=True)
+    source_type: Mapped[str] = mapped_column(String(64), nullable=False, default="seeded_course_asset", index=True)
+    scope_type: Mapped[str] = mapped_column(String(32), nullable=False, default="course", index=True)
+    owner_user_id: Mapped[int | None] = mapped_column(ForeignKey("users.id", ondelete="SET NULL"), nullable=True, index=True)
+    learning_path_id: Mapped[str | None] = mapped_column(ForeignKey("learning_paths.id", ondelete="SET NULL"), nullable=True, index=True)
+    node_id: Mapped[str | None] = mapped_column(String(128), nullable=True, index=True)
+    chapter_id: Mapped[str | None] = mapped_column(String(128), nullable=True)
+    branch_id: Mapped[str | None] = mapped_column(String(128), nullable=True)
+    uploaded_by_user_id: Mapped[int | None] = mapped_column(ForeignKey("users.id", ondelete="SET NULL"), nullable=True, index=True)
+    attempt_id: Mapped[str | None] = mapped_column(String(128), nullable=True, index=True)
+    asset_status: Mapped[str] = mapped_column(String(32), nullable=False, default="ready", index=True)
+    alt_text: Mapped[str] = mapped_column(Text, nullable=False, default="")
+    caption: Mapped[str] = mapped_column(Text, nullable=False, default="")
+    description: Mapped[str] = mapped_column(Text, nullable=False, default="")
+    download_label: Mapped[str] = mapped_column(String(255), nullable=False, default="")
+    file_category: Mapped[str] = mapped_column(String(64), nullable=False, default="")
+    is_optional: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
+    is_required: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
+    width: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    height: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    duration_seconds: Mapped[float | None] = mapped_column(Float, nullable=True)
+    poster_asset_id: Mapped[str | None] = mapped_column(ForeignKey("content_assets.id", ondelete="SET NULL"), nullable=True)
+    transcript_asset_id: Mapped[str | None] = mapped_column(ForeignKey("content_assets.id", ondelete="SET NULL"), nullable=True)
+    thumbnail_asset_id: Mapped[str | None] = mapped_column(ForeignKey("content_assets.id", ondelete="SET NULL"), nullable=True)
+    metadata_json: Mapped[dict] = mapped_column(JSON, default=dict)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, server_default=func.now())
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, server_default=func.now(), onupdate=func.now()
+    )
+
+
 class UserLearningPreference(Base):
     __tablename__ = "user_learning_preferences"
     __table_args__ = (UniqueConstraint("user_id", name="uq_user_learning_preferences_user"),)
@@ -651,3 +777,37 @@ class ExplanationFeedback(Base):
     feedback_text: Mapped[str] = mapped_column(Text, nullable=False, default="")
     re_explain_requested: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, server_default=func.now())
+
+
+class UserLearningPersonalizationLayer(Base):
+    __tablename__ = "user_learning_personalization_layers"
+    __table_args__ = (UniqueConstraint("user_id", name="uq_user_learning_personalization_layers_user"),)
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    user_id: Mapped[int] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True)
+    rule_engine_version: Mapped[str] = mapped_column(String(32), nullable=False, default="v1")
+    identity_context_snapshot: Mapped[dict] = mapped_column(JSON, default=dict)
+    resolved_identity_context_rules: Mapped[dict] = mapped_column(JSON, default=dict)
+    goal_intent_snapshot: Mapped[dict] = mapped_column(JSON, default=dict)
+    resolved_goal_rules: Mapped[dict] = mapped_column(JSON, default=dict)
+    declared_preferences_snapshot: Mapped[dict] = mapped_column(JSON, default=dict)
+    resolved_declared_tutor_rules: Mapped[dict] = mapped_column(JSON, default=dict)
+    diagnosed_learning_snapshot: Mapped[dict] = mapped_column(JSON, default=dict)
+    resolved_diagnostic_rules: Mapped[dict] = mapped_column(JSON, default=dict)
+    capability_mastery_snapshot: Mapped[dict] = mapped_column(JSON, default=dict)
+    resolved_capability_rules: Mapped[dict] = mapped_column(JSON, default=dict)
+    live_adaptation_snapshot: Mapped[dict] = mapped_column(JSON, default=dict)
+    resolved_live_adaptation_rules: Mapped[dict] = mapped_column(JSON, default=dict)
+    last_source_hashes_json: Mapped[dict] = mapped_column(JSON, default=dict)
+    source_to_group_trace_json: Mapped[dict] = mapped_column(JSON, default=dict)
+    change_log_json: Mapped[list[dict]] = mapped_column(JSON, default=list)
+    identity_context_updated_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    goal_intent_updated_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    declared_preferences_updated_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    diagnosed_learning_updated_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    capability_mastery_updated_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    live_adaptation_updated_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, server_default=func.now())
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, server_default=func.now(), onupdate=func.now()
+    )

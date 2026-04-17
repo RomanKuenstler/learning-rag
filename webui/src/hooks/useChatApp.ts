@@ -25,6 +25,7 @@ import type {
   LibraryResponse,
   LearningLesson,
   LearningGoal,
+  LearningNodeSession,
   KsaDrillAttempt,
   KsaDrillTopicClassification,
   KsaDrillTopic,
@@ -112,6 +113,10 @@ function sortGpts(gpts: Gpt[]) {
   return [...gpts].sort((left, right) => right.updated_at.localeCompare(left.updated_at));
 }
 
+function sortLearningNodeSessions(sessions: LearningNodeSession[]) {
+  return [...sessions].sort((left, right) => right.updated_at.localeCompare(left.updated_at));
+}
+
 function triggerJsonDownload(fileName: string, data: unknown) {
   const blob = new Blob([JSON.stringify(data, null, 2)], { type: "application/json" });
   const url = URL.createObjectURL(blob);
@@ -188,6 +193,8 @@ export function useChatApp() {
   const [learningStateError, setLearningStateError] = useState<string | null>(null);
   const [feedbackSaving, setFeedbackSaving] = useState(false);
   const [feedbackError, setFeedbackError] = useState<string | null>(null);
+  const [learningNodeSessions, setLearningNodeSessions] = useState<LearningNodeSession[]>([]);
+  const [archivedLearningNodeSessions, setArchivedLearningNodeSessions] = useState<LearningNodeSession[]>([]);
   const [archivedChats, setArchivedChats] = useState<Chat[]>([]);
   const [messagesByChat, setMessagesByChat] = useState<Record<string, Message[]>>({});
   const [gptChatsById, setGptChatsById] = useState<Record<string, GptChat>>({});
@@ -284,7 +291,7 @@ export function useChatApp() {
     setAppError(null);
     try {
       const isStudent = session.user.role === "student";
-      const [chatList, archivedList, runtimeSettings, personalizationSettings, gptList, learning, declaredLearningProfile, ksa, diagnostics, attempts, stateChecks] = await Promise.all([
+      const [chatList, archivedList, runtimeSettings, personalizationSettings, gptList, learning, declaredLearningProfile, ksa, diagnostics, attempts, stateChecks, nodeSessions, archivedNodeSessions] = await Promise.all([
         isStudent ? Promise.resolve([]) : apiClient.listChats(),
         isStudent ? Promise.resolve([]) : apiClient.listArchivedChats(),
         apiClient.getSettings(),
@@ -296,6 +303,8 @@ export function useChatApp() {
         apiClient.listDiagnosticDefinitions(),
         apiClient.listDiagnosticAttempts(),
         apiClient.listLearningStateChecks(),
+        apiClient.listLearningNodeSessions(),
+        apiClient.listArchivedLearningNodeSessions(),
       ]);
       setChats(sortChats(chatList));
       setGpts(gptList);
@@ -310,6 +319,8 @@ export function useChatApp() {
       });
       setDiagnosticAttempts(attempts);
       setLearningStateChecks(stateChecks);
+      setLearningNodeSessions(sortLearningNodeSessions(nodeSessions.sessions));
+      setArchivedLearningNodeSessions(sortLearningNodeSessions(archivedNodeSessions.sessions));
       if (attempts.length > 0) {
         const latest = await apiClient.getDiagnosticAttempt(attempts[0].attempt_id);
         setDiagnosticAttempt(latest);
@@ -381,6 +392,8 @@ export function useChatApp() {
     setLearningStateError(null);
     setFeedbackSaving(false);
     setFeedbackError(null);
+    setLearningNodeSessions([]);
+    setArchivedLearningNodeSessions([]);
     setArchivedChats([]);
     setMessagesByChat({});
     setGptChatsById({});
@@ -1672,6 +1685,43 @@ export function useChatApp() {
     return await apiClient.getLearningPath(pathId);
   }
 
+  async function getCourseEditor(pathId: string) {
+    return await apiClient.getCourseEditor(pathId);
+  }
+
+  async function saveCourseEditor(pathId: string, rawJson: string) {
+    setLearningSaving(true);
+    setLearningError(null);
+    try {
+      const saved = await apiClient.saveCourseEditor(pathId, rawJson);
+      const refreshed = await apiClient.getLearningPath(pathId);
+      setLearningPaths((current) => current.map((entry) => (entry.id === pathId ? refreshed : entry)));
+      return saved;
+    } catch (error) {
+      setLearningError(error instanceof Error ? error.message : "Failed to save course JSON");
+      throw error;
+    } finally {
+      setLearningSaving(false);
+    }
+  }
+
+  async function listCourseAttachments(pathId: string) {
+    return await apiClient.listCourseAttachments(pathId);
+  }
+
+  async function uploadCourseAttachments(pathId: string, files: File[]) {
+    setLearningSaving(true);
+    setLearningError(null);
+    try {
+      return await apiClient.uploadCourseAttachments(pathId, files);
+    } catch (error) {
+      setLearningError(error instanceof Error ? error.message : "Failed to upload course attachments");
+      throw error;
+    } finally {
+      setLearningSaving(false);
+    }
+  }
+
   async function updateLearningNodeProgress(
     pathId: string,
     nodeId: string,
@@ -1685,6 +1735,19 @@ export function useChatApp() {
     try {
       const updated = await apiClient.updateLearningNodeProgress(pathId, nodeId, payload);
       setLearningPaths((current) => current.map((entry) => (entry.id === pathId ? updated : entry)));
+      const nodeState = String(updated.node_progress[nodeId] ?? "available");
+      const nextSessionStatus = nodeState === "completed" || nodeState === "mastered"
+        ? "completed"
+        : "in_progress";
+      setLearningNodeSessions((current) =>
+        sortLearningNodeSessions(
+          current.map((session) =>
+            session.learning_path_id === pathId && session.node_id === nodeId
+              ? { ...session, status: nextSessionStatus, is_completed: nextSessionStatus === "completed", updated_at: new Date().toISOString() }
+              : session,
+          ),
+        ),
+      );
       return updated;
     } catch (error) {
       setLearningError(error instanceof Error ? error.message : "Failed to update node progress");
@@ -1692,6 +1755,111 @@ export function useChatApp() {
     } finally {
       setLearningSaving(false);
     }
+  }
+
+  function upsertLearningNodeSessionInState(session: LearningNodeSession) {
+    if (session.is_archived) {
+      setLearningNodeSessions((current) => current.filter((entry) => entry.id !== session.id));
+      setArchivedLearningNodeSessions((current) => sortLearningNodeSessions([session, ...current.filter((entry) => entry.id !== session.id)]));
+      return;
+    }
+    if (session.is_deleted) {
+      setLearningNodeSessions((current) => current.filter((entry) => entry.id !== session.id));
+      setArchivedLearningNodeSessions((current) => current.filter((entry) => entry.id !== session.id));
+      return;
+    }
+    setArchivedLearningNodeSessions((current) => current.filter((entry) => entry.id !== session.id));
+    setLearningNodeSessions((current) => sortLearningNodeSessions([session, ...current.filter((entry) => entry.id !== session.id)]));
+  }
+
+  async function loadLearningNodeSessions() {
+    try {
+      const [activePayload, archivedPayload] = await Promise.all([
+        apiClient.listLearningNodeSessions(),
+        apiClient.listArchivedLearningNodeSessions(),
+      ]);
+      setLearningNodeSessions(sortLearningNodeSessions(activePayload.sessions));
+      setArchivedLearningNodeSessions(sortLearningNodeSessions(archivedPayload.sessions));
+      return activePayload.sessions;
+    } catch (error) {
+      setLearningError(error instanceof Error ? error.message : "Failed to load learning node sessions");
+      return [];
+    }
+  }
+
+  async function ensureLearningNodeSession(pathId: string, nodeId: string) {
+    const session = await apiClient.ensureLearningNodeSession(pathId, nodeId);
+    upsertLearningNodeSessionInState(session);
+    return session;
+  }
+
+  async function startLearningNodeExecution(pathId: string, nodeId: string, forceNewAttempt = false) {
+    return apiClient.startLearningNodeExecution(pathId, nodeId, forceNewAttempt);
+  }
+
+  async function getLatestLearningNodeExecution(pathId: string, nodeId: string) {
+    return apiClient.getLatestLearningNodeExecution(pathId, nodeId);
+  }
+
+  async function listLearningNodeExecutionAttempts(pathId: string, nodeId: string, limit = 20) {
+    const payload = await apiClient.listLearningNodeExecutionAttempts(pathId, nodeId, limit);
+    return payload.attempts;
+  }
+
+  async function submitLearningNodeExecutionResponses(pathId: string, nodeId: string, attemptId: string, responses: Record<string, unknown>) {
+    return apiClient.submitLearningNodeExecutionResponses(pathId, nodeId, attemptId, responses);
+  }
+
+  async function completeLearningNodeExecution(pathId: string, nodeId: string, attemptId: string) {
+    return apiClient.completeLearningNodeExecution(pathId, nodeId, attemptId);
+  }
+
+  async function getLearningNodeSession(sessionId: string, markOpened = false) {
+    const session = await apiClient.getLearningNodeSession(sessionId, markOpened);
+    upsertLearningNodeSessionInState(session);
+    return session;
+  }
+
+  async function archiveLearningNodeSession(sessionId: string) {
+    const session = await apiClient.archiveLearningNodeSession(sessionId);
+    upsertLearningNodeSessionInState(session);
+    return session;
+  }
+
+  async function unarchiveLearningNodeSession(sessionId: string) {
+    const session = await apiClient.unarchiveLearningNodeSession(sessionId);
+    const prior = archivedLearningNodeSessions.find((entry) => entry.id === sessionId)
+      ?? learningNodeSessions.find((entry) => entry.id === sessionId);
+    const preserved = prior
+      ? {
+          ...session,
+          status: prior.status,
+          started_at: prior.started_at,
+          completed_at: prior.completed_at,
+          last_opened_at: prior.last_opened_at,
+        }
+      : session;
+    upsertLearningNodeSessionInState(preserved);
+    return preserved;
+  }
+
+  async function deleteLearningNodeSession(sessionId: string) {
+    const session = await apiClient.deleteLearningNodeSession(sessionId);
+    upsertLearningNodeSessionInState(session);
+    return session;
+  }
+
+  async function resetLearningNodeSession(sessionId: string) {
+    const session = await apiClient.resetLearningNodeSession(sessionId);
+    upsertLearningNodeSessionInState(session);
+    return session;
+  }
+
+  async function downloadLearningNodeSession(sessionId: string) {
+    const payload = await apiClient.downloadLearningNodeSession(sessionId);
+    const safeNode = payload.session.node_title.replace(/[^a-z0-9-_]+/gi, "_").replace(/^_+|_+$/g, "") || "learning-node";
+    triggerJsonDownload(`${safeNode}-${payload.session.id}.json`, payload);
+    return payload;
   }
 
   async function deleteLearningPath(pathId: string) {
@@ -2141,6 +2309,8 @@ export function useChatApp() {
     learningStateError,
     feedbackSaving,
     feedbackError,
+    learningNodeSessions,
+    archivedLearningNodeSessions,
     archivedChats,
     gptChatsById,
     activeChatId,
@@ -2244,7 +2414,24 @@ export function useChatApp() {
     submitExplanationFeedback,
     createLearningPath,
     getLearningPathDetails,
+    getCourseEditor,
+    saveCourseEditor,
+    listCourseAttachments,
+    uploadCourseAttachments,
     updateLearningNodeProgress,
+    loadLearningNodeSessions,
+    ensureLearningNodeSession,
+    startLearningNodeExecution,
+    getLatestLearningNodeExecution,
+    listLearningNodeExecutionAttempts,
+    submitLearningNodeExecutionResponses,
+    completeLearningNodeExecution,
+    getLearningNodeSession,
+    archiveLearningNodeSession,
+    unarchiveLearningNodeSession,
+    deleteLearningNodeSession,
+    resetLearningNodeSession,
+    downloadLearningNodeSession,
     updateLearningPath,
     deleteLearningPath,
     createLearningModule,

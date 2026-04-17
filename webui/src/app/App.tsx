@@ -14,8 +14,10 @@ import { PreferencesDialog } from "../components/preferences/PreferencesDialog";
 import { Sidebar } from "../components/sidebar/Sidebar";
 import { useChatApp } from "../hooks/useChatApp";
 import { LoginPage } from "../pages/LoginPage";
+import { LearningNodePage } from "../pages/LearningNodePage";
 import { PasswordChangePage } from "../pages/PasswordChangePage";
 import { GptEditorPage } from "../pages/GptEditorPage";
+import { CourseEditorPage } from "../pages/CourseEditorPage";
 
 type PreferencesTab = "general" | "personalization" | "settings" | "filter" | "archive";
 
@@ -42,8 +44,11 @@ function AppRoutes() {
   const location = useLocation();
   const currentChatId = location.pathname.startsWith("/chats/") ? location.pathname.split("/")[2] ?? null : null;
   const currentGptId = location.pathname.startsWith("/gpts/") && location.pathname.endsWith("/chat") ? location.pathname.split("/")[2] ?? null : null;
-  const activeView = location.pathname.startsWith("/learning")
-    ? "learning"
+  const currentLearningNodeSessionId = location.pathname.startsWith("/learning/nodes/") ? location.pathname.split("/")[3] ?? null : null;
+  const activeView = location.pathname.startsWith("/learning/nodes/")
+    ? "learning-node"
+    : location.pathname.startsWith("/learning")
+      ? "learning"
     : location.pathname.startsWith("/courses")
       ? "courses"
     : location.pathname.startsWith("/library")
@@ -54,6 +59,7 @@ function AppRoutes() {
           ? "gpt"
           : "chat";
   const activeGptChat = currentGptId ? app.gptChatsById[currentGptId] ?? null : null;
+  const showAssistantModeDropdown = activeView === "chat";
   const [preferencesTab, setPreferencesTab] = useState<PreferencesTab | null>(null);
   const [infoOpen, setInfoOpen] = useState(false);
   const [helpOpen, setHelpOpen] = useState(false);
@@ -63,6 +69,7 @@ function AppRoutes() {
   const [systemStatusError, setSystemStatusError] = useState<string | null>(null);
   const [systemStatus, setSystemStatus] = useState<Array<{ label: string; description: string; status: string; detail: string }>>([]);
   const isGptEditorRoute = location.pathname === "/gpts/new" || /^\/gpts\/[^/]+\/edit$/.test(location.pathname);
+  const isCourseEditorRoute = /^\/courses\/[^/]+\/edit$/.test(location.pathname);
 
   useEffect(() => {
     if (!app.isAuthenticated || app.requiresPasswordChange || app.bootstrapping || app.chats.length === 0) {
@@ -209,11 +216,31 @@ function AppRoutes() {
     }
   }
 
+  async function handleSelectLearningNodeSession(sessionId: string) {
+    navigate(`/learning/nodes/${sessionId}`);
+  }
+
+  async function handleArchiveLearningNodeSession(sessionId: string) {
+    await app.archiveLearningNodeSession(sessionId);
+    if (currentLearningNodeSessionId === sessionId) {
+      navigate("/courses");
+    }
+  }
+
+  async function handleDeleteLearningNodeSession(sessionId: string) {
+    await app.deleteLearningNodeSession(sessionId);
+    if (currentLearningNodeSessionId === sessionId) {
+      navigate("/courses");
+    }
+  }
+
   const sidebar = (
     <Sidebar
       chats={app.chats}
       gpts={app.gpts}
+      learningNodeSessions={app.learningNodeSessions}
       activeChatId={currentGptId ?? app.activeChatId}
+      activeLearningNodeSessionId={currentLearningNodeSessionId}
       activeView={activeView}
       currentUser={app.currentUser}
       canUseStandardChat={app.canUseStandardChat}
@@ -241,6 +268,11 @@ function AppRoutes() {
       }}
       onDownloadChat={(chatId) => void app.downloadChat(chatId)}
       onDeleteChat={(chatId) => void handleDeleteChat(chatId)}
+      onSelectLearningNodeSession={(sessionId) => void handleSelectLearningNodeSession(sessionId)}
+      onArchiveLearningNodeSession={(sessionId) => void handleArchiveLearningNodeSession(sessionId)}
+      onResetLearningNodeSession={(sessionId) => void app.resetLearningNodeSession(sessionId)}
+      onDownloadLearningNodeSession={(sessionId) => void app.downloadLearningNodeSession(sessionId)}
+      onDeleteLearningNodeSession={(sessionId) => void handleDeleteLearningNodeSession(sessionId)}
       onEditGpt={(gptId) => navigate(`/gpts/${gptId}/edit`)}
       onClearGpt={(gptId) => void app.clearGptChat(gptId)}
       onDownloadGpt={(gptId) => void app.downloadGptChat(gptId)}
@@ -282,11 +314,34 @@ function AppRoutes() {
     </Routes>
   );
 
+  const courseEditorRoutes = (
+    <Routes>
+      <Route
+        path="/courses/:courseId/edit"
+        element={
+          <CourseEditorRoute
+            saving={app.learningSaving}
+            onLoadEditor={app.getCourseEditor}
+            onSaveEditor={app.saveCourseEditor}
+            onUploadAttachments={app.uploadCourseAttachments}
+          />
+        }
+      />
+      <Route path="*" element={<Navigate to="/courses" replace />} />
+    </Routes>
+  );
+
   if (isGptEditorRoute) {
     if (!app.canUseGpts) {
       return <Navigate to="/learning" replace />;
     }
     return gptEditorRoutes;
+  }
+  if (isCourseEditorRoute) {
+    if (!app.canAuthorLearningPaths) {
+      return <Navigate to="/courses" replace />;
+    }
+    return courseEditorRoutes;
   }
 
   return (
@@ -304,7 +359,9 @@ function AppRoutes() {
         onAssistantModeChange={currentGptId || app.isStudent ? (() => undefined) : app.setAssistantMode}
         assistantModeLocked={Boolean(currentGptId) || app.isStudent}
         headerRight={
-          app.isStudent ? (
+          showAssistantModeDropdown ? undefined : activeView === "learning-node" ? (
+            <div />
+          ) : app.isStudent ? (
             <div className="header-learning-badge" aria-label="Learning mode">
               <span className="header-learning-badge-icon-shell" aria-hidden="true">
                 <Icon name="academic-hat" className="header-learning-badge-icon" />
@@ -324,7 +381,9 @@ function AppRoutes() {
                 <strong className="header-gpt-badge-name">{activeGptChat?.gpt.name ?? "Untitled GPT"}</strong>
               </span>
             </div>
-          ) : undefined
+          ) : (
+            <div />
+          )
         }
         content={
           <Routes>
@@ -402,10 +461,19 @@ function AppRoutes() {
               }
             />
             <Route
+              path="/learning/nodes/:sessionId"
+              element={
+                <LearningNodeRoute
+                  app={app}
+                />
+              }
+            />
+            <Route
               path="/courses"
               element={
                 <CoursesPage
                   courses={app.courses}
+                  learningNodeSessions={app.learningNodeSessions}
                   loading={app.coursesLoading}
                   error={app.coursesError}
                   importing={app.coursesImporting}
@@ -417,13 +485,22 @@ function AppRoutes() {
                   onUpdateNodeProgress={(courseId, nodeId, payload) => app.updateLearningNodeProgress(courseId, nodeId, payload)}
                   onImport={app.importCourseFiles}
                   onDownloadTemplate={app.downloadCourseTemplate}
-                  onStartContinue={() => navigate("/learning")}
+                  onStartContinue={async (courseId, nodeId) => {
+                    const session = await app.ensureLearningNodeSession(courseId, nodeId);
+                    if (!session) {
+                      return;
+                    }
+                    navigate(`/learning/nodes/${session.id}`);
+                  }}
                   onToggleArchived={(courseId, nextArchived) =>
                     app
                       .updateLearningPath(courseId, { status: nextArchived ? "archived" : "published" })
                       .then(() => app.loadCourses())
                       .then(() => undefined)
                   }
+                  onEditCourse={(courseId) => {
+                    navigate(`/courses/${encodeURIComponent(courseId)}/edit`);
+                  }}
                   onDeleteCourse={(courseId) =>
                     app
                       .deleteLearningPath(courseId)
@@ -500,6 +577,7 @@ function AppRoutes() {
         <PreferencesDialog
           initialTab={preferencesTab}
           archivedChats={app.archivedChats}
+          archivedLearningNodeSessions={app.archivedLearningNodeSessions}
           settingsDraft={app.settingsDraft}
           personalizationDraft={app.personalizationDraft}
           availableModes={app.settings?.available_assistant_modes ?? ["simple", "refine", "thinking"]}
@@ -517,8 +595,11 @@ function AppRoutes() {
           personalizationSuccess={app.personalizationSuccess}
           onClose={() => setPreferencesTab(null)}
           onDownloadChat={(chatId) => void app.downloadChat(chatId)}
+          onDownloadLearningNodeSession={(sessionId) => void app.downloadLearningNodeSession(sessionId)}
           onUnarchiveChat={(chatId) => void app.unarchiveChat(chatId)}
+          onUnarchiveLearningNodeSession={(sessionId) => void app.unarchiveLearningNodeSession(sessionId)}
           onDeleteChat={(chatId) => void handleDeleteChat(chatId)}
+          onDeleteLearningNodeSession={(sessionId) => void app.deleteLearningNodeSession(sessionId)}
           onFieldChange={app.updateSettingsDraft}
           onPersonalizationFieldChange={app.updatePersonalizationDraft}
           onSaveSettings={() => void app.saveSettings()}
@@ -755,9 +836,435 @@ function ChatRoute({
   );
 }
 
+function LearningNodeRoute({
+  app,
+}: {
+  app: ReturnType<typeof useChatApp>;
+}) {
+  const navigate = useNavigate();
+  const params = useParams<{ sessionId: string }>();
+  const sessionId = params.sessionId ?? "";
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [session, setSession] = useState<Awaited<ReturnType<typeof app.getLearningNodeSession>> | null>(null);
+  const [learningPath, setLearningPath] = useState<Awaited<ReturnType<typeof app.getLearningPathDetails>> | null>(null);
+  const [attempt, setAttempt] = useState<Awaited<ReturnType<typeof app.getLatestLearningNodeExecution>> | null>(null);
+  const [pathLoading, setPathLoading] = useState(false);
+  const [pathError, setPathError] = useState<string | null>(null);
+  const [attemptLoading, setAttemptLoading] = useState(false);
+  const [attemptError, setAttemptError] = useState<string | null>(null);
+  const [milestoneFinishing, setMilestoneFinishing] = useState(false);
+  const [assessmentFinishing, setAssessmentFinishing] = useState(false);
+  const [assessmentRestarting, setAssessmentRestarting] = useState(false);
+  const [guidedCompleting, setGuidedCompleting] = useState(false);
+  const [guidedRestarting, setGuidedRestarting] = useState(false);
+  const [lessonCompleting, setLessonCompleting] = useState(false);
+  const [lessonClosing, setLessonClosing] = useState(false);
+
+  const isStaleGeneratingAttempt = (attemptRecord: Awaited<ReturnType<typeof app.getLatestLearningNodeExecution>>) => {
+    if (String(attemptRecord.status ?? "") !== "generating") {
+      return false;
+    }
+    const startedAt = Date.parse(String(attemptRecord.started_at ?? ""));
+    if (Number.isNaN(startedAt)) {
+      return false;
+    }
+    return Date.now() - startedAt > 90_000;
+  };
+
+  const tryFallbackToCompletedAttempt = async (pathId: string, nodeId: string) => {
+    try {
+      const attempts = await app.listLearningNodeExecutionAttempts(pathId, nodeId, 20);
+      const completed = attempts.find((item) => String(item.status) === "completed");
+      if (completed) {
+        setAttempt(completed);
+        setAttemptError("Latest generation attempt is stalled. Showing the latest completed attempt.");
+        return true;
+      }
+    } catch {
+      // keep polling fallback silent
+    }
+    return false;
+  };
+
+  const pollAttemptUntilReady = async (pathId: string, nodeId: string, isCancelled?: () => boolean) => {
+    const maxPollCycles = 120;
+    for (let cycle = 0; cycle < maxPollCycles; cycle += 1) {
+      if (isCancelled?.()) {
+        return;
+      }
+      await new Promise((resolve) => window.setTimeout(resolve, 2500));
+      if (isCancelled?.()) {
+        return;
+      }
+      try {
+        const latest = await app.getLatestLearningNodeExecution(pathId, nodeId);
+        if (isCancelled?.()) {
+          return;
+        }
+        setAttempt(latest);
+        setAttemptError(null);
+        if (isStaleGeneratingAttempt(latest)) {
+          const switched = await tryFallbackToCompletedAttempt(pathId, nodeId);
+          if (switched) {
+            return;
+          }
+        }
+        if (String(latest.status ?? "") !== "generating") {
+          return;
+        }
+      } catch (pollError: unknown) {
+        if (isCancelled?.()) {
+          return;
+        }
+        setAttemptError(pollError instanceof Error ? pollError.message : "Failed to refresh learning node package");
+        return;
+      }
+    }
+    if (isCancelled?.()) {
+      return;
+    }
+    setAttemptError("Package generation is taking longer than expected. Please keep this page open.");
+  };
+
+  useEffect(() => {
+    if (!sessionId) {
+      return;
+    }
+    let cancelled = false;
+    setLoading(true);
+    setError(null);
+    setPathLoading(false);
+    setPathError(null);
+    setLearningPath(null);
+    setAttemptLoading(false);
+    setAttemptError(null);
+    setAttempt(null);
+    setMilestoneFinishing(false);
+    setAssessmentFinishing(false);
+    setAssessmentRestarting(false);
+    setGuidedCompleting(false);
+    setGuidedRestarting(false);
+    setLessonCompleting(false);
+    setLessonClosing(false);
+    void (async () => {
+      try {
+        const payload = await app.getLearningNodeSession(sessionId, false);
+        if (cancelled) {
+          return;
+        }
+        setSession(payload);
+        setLoading(false);
+        setPathLoading(true);
+        let details: Awaited<ReturnType<typeof app.getLearningPathDetails>> | null = null;
+        try {
+          details = await app.getLearningPathDetails(payload.learning_path_id);
+        } catch (pathLoadError: unknown) {
+          if (!cancelled) {
+            setPathError(pathLoadError instanceof Error ? pathLoadError.message : "Failed to load learning node details");
+          }
+          return;
+        } finally {
+          if (!cancelled) {
+            setPathLoading(false);
+          }
+        }
+        if (cancelled || !details) {
+          return;
+        }
+        setLearningPath(details);
+        const node = details.nodes.find((item) => item.id === payload.node_id);
+        if (!node) {
+          setPathError("Node definition is missing for this learning session.");
+          return;
+        }
+        if (node.type === "unlock_gate") {
+          navigate("/courses", { replace: true });
+          return;
+        }
+        setAttemptLoading(true);
+        try {
+          const latestAttempt = await app.getLatestLearningNodeExecution(payload.learning_path_id, payload.node_id);
+          if (!cancelled) {
+            setAttempt(latestAttempt);
+            if (isStaleGeneratingAttempt(latestAttempt)) {
+              void tryFallbackToCompletedAttempt(payload.learning_path_id, payload.node_id);
+              return;
+            }
+            if (String(latestAttempt.status ?? "") === "generating") {
+              void pollAttemptUntilReady(payload.learning_path_id, payload.node_id, () => cancelled);
+            }
+          }
+        } catch {
+          try {
+            const started = await app.startLearningNodeExecution(payload.learning_path_id, payload.node_id, false);
+            if (cancelled) {
+              return;
+            }
+            setAttempt(started.attempt);
+            if (String(started.attempt.status ?? "") === "generating") {
+              void pollAttemptUntilReady(payload.learning_path_id, payload.node_id, () => cancelled);
+            }
+            if (started.auto_completed) {
+              void app.loadLearningNodeSessions();
+              const refreshedDetails = await app.getLearningPathDetails(payload.learning_path_id);
+              if (!cancelled) {
+                setLearningPath(refreshedDetails);
+              }
+            }
+          } catch (attemptLoadError: unknown) {
+            if (!cancelled) {
+              setAttemptError(attemptLoadError instanceof Error ? attemptLoadError.message : "Failed to load learning node package");
+            }
+          }
+        } finally {
+          if (!cancelled) {
+            setAttemptLoading(false);
+          }
+        }
+      } catch (nextError: unknown) {
+        if (!cancelled) {
+          setError(nextError instanceof Error ? nextError.message : "Failed to load learning node session");
+        }
+      } finally {
+        if (!cancelled) {
+          setLoading(false);
+        }
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [navigate, sessionId]);
+
+  if (!sessionId) {
+    return <Navigate to="/courses" replace />;
+  }
+
+  const handleMilestoneFinish = async () => {
+    if (!session) {
+      return;
+    }
+    setMilestoneFinishing(true);
+    try {
+      await app.archiveLearningNodeSession(session.id);
+      navigate(`/courses?course=${encodeURIComponent(session.learning_path_id)}`, { replace: true });
+    } finally {
+      setMilestoneFinishing(false);
+    }
+  };
+
+  const handleAssessmentComplete = async (responses: Record<string, unknown>) => {
+    if (!session || !attempt) {
+      return;
+    }
+    setAssessmentFinishing(true);
+    setAttemptError(null);
+    try {
+      const savedAttempt = await app.submitLearningNodeExecutionResponses(
+        session.learning_path_id,
+        session.node_id,
+        attempt.attempt_id,
+        responses,
+      );
+      setAttempt(savedAttempt);
+      const completed = await app.completeLearningNodeExecution(
+        session.learning_path_id,
+        session.node_id,
+        attempt.attempt_id,
+      );
+      setAttempt(completed.attempt);
+      await app.loadLearningNodeSessions();
+      const refreshedDetails = await app.getLearningPathDetails(session.learning_path_id);
+      setLearningPath(refreshedDetails);
+    } catch (nextError: unknown) {
+      setAttemptError(nextError instanceof Error ? nextError.message : "Failed to complete assessment hook");
+      throw nextError;
+    } finally {
+      setAssessmentFinishing(false);
+    }
+  };
+
+  const handleAssessmentRestart = async () => {
+    if (!session) {
+      return;
+    }
+    setAssessmentRestarting(true);
+    setAttemptError(null);
+    try {
+      const restarted = await app.startLearningNodeExecution(session.learning_path_id, session.node_id, true);
+      setAttempt(restarted.attempt);
+      if (String(restarted.attempt.status ?? "") === "generating") {
+        void pollAttemptUntilReady(session.learning_path_id, session.node_id);
+      }
+    } catch (nextError: unknown) {
+      setAttemptError(nextError instanceof Error ? nextError.message : "Failed to restart assessment hook");
+      throw nextError;
+    } finally {
+      setAssessmentRestarting(false);
+    }
+  };
+
+  const handleAssessmentStart = async () => {
+    if (!session) {
+      return;
+    }
+    if (session.status !== "created") {
+      return;
+    }
+    try {
+      const opened = await app.getLearningNodeSession(session.id, true);
+      setSession(opened);
+    } catch (nextError: unknown) {
+      setAttemptError(nextError instanceof Error ? nextError.message : "Failed to set assessment in progress");
+      throw nextError;
+    }
+  };
+
+  const handleGuidedComplete = async (responses: Record<string, unknown>) => {
+    if (!session || !attempt) {
+      return;
+    }
+    setGuidedCompleting(true);
+    setAttemptError(null);
+    try {
+      const savedAttempt = await app.submitLearningNodeExecutionResponses(
+        session.learning_path_id,
+        session.node_id,
+        attempt.attempt_id,
+        responses,
+      );
+      setAttempt(savedAttempt);
+      const completed = await app.completeLearningNodeExecution(
+        session.learning_path_id,
+        session.node_id,
+        attempt.attempt_id,
+      );
+      setAttempt(completed.attempt);
+      await app.loadLearningNodeSessions();
+      const refreshedDetails = await app.getLearningPathDetails(session.learning_path_id);
+      setLearningPath(refreshedDetails);
+    } catch (nextError: unknown) {
+      setAttemptError(nextError instanceof Error ? nextError.message : "Failed to complete learning node");
+      throw nextError;
+    } finally {
+      setGuidedCompleting(false);
+    }
+  };
+
+  const handleGuidedRestart = async () => {
+    if (!session) {
+      return;
+    }
+    setGuidedRestarting(true);
+    setAttemptError(null);
+    try {
+      const restarted = await app.startLearningNodeExecution(session.learning_path_id, session.node_id, true);
+      setAttempt(restarted.attempt);
+      if (String(restarted.attempt.status ?? "") === "generating") {
+        void pollAttemptUntilReady(session.learning_path_id, session.node_id);
+      }
+      await app.loadLearningNodeSessions();
+    } catch (nextError: unknown) {
+      setAttemptError(nextError instanceof Error ? nextError.message : "Failed to restart learning node");
+      throw nextError;
+    } finally {
+      setGuidedRestarting(false);
+    }
+  };
+
+  const handleLessonClose = async () => {
+    if (!session) {
+      return;
+    }
+    setLessonClosing(true);
+    try {
+      await app.archiveLearningNodeSession(session.id);
+      await app.loadLearningNodeSessions();
+      navigate("/courses", { replace: true });
+    } finally {
+      setLessonClosing(false);
+    }
+  };
+
+  const handleLessonComplete = async (responses: Record<string, unknown>) => {
+    if (!session || !attempt) {
+      return;
+    }
+    setLessonCompleting(true);
+    setAttemptError(null);
+    try {
+      const savedAttempt = await app.submitLearningNodeExecutionResponses(
+        session.learning_path_id,
+        session.node_id,
+        attempt.attempt_id,
+        responses,
+      );
+      setAttempt(savedAttempt);
+      const completed = await app.completeLearningNodeExecution(
+        session.learning_path_id,
+        session.node_id,
+        attempt.attempt_id,
+      );
+      setAttempt(completed.attempt);
+      const opened = await app.getLearningNodeSession(session.id, false);
+      setSession(opened);
+      await app.loadLearningNodeSessions();
+      const refreshedDetails = await app.getLearningPathDetails(session.learning_path_id);
+      setLearningPath(refreshedDetails);
+    } catch (nextError: unknown) {
+      setAttemptError(nextError instanceof Error ? nextError.message : "Failed to complete learning node");
+      throw nextError;
+    } finally {
+      setLessonCompleting(false);
+    }
+  };
+
+  return (
+    <LearningNodePage
+      loading={loading}
+      error={error}
+      session={session}
+      learningPath={learningPath}
+      pathLoading={pathLoading}
+      pathError={pathError}
+      attempt={attempt}
+      attemptLoading={attemptLoading}
+      attemptError={attemptError}
+      onMilestoneFinish={() => {
+        void handleMilestoneFinish();
+      }}
+      milestoneFinishing={milestoneFinishing}
+      onAssessmentComplete={handleAssessmentComplete}
+      assessmentFinishing={assessmentFinishing}
+      onAssessmentRestart={handleAssessmentRestart}
+      assessmentRestarting={assessmentRestarting}
+      onAssessmentStart={handleAssessmentStart}
+      onGuidedComplete={handleGuidedComplete}
+      guidedCompleting={guidedCompleting}
+      onGuidedRestart={handleGuidedRestart}
+      guidedRestarting={guidedRestarting}
+      onLessonComplete={handleLessonComplete}
+      lessonCompleting={lessonCompleting}
+      onLessonClose={handleLessonClose}
+      lessonClosing={lessonClosing}
+    />
+  );
+}
+
 function GptEditorRoute(props: ComponentProps<typeof GptEditorPage>) {
   const params = useParams<{ gptId: string }>();
   return <GptEditorPage {...props} gptId={params.gptId} />;
+}
+
+function CourseEditorRoute(props: Omit<ComponentProps<typeof CourseEditorPage>, "courseId">) {
+  const params = useParams<{ courseId: string }>();
+  const courseId = params.courseId ?? "";
+  if (!courseId) {
+    return <Navigate to="/courses" replace />;
+  }
+  return <CourseEditorPage {...props} courseId={courseId} />;
 }
 
 function GptChatRoute({

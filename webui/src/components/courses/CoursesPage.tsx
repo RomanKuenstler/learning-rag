@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState, type ChangeEvent } from "react";
-import type { CourseImportResponse, CourseListItem, CourseSort, LearningPath } from "../../types/chat";
+import { useSearchParams } from "react-router-dom";
+import type { CourseImportResponse, CourseListItem, CourseSort, LearningNodeSession, LearningPath } from "../../types/chat";
 import { Dialog } from "../common/Dialog";
 import { Icon } from "../common/Icons";
 
@@ -16,6 +17,7 @@ const TOP_PADDING = 90;
 
 type CoursesPageProps = {
   courses: CourseListItem[];
+  learningNodeSessions: LearningNodeSession[];
   loading: boolean;
   error: string | null;
   importing: boolean;
@@ -39,8 +41,9 @@ type CoursesPageProps = {
   ) => Promise<LearningPath>;
   onImport: (files: File[], scopesByFile: Record<string, "global" | "user">) => Promise<CourseImportResponse>;
   onDownloadTemplate: () => Promise<unknown>;
-  onStartContinue: (course: CourseListItem) => void;
+  onStartContinue: (courseId: string, nodeId: string) => Promise<unknown> | unknown;
   onToggleArchived: (courseId: string, nextArchived: boolean) => Promise<unknown>;
+  onEditCourse: (courseId: string) => void;
   onDeleteCourse: (courseId: string) => Promise<unknown>;
 };
 
@@ -112,6 +115,14 @@ function ScopeMenu({ value, canCreateGlobal, disabled, onChange }: ScopeMenuProp
   );
 }
 
+function formatCourseVersion(schemaVersion: number): string {
+  const numeric = Number.isFinite(schemaVersion) ? schemaVersion : 2;
+  const offset = Math.max(0, Math.floor(numeric) - 2);
+  const major = 1 + Math.floor(offset / 10);
+  const minor = offset % 10;
+  return `${major}.${minor}`;
+}
+
 function SortMenu({
   value,
   onChange,
@@ -134,8 +145,14 @@ function SortMenu({
   return (
     <div className={`gpt-editor-select${open ? " open" : ""}`}>
       <button type="button" className="gpt-editor-select-trigger" aria-expanded={open} onClick={() => setOpen((current) => !current)}>
-        <span className="gpt-editor-select-label">{options.find((item) => item.value === value)?.label ?? "Sort"}</span>
-        <Icon name="chevron-down" className="header-mode-chevron" />
+        <span className="courses-trigger-label">
+          <Icon name="sort" className="courses-trigger-icon" />
+          <span>Sorting</span>
+          <span className="courses-trigger-arrows" aria-hidden="true">
+            <Icon name="arrow-up" className="courses-trigger-arrow-up" />
+            <Icon name="chevron-down" className="courses-trigger-arrow-down" />
+          </span>
+        </span>
       </button>
       {open ? (
         <div className="header-mode-menu gpt-editor-select-menu" role="menu">
@@ -176,8 +193,10 @@ function ScopeFilterMenu({
   return (
     <div className={`gpt-editor-select${open ? " open" : ""}`}>
       <button type="button" className="gpt-editor-select-trigger" aria-expanded={open} onClick={() => setOpen((current) => !current)}>
-        <span className="gpt-editor-select-label">{options.find((item) => item.value === value)?.label ?? "Scope"}</span>
-        <Icon name="chevron-down" className="header-mode-chevron" />
+        <span className="courses-trigger-label">
+          <Icon name="filter" className="courses-trigger-icon" />
+          <span>Scope</span>
+        </span>
       </button>
       {open ? (
         <div className="header-mode-menu gpt-editor-select-menu" role="menu">
@@ -223,8 +242,10 @@ function StatusFilterMenu({
   return (
     <div className={`gpt-editor-select${open ? " open" : ""}`}>
       <button type="button" className="gpt-editor-select-trigger" aria-expanded={open} onClick={() => setOpen((current) => !current)}>
-        <span className="gpt-editor-select-label">{options.find((item) => item.value === value)?.label ?? "Status"}</span>
-        <Icon name="chevron-down" className="header-mode-chevron" />
+        <span className="courses-trigger-label">
+          <Icon name="filter" className="courses-trigger-icon" />
+          <span>Status</span>
+        </span>
       </button>
       {open ? (
         <div className="header-mode-menu gpt-editor-select-menu" role="menu">
@@ -250,6 +271,7 @@ function StatusFilterMenu({
 
 export function CoursesPage({
   courses,
+  learningNodeSessions,
   loading,
   error,
   importing,
@@ -263,8 +285,10 @@ export function CoursesPage({
   onDownloadTemplate,
   onStartContinue,
   onToggleArchived,
+  onEditCourse,
   onDeleteCourse,
 }: CoursesPageProps) {
+  const [searchParams] = useSearchParams();
   const [search, setSearch] = useState("");
   const [scope, setScope] = useState<CourseScopeFilter>("all");
   const [status, setStatus] = useState<CourseStatusFilter>("all");
@@ -276,6 +300,7 @@ export function CoursesPage({
   const [detailsByCourseId, setDetailsByCourseId] = useState<Record<string, LearningPath>>({});
   const [selectedNodeId, setSelectedNodeId] = useState<string | null>(null);
   const [zoom, setZoom] = useState(1);
+  const isAdmin = canCreateGlobal;
 
   useEffect(() => {
     void onLoad({ search, scope, status, sort });
@@ -295,6 +320,36 @@ export function CoursesPage({
     }
     return courses.find((course) => course.id === selectedCourseId) ?? null;
   }, [courses, selectedCourseId]);
+  const courseProgressStatusById = useMemo(() => {
+    const completedStates = new Set(["completed", "mastered"]);
+    const startedStates = new Set(["in_progress", "completed", "mastered", "failed_needs_retry", "optional_skipped"]);
+    const map: Record<string, "not_started" | "in_progress" | "required_completed" | "all_completed"> = {};
+    for (const course of courses) {
+      const details = detailsByCourseId[course.id];
+      if (!details) {
+        const hasAnySession = learningNodeSessions.some((session) => session.learning_path_id === course.id);
+        map[course.id] = hasAnySession ? "in_progress" : "not_started";
+        continue;
+      }
+      const requiredNodes = details.nodes.filter((node) => node.required);
+      const progress = details.node_progress ?? {};
+      const hasStarted = details.nodes.some((node) => startedStates.has(String(progress[node.id] ?? "available")));
+      const requiredDone = requiredNodes.length > 0
+        && requiredNodes.every((node) => completedStates.has(String(progress[node.id] ?? "available")));
+      const allDone = details.nodes.length > 0
+        && details.nodes.every((node) => completedStates.has(String(progress[node.id] ?? "available")));
+      if (allDone) {
+        map[course.id] = "all_completed";
+      } else if (requiredDone) {
+        map[course.id] = "required_completed";
+      } else if (hasStarted) {
+        map[course.id] = "in_progress";
+      } else {
+        map[course.id] = "not_started";
+      }
+    }
+    return map;
+  }, [courses, detailsByCourseId, learningNodeSessions]);
 
   const selectedDetails = selectedCourseId ? detailsByCourseId[selectedCourseId] ?? null : null;
   const chapterColorById = useMemo(() => {
@@ -467,6 +522,20 @@ export function CoursesPage({
   }, [courses, selectedCourseId]);
 
   useEffect(() => {
+    const courseFromQuery = searchParams.get("course")?.trim() ?? "";
+    if (!courseFromQuery) {
+      return;
+    }
+    if (selectedCourseId === courseFromQuery) {
+      return;
+    }
+    if (!courses.some((course) => course.id === courseFromQuery)) {
+      return;
+    }
+    setSelectedCourseId(courseFromQuery);
+  }, [courses, searchParams, selectedCourseId]);
+
+  useEffect(() => {
     if (!menuCourseId) {
       return;
     }
@@ -521,31 +590,41 @@ export function CoursesPage({
           <h4>Courses</h4>
         </div>
 
-        <div className="courses-toolbar">
-          <input
-            className="dialog-input"
-            type="search"
-            placeholder="Search title or description"
-            value={search}
-            onChange={(event) => setSearch(event.target.value)}
-          />
-          <ScopeFilterMenu value={scope} onChange={setScope} />
-          <StatusFilterMenu value={status} onChange={setStatus} includeArchived={canCreateGlobal} />
-          <SortMenu value={sort} onChange={setSort} />
+        <div className={`courses-toolbar ${isAdmin ? "admin" : "user"}`}>
+          <div className="table-search-input">
+            <Icon name="search" className="table-search-input-icon" />
+            <input
+              className="dialog-input table-search-input-control"
+              type="search"
+              placeholder="Search title or description"
+              value={search}
+              onChange={(event) => setSearch(event.target.value)}
+            />
+          </div>
+          {isAdmin ? (
+            <div className="courses-toolbar-filters">
+              <ScopeFilterMenu value={scope} onChange={setScope} />
+              <StatusFilterMenu value={status} onChange={setStatus} includeArchived={canCreateGlobal} />
+            </div>
+          ) : null}
+          <div className={`courses-toolbar-sort${isAdmin ? "" : " user-only"}`}>
+            <SortMenu value={sort} onChange={setSort} />
+          </div>
         </div>
 
         <div className="library-table courses-table">
           {loading ? <div className="empty-state">Loading courses...</div> : null}
           {!loading ? (
             <>
-              <div className="library-table-head courses-head">
+              <div className={`library-table-head courses-head${isAdmin ? " admin" : " compact"}`}>
                 <span>Name</span>
-                <span>Scope</span>
-                <span>Owner</span>
-                <span>Status</span>
+                {isAdmin ? <span>Scope</span> : null}
+                {isAdmin ? <span>Owner</span> : null}
+                {isAdmin ? <span>Status</span> : null}
                 <span>Nodes</span>
                 <span>Modules</span>
                 <span>Lessons</span>
+                <span>Version</span>
                 <span>Updated</span>
                 <span>Actions</span>
               </div>
@@ -554,7 +633,7 @@ export function CoursesPage({
                 {courses.map((course) => (
                   <div
                     key={course.id}
-                    className={`library-table-row courses-row${selectedCourseId === course.id ? " active" : ""}`}
+                    className={`library-table-row courses-row${isAdmin ? " admin" : " compact"}${selectedCourseId === course.id ? " active" : ""}`}
                     role="button"
                     tabIndex={0}
                     onClick={() => setSelectedCourseId(course.id)}
@@ -566,32 +645,39 @@ export function CoursesPage({
                     }}
                   >
                     <span className="courses-title-cell">
-                      <strong>{course.title}</strong>
+                      <strong className="courses-title-main">
+                        <span
+                          className={`learning-session-status-dot course-status-icon ${
+                            courseProgressStatusById[course.id] === "all_completed"
+                              ? "completed-all"
+                              : courseProgressStatusById[course.id] === "required_completed"
+                                ? "completed"
+                                : courseProgressStatusById[course.id] === "in_progress"
+                                  ? "in-progress"
+                                  : "not-started"
+                          }`}
+                          aria-hidden="true"
+                        >
+                          {(courseProgressStatusById[course.id] === "required_completed" || courseProgressStatusById[course.id] === "all_completed")
+                            ? <Icon name="check" className="learning-session-status-icon completed" />
+                            : null}
+                        </span>
+                        <span>{course.title}</span>
+                      </strong>
                       <small>{course.description || "No description"}</small>
                     </span>
-                    <span>{course.scope === "global" ? "Global" : "User"}</span>
-                    <span>{course.owner_displayname || course.owner_username || (course.scope === "global" ? "System" : "-")}</span>
-                    <span className={`learning-path-status learning-path-status-${course.status}`}>{course.status}</span>
+                    {isAdmin ? <span>{course.scope === "global" ? "Global" : "User"}</span> : null}
+                    {isAdmin ? <span>{course.owner_displayname || course.owner_username || (course.scope === "global" ? "System" : "-")}</span> : null}
+                    {isAdmin ? <span className={`learning-path-status learning-path-status-${course.status}`}>{course.status}</span> : null}
                     <span>{course.node_count}</span>
                     <span>{course.module_count}</span>
                     <span>{course.lesson_count}</span>
+                    <span>{formatCourseVersion(course.schema_version)}</span>
                     <span className="library-updated-cell">
                       <strong>{new Date(course.updated_at).toLocaleDateString()}</strong>
                       <span>{new Date(course.updated_at).toLocaleTimeString()}</span>
                     </span>
                     <span className="courses-row-actions">
-                      <button
-                        className="course-icon-button play"
-                        type="button"
-                        title={course.status === "draft" ? "Start" : "Continue"}
-                        aria-label={course.status === "draft" ? "Start course" : "Continue course"}
-                        onClick={(event) => {
-                          event.stopPropagation();
-                          void onStartContinue(course);
-                        }}
-                      >
-                        <Icon name="play" className="course-play-icon" />
-                      </button>
                       {canCreateGlobal || course.owner_user_id === currentUserId ? (
                         <div className="courses-row-menu">
                           <button
@@ -633,7 +719,15 @@ export function CoursesPage({
                                 <Icon name="archive" />
                                 {course.status === "archived" ? "Unarchive" : "Archive"}
                               </button>
-                              <button className="chat-item-actions-option" type="button" onClick={() => setMenuCourseId(null)}>
+                              <button
+                                className="chat-item-actions-option"
+                                type="button"
+                                onClick={() => {
+                                  onEditCourse(course.id);
+                                  setMenuCourseId(null);
+                                  setMenuCoursePosition(null);
+                                }}
+                              >
                                 <Icon name="edit" />
                                 Edit
                               </button>
@@ -679,8 +773,8 @@ export function CoursesPage({
             <h4>{selectedCourse.title}</h4>
             <p>{selectedCourse.description || "No description provided for this course."}</p>
             <div className="learning-path-details-meta">
-              <span>{selectedCourse.scope === "global" ? "Global scope" : "User scope"}</span>
-              <span>{selectedCourse.status}</span>
+              {isAdmin ? <span>{selectedCourse.scope === "global" ? "Global scope" : "User scope"}</span> : null}
+              {isAdmin ? <span>{selectedCourse.status}</span> : null}
               <span>{selectedCourse.subject || "General"}</span>
               <span>{selectedCourse.difficulty_level || "n/a"}</span>
             </div>
@@ -753,6 +847,11 @@ export function CoursesPage({
                             const state = selectedDetails.node_progress[node.id] ?? "locked";
                             const isSelected = selectedNode?.id === node.id;
                             const chapterColor = chapterColorById[node.chapter_id ?? ""] ?? "#94a3b8";
+                            const progressStatusClass = state === "completed" || state === "mastered"
+                              ? "completed"
+                              : state === "in_progress"
+                                ? "in-progress"
+                                : "not-started";
                             const nodeIcon: "play" | "check" | "archive" | "academic-hat" | "book" =
                               node.type === "practice"
                                 ? "play"
@@ -785,6 +884,9 @@ export function CoursesPage({
                               >
                                 <span className="skilltree-node-icon-shell" style={{ borderColor: chapterColor, color: chapterColor }}>
                                   <Icon name={nodeIcon} className="skilltree-node-icon" />
+                                </span>
+                                <span className={`skilltree-node-progress-indicator learning-session-status-dot ${progressStatusClass}`} aria-hidden="true">
+                                  {progressStatusClass === "completed" ? <Icon name="check" className="learning-session-status-icon completed" /> : null}
                                 </span>
                               </button>
                             );
@@ -829,6 +931,10 @@ export function CoursesPage({
                             Branch: {selectedNode.branch_id ? branchById[selectedNode.branch_id]?.title ?? selectedNode.branch_id : "none"}
                             <br />
                             Completion role: {selectedNode.type === "capstone" ? "capstone" : selectedNode.required ? "required" : "optional"}
+                            <br />
+                            Attempts: {selectedDetails.node_attempt_counts?.[selectedNode.id] ?? 0}
+                            <br />
+                            Restarts: {Math.max(0, (selectedDetails.node_attempt_counts?.[selectedNode.id] ?? 0) - 1)}
                           </p>
                         </div>
                         <div className="skilltree-sidepanel-list">
@@ -897,9 +1003,10 @@ export function CoursesPage({
                           const runtime = selectedDetails.node_runtime[selectedNode.id];
                           const state = selectedDetails.node_progress[selectedNode.id] ?? "locked";
                           const prereqsSatisfied = runtime ? runtime.blocked_by_all.length === 0 && runtime.blocked_by_any.length === 0 : false;
-                          const showActions = prereqsSatisfied && state !== "locked" && state !== "awaiting_checkpoint";
+                          const isUnlockGate = selectedNode.type === "unlock_gate";
+                          const showActions = !isUnlockGate && prereqsSatisfied && state !== "locked" && state !== "awaiting_checkpoint";
                           const canReset = state === "in_progress" || state === "completed";
-                          const actionLabel = state === "in_progress" ? "Continue" : "Start";
+                          const actionLabel = state === "in_progress" || state === "completed" || state === "mastered" ? "Continue" : "Start";
                           if (!showActions) {
                             return null;
                           }
@@ -939,8 +1046,13 @@ export function CoursesPage({
                                 title={actionLabel}
                                 aria-label={`${actionLabel} node`}
                                 onClick={() => {
-                                  void onUpdateNodeProgress(selectedCourse.id, selectedNode.id, { status: "in_progress" })
-                                    .then((payload) => setDetailsByCourseId((current) => ({ ...current, [selectedCourse.id]: payload })));
+                                  void Promise.resolve(onStartContinue(selectedCourse.id, selectedNode.id))
+                                    .then(() => onLoadDetails(selectedCourse.id))
+                                    .then((payload) => {
+                                      if (payload) {
+                                        setDetailsByCourseId((current) => ({ ...current, [selectedCourse.id]: payload }));
+                                      }
+                                    });
                                 }}
                               >
                                 <Icon name="play" />

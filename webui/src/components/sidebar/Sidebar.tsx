@@ -1,13 +1,15 @@
 import { useEffect, useRef, useState } from "react";
 import { Icon } from "../common/Icons";
-import type { Chat, CurrentUser, Gpt } from "../../types/chat";
+import type { Chat, CurrentUser, Gpt, LearningNodeSession } from "../../types/chat";
 import { Dialog } from "../common/Dialog";
 
 type SidebarProps = {
   chats: Chat[];
   gpts: Gpt[];
+  learningNodeSessions: LearningNodeSession[];
   activeChatId: string | null;
-  activeView: "chat" | "gpt" | "library" | "admin" | "learning" | "courses";
+  activeLearningNodeSessionId: string | null;
+  activeView: "chat" | "gpt" | "library" | "admin" | "learning" | "learning-node" | "courses";
   currentUser: CurrentUser;
   canUseStandardChat: boolean;
   canUseGpts: boolean;
@@ -31,16 +33,37 @@ type SidebarProps = {
   onOpenChatFilter: (chat: Chat) => void;
   onDownloadChat: (chatId: string) => void;
   onDeleteChat: (chatId: string) => void;
+  onSelectLearningNodeSession: (sessionId: string) => void;
+  onArchiveLearningNodeSession: (sessionId: string) => void;
+  onResetLearningNodeSession: (sessionId: string) => void;
+  onDownloadLearningNodeSession: (sessionId: string) => void;
+  onDeleteLearningNodeSession: (sessionId: string) => void;
   onEditGpt: (gptId: string) => void;
   onClearGpt: (gptId: string) => void;
   onDownloadGpt: (gptId: string) => void;
   onDeleteGpt: (gptId: string) => void;
 };
 
+function LearningSessionStatusIcon({ status }: { status: LearningNodeSession["status"] }) {
+  if (status === "completed") {
+    return (
+      <span className="learning-session-status-dot completed" aria-hidden="true">
+        <Icon name="check" className="learning-session-status-icon completed" />
+      </span>
+    );
+  }
+  if (status === "in_progress") {
+    return <span className="learning-session-status-dot in-progress" aria-hidden="true" />;
+  }
+  return <span className="learning-session-status-dot created" aria-hidden="true" />;
+}
+
 export function Sidebar({
   chats,
   gpts,
+  learningNodeSessions,
   activeChatId,
+  activeLearningNodeSessionId,
   activeView,
   currentUser,
   canUseStandardChat,
@@ -65,6 +88,11 @@ export function Sidebar({
   onOpenChatFilter,
   onDownloadChat,
   onDeleteChat,
+  onSelectLearningNodeSession,
+  onArchiveLearningNodeSession,
+  onResetLearningNodeSession,
+  onDownloadLearningNodeSession,
+  onDeleteLearningNodeSession,
   onEditGpt,
   onClearGpt,
   onDownloadGpt,
@@ -72,6 +100,7 @@ export function Sidebar({
 }: SidebarProps) {
   const [menuChatId, setMenuChatId] = useState<string | null>(null);
   const [menuGptId, setMenuGptId] = useState<string | null>(null);
+  const [menuLearningNodeSessionId, setMenuLearningNodeSessionId] = useState<string | null>(null);
   const [userMenuOpen, setUserMenuOpen] = useState(false);
   const [renameTarget, setRenameTarget] = useState<Chat | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<Chat | null>(null);
@@ -85,6 +114,7 @@ export function Sidebar({
       if (menuRef.current && !menuRef.current.contains(event.target as Node)) {
         setMenuChatId(null);
         setMenuGptId(null);
+        setMenuLearningNodeSessionId(null);
       }
       if (userMenuRef.current && !userMenuRef.current.contains(event.target as Node)) {
         setUserMenuOpen(false);
@@ -95,6 +125,7 @@ export function Sidebar({
       if (event.key === "Escape") {
         setMenuChatId(null);
         setMenuGptId(null);
+        setMenuLearningNodeSessionId(null);
         setUserMenuOpen(false);
       }
     }
@@ -202,6 +233,100 @@ export function Sidebar({
             <span>New GPT</span>
           </button>
         </div> : null}
+
+        <p className="side-nav-headline">Learning Nodes</p>
+
+        <div className="side-nav-chat-list side-nav-chat-list-compact" aria-label="Learning Nodes">
+          {learningNodeSessions.length === 0 ? (
+            <div className="side-nav-empty-hint">No active learning nodes yet.</div>
+          ) : null}
+          {learningNodeSessions.map((session) => (
+            <div
+              key={session.id}
+              className={`side-nav-chat-row${session.id === activeLearningNodeSessionId && activeView === "learning-node" ? " active" : ""}${
+                menuLearningNodeSessionId === session.id ? " menu-open" : ""
+              }`}
+            >
+              <button
+                className={`side-nav-chat-item${session.id === activeLearningNodeSessionId && activeView === "learning-node" ? " active" : ""}`}
+                type="button"
+                onClick={() => onSelectLearningNodeSession(session.id)}
+              >
+                <span className="learning-session-row-content">
+                  <span className="learning-session-status-wrap" aria-hidden="true">
+                    <LearningSessionStatusIcon status={session.status} />
+                  </span>
+                  <span className="learning-session-copy">
+                    <span className="learning-session-title">{session.node_title}</span>
+                    <small>{session.course_title}</small>
+                  </span>
+                </span>
+              </button>
+              <div className="chat-item-actions" ref={menuLearningNodeSessionId === session.id ? menuRef : null}>
+                <button
+                  className="chat-item-actions-trigger"
+                  type="button"
+                  aria-label={`Learning node options for ${session.node_title}`}
+                  aria-expanded={menuLearningNodeSessionId === session.id}
+                  onClick={(event) => {
+                    event.stopPropagation();
+                    setMenuLearningNodeSessionId((current) => (current === session.id ? null : session.id));
+                  }}
+                >
+                  <Icon name="dots" className="chat-menu-dots" />
+                </button>
+                {menuLearningNodeSessionId === session.id ? (
+                  <div className="chat-item-actions-menu" role="menu">
+                    <button
+                      className="chat-item-actions-option"
+                      type="button"
+                      onClick={() => {
+                        onArchiveLearningNodeSession(session.id);
+                        setMenuLearningNodeSessionId(null);
+                      }}
+                    >
+                      <Icon name="archive" />
+                      Archive
+                    </button>
+                    <button
+                      className="chat-item-actions-option"
+                      type="button"
+                      onClick={() => {
+                        onResetLearningNodeSession(session.id);
+                        setMenuLearningNodeSessionId(null);
+                      }}
+                    >
+                      <Icon name="reset" />
+                      Reset
+                    </button>
+                    <button
+                      className="chat-item-actions-option"
+                      type="button"
+                      onClick={() => {
+                        onDownloadLearningNodeSession(session.id);
+                        setMenuLearningNodeSessionId(null);
+                      }}
+                    >
+                      <Icon name="download" />
+                      Download
+                    </button>
+                    <button
+                      type="button"
+                      className="chat-item-actions-option delete"
+                      onClick={() => {
+                        onDeleteLearningNodeSession(session.id);
+                        setMenuLearningNodeSessionId(null);
+                      }}
+                    >
+                      <Icon name="trash" />
+                      Delete
+                    </button>
+                  </div>
+                ) : null}
+              </div>
+            </div>
+          ))}
+        </div>
 
         {canUseStandardChat ? <p className="side-nav-headline">Your chats</p> : null}
 

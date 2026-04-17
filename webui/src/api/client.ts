@@ -13,9 +13,12 @@ import type {
   ChatDownload,
   ChatUpdate,
   CourseImportResponse,
+  CourseEditorData,
   CourseListResponse,
   CourseSort,
   CourseTemplateResponse,
+  ContentAssetListResponse,
+  ContentAsset,
   CurrentUser,
   FilterFile,
   FilterFileResponse,
@@ -31,6 +34,13 @@ import type {
   LibraryUploadResponse,
   LearningModule,
   LearningLesson,
+  LearningNodeSession,
+  LearningNodeExecutionAttempt,
+  LearningNodeExecutionAttemptListResponse,
+  LearningNodeExecutionCompleteResponse,
+  LearningNodeExecutionStartResponse,
+  LearningNodeSessionDownload,
+  LearningNodeSessionListResponse,
   LearningGoal,
   LearningGoalPriority,
   LearningProfileBundle,
@@ -214,6 +224,33 @@ export const apiClient = {
   },
   getCourseTemplate() {
     return request<CourseTemplateResponse>("/api/courses/template");
+  },
+  getCourseEditor(pathId: string) {
+    return request<CourseEditorData>(`/api/learning-paths/${pathId}/editor`);
+  },
+  saveCourseEditor(pathId: string, rawJson: string) {
+    return request<CourseEditorData>(`/api/learning-paths/${pathId}/editor`, {
+      method: "PUT",
+      body: JSON.stringify({ raw_json: rawJson }),
+    });
+  },
+  listCourseAttachments(pathId: string) {
+    return request<ContentAssetListResponse>(`/api/learning-paths/${pathId}/attachments`);
+  },
+  uploadCourseAttachments(pathId: string, files: File[]) {
+    const formData = new FormData();
+    for (const file of files) {
+      formData.append("files", file);
+    }
+    return request<ContentAssetListResponse>(`/api/learning-paths/${pathId}/attachments/upload`, {
+      method: "POST",
+      body: formData,
+    });
+  },
+  resolveCourseAttachment(pathId: string, fileName: string) {
+    const query = new URLSearchParams();
+    query.set("file_name", fileName);
+    return request<ContentAsset>(`/api/learning-paths/${pathId}/attachments/resolve?${query.toString()}`);
   },
   importCourseFiles(files: File[], scopesByFile: Record<string, "global" | "user">) {
     const formData = new FormData();
@@ -449,6 +486,67 @@ export const apiClient = {
       method: "PUT",
       body: JSON.stringify(payload),
     });
+  },
+  listLearningNodeSessions() {
+    return request<LearningNodeSessionListResponse>("/api/learning-node-sessions");
+  },
+  listArchivedLearningNodeSessions() {
+    return request<LearningNodeSessionListResponse>("/api/learning-node-sessions/archived");
+  },
+  ensureLearningNodeSession(pathId: string, nodeId: string) {
+    return request<LearningNodeSession>(`/api/learning-paths/${pathId}/nodes/${nodeId}/session`, {
+      method: "POST",
+    });
+  },
+  startLearningNodeExecution(pathId: string, nodeId: string, forceNewAttempt = false) {
+    return request<LearningNodeExecutionStartResponse>(
+      `/api/learning-paths/${pathId}/nodes/${nodeId}/execution/start?force_new_attempt=${forceNewAttempt ? "true" : "false"}`,
+      { method: "POST" },
+    );
+  },
+  getLatestLearningNodeExecution(pathId: string, nodeId: string) {
+    return request<LearningNodeExecutionAttempt>(`/api/learning-paths/${pathId}/nodes/${nodeId}/execution/latest`);
+  },
+  listLearningNodeExecutionAttempts(pathId: string, nodeId: string, limit = 20) {
+    const safeLimit = Math.max(1, Math.min(100, limit));
+    return request<LearningNodeExecutionAttemptListResponse>(`/api/learning-paths/${pathId}/nodes/${nodeId}/execution/attempts?limit=${safeLimit}`);
+  },
+  submitLearningNodeExecutionResponses(pathId: string, nodeId: string, attemptId: string, responses: Record<string, unknown>) {
+    return request<LearningNodeExecutionAttempt>(`/api/learning-paths/${pathId}/nodes/${nodeId}/execution/attempts/${attemptId}/responses`, {
+      method: "PUT",
+      body: JSON.stringify({ responses }),
+    });
+  },
+  completeLearningNodeExecution(pathId: string, nodeId: string, attemptId: string) {
+    return request<LearningNodeExecutionCompleteResponse>(`/api/learning-paths/${pathId}/nodes/${nodeId}/execution/attempts/${attemptId}/complete`, {
+      method: "POST",
+    });
+  },
+  getLearningNodeSession(sessionId: string, markOpened = false) {
+    return request<LearningNodeSession>(`/api/learning-node-sessions/${sessionId}?mark_opened=${markOpened ? "true" : "false"}`);
+  },
+  archiveLearningNodeSession(sessionId: string) {
+    return request<LearningNodeSession>(`/api/learning-node-sessions/${sessionId}/archive`, {
+      method: "PATCH",
+    });
+  },
+  unarchiveLearningNodeSession(sessionId: string) {
+    return request<LearningNodeSession>(`/api/learning-node-sessions/${sessionId}/unarchive`, {
+      method: "PATCH",
+    });
+  },
+  deleteLearningNodeSession(sessionId: string) {
+    return request<LearningNodeSession>(`/api/learning-node-sessions/${sessionId}/delete`, {
+      method: "PATCH",
+    });
+  },
+  resetLearningNodeSession(sessionId: string) {
+    return request<LearningNodeSession>(`/api/learning-node-sessions/${sessionId}/reset`, {
+      method: "POST",
+    });
+  },
+  downloadLearningNodeSession(sessionId: string) {
+    return request<LearningNodeSessionDownload>(`/api/learning-node-sessions/${sessionId}/download`);
   },
   deleteLearningPath(pathId: string) {
     return request<LearningPath>(`/api/learning-paths/${pathId}`, { method: "DELETE" });

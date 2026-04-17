@@ -95,6 +95,15 @@ class Settings:
     password_salt: str = os.getenv("PASSWORD_SALT", "%vSp3$")
     users_file: str = os.getenv("USERS_FILE", "/app/users.json")
     courses_dir: str = os.getenv("COURSES_DIR", "courses")
+    minio_enabled: bool = _get_bool("MINIO_ENABLED", True)
+    minio_endpoint: str = os.getenv("MINIO_ENDPOINT", "http://minio:9000")
+    minio_access_key: str = os.getenv("MINIO_ACCESS_KEY", "minioadmin")
+    minio_secret_key: str = os.getenv("MINIO_SECRET_KEY", "minioadmin")
+    minio_secure: bool = _get_bool("MINIO_SECURE", False)
+    minio_region: str = os.getenv("MINIO_REGION", "us-east-1")
+    minio_content_bucket: str = os.getenv("MINIO_CONTENT_BUCKET", "learning-content-assets")
+    minio_submission_bucket: str = os.getenv("MINIO_SUBMISSION_BUCKET", "learning-submission-assets")
+    minio_url_expiry_seconds: int = _get_int("MINIO_URL_EXPIRY_SECONDS", 900)
 
     @property
     def database_url(self) -> str:

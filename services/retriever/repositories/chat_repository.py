@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from services.common.models import (
+    ContentAsset,
     ChatMessage,
     ChatSession,
     DiagnosticDefinition,
@@ -9,6 +10,7 @@ from services.common.models import (
     GPTChatSession,
     GPTRecord,
     LearningLesson,
+    LearningNodeSession,
     LearningStateCheck,
     LearningModule,
     LearningPath,
@@ -18,11 +20,14 @@ from services.common.models import (
     RetrievalLog,
     SettingRecord,
     UserLearningGoal,
+    UserLearningNodeContext,
+    UserLearningNodeExecutionAttempt,
     UserLearningNodeProgress,
     UserKSAAssessmentAttempt,
     UserKSADrillAttempt,
     UserKSAProfile,
     UserLearningPreference,
+    UserLearningPersonalizationLayer,
     UserLearningProfile,
     UserDiagnosticAnswer,
     UserDiagnosticAttempt,
@@ -254,6 +259,17 @@ class ChatRepository:
             user_id=user_id,
             attempt_id=attempt_id,
             result_json=result_json,
+        )
+
+    def delete_user_ksa_drill_attempt(
+        self,
+        *,
+        user_id: int,
+        attempt_id: str,
+    ) -> bool:
+        return self.postgres_client.delete_user_ksa_drill_attempt(
+            user_id=user_id,
+            attempt_id=attempt_id,
         )
 
     def list_user_file_filters(self, user_id: int, *, is_admin: bool):
@@ -517,6 +533,244 @@ class ChatRepository:
             node_id=node_id,
         )
 
+    def list_learning_node_sessions(
+        self,
+        *,
+        user_id: int,
+        archived: bool = False,
+        include_deleted: bool = False,
+    ) -> list[LearningNodeSession]:
+        return self.postgres_client.list_learning_node_sessions(
+            user_id=user_id,
+            archived=archived,
+            include_deleted=include_deleted,
+        )
+
+    def get_learning_node_session(self, *, user_id: int, session_id: str) -> LearningNodeSession | None:
+        return self.postgres_client.get_learning_node_session(user_id=user_id, session_id=session_id)
+
+    def get_learning_node_session_by_node(
+        self,
+        *,
+        user_id: int,
+        learning_path_id: str,
+        node_id: str,
+    ) -> LearningNodeSession | None:
+        return self.postgres_client.get_learning_node_session_by_node(
+            user_id=user_id,
+            learning_path_id=learning_path_id,
+            node_id=node_id,
+        )
+
+    def ensure_learning_node_session(
+        self,
+        *,
+        user_id: int,
+        learning_path_id: str,
+        node_id: str,
+        node_type: str,
+        route_path: str,
+    ) -> LearningNodeSession:
+        return self.postgres_client.ensure_learning_node_session(
+            user_id=user_id,
+            learning_path_id=learning_path_id,
+            node_id=node_id,
+            node_type=node_type,
+            route_path=route_path,
+        )
+
+    def set_learning_node_session_archived(
+        self,
+        *,
+        user_id: int,
+        session_id: str,
+        is_archived: bool,
+    ) -> LearningNodeSession | None:
+        return self.postgres_client.set_learning_node_session_archived(
+            user_id=user_id,
+            session_id=session_id,
+            is_archived=is_archived,
+        )
+
+    def set_learning_node_session_deleted(
+        self,
+        *,
+        user_id: int,
+        session_id: str,
+        is_deleted: bool,
+    ) -> LearningNodeSession | None:
+        return self.postgres_client.set_learning_node_session_deleted(
+            user_id=user_id,
+            session_id=session_id,
+            is_deleted=is_deleted,
+        )
+
+    def mark_learning_node_session_opened(
+        self,
+        *,
+        user_id: int,
+        session_id: str,
+    ) -> LearningNodeSession | None:
+        return self.postgres_client.mark_learning_node_session_opened(user_id=user_id, session_id=session_id)
+
+    def sync_learning_node_session_completion(
+        self,
+        *,
+        user_id: int,
+        learning_path_id: str,
+        node_id: str,
+        node_progress_status: str,
+    ) -> LearningNodeSession | None:
+        return self.postgres_client.sync_learning_node_session_completion(
+            user_id=user_id,
+            learning_path_id=learning_path_id,
+            node_id=node_id,
+            node_progress_status=node_progress_status,
+        )
+
+    def get_user_learning_node_context(
+        self,
+        *,
+        user_id: int,
+        learning_path_id: str,
+        node_id: str,
+    ) -> UserLearningNodeContext | None:
+        return self.postgres_client.get_user_learning_node_context(
+            user_id=user_id,
+            learning_path_id=learning_path_id,
+            node_id=node_id,
+        )
+
+    def list_user_learning_node_contexts(
+        self,
+        *,
+        user_id: int,
+        learning_path_id: str | None = None,
+    ) -> list[UserLearningNodeContext]:
+        return self.postgres_client.list_user_learning_node_contexts(
+            user_id=user_id,
+            learning_path_id=learning_path_id,
+        )
+
+    def upsert_user_learning_node_context(
+        self,
+        *,
+        user_id: int,
+        learning_path_id: str,
+        node_id: str,
+        fields: dict[str, object],
+    ) -> UserLearningNodeContext:
+        return self.postgres_client.upsert_user_learning_node_context(
+            user_id=user_id,
+            learning_path_id=learning_path_id,
+            node_id=node_id,
+            fields=fields,
+        )
+
+    def delete_user_learning_node_contexts_for_path(self, *, learning_path_id: str) -> int:
+        return self.postgres_client.delete_user_learning_node_contexts_for_path(learning_path_id=learning_path_id)
+
+    def create_user_learning_node_execution_attempt(self, payload: dict[str, object]) -> UserLearningNodeExecutionAttempt:
+        return self.postgres_client.create_user_learning_node_execution_attempt(payload)
+
+    def get_user_learning_node_execution_attempt(
+        self,
+        *,
+        user_id: int,
+        attempt_id: str,
+    ) -> UserLearningNodeExecutionAttempt | None:
+        return self.postgres_client.get_user_learning_node_execution_attempt(user_id=user_id, attempt_id=attempt_id)
+
+    def get_latest_user_learning_node_execution_attempt(
+        self,
+        *,
+        user_id: int,
+        learning_path_id: str,
+        node_id: str,
+    ) -> UserLearningNodeExecutionAttempt | None:
+        return self.postgres_client.get_latest_user_learning_node_execution_attempt(
+            user_id=user_id,
+            learning_path_id=learning_path_id,
+            node_id=node_id,
+        )
+
+    def list_user_learning_node_execution_attempts(
+        self,
+        *,
+        user_id: int,
+        learning_path_id: str,
+        node_id: str,
+        limit: int = 20,
+    ) -> list[UserLearningNodeExecutionAttempt]:
+        return self.postgres_client.list_user_learning_node_execution_attempts(
+            user_id=user_id,
+            learning_path_id=learning_path_id,
+            node_id=node_id,
+            limit=limit,
+        )
+
+    def count_user_learning_node_execution_attempts_by_node(
+        self,
+        *,
+        user_id: int,
+        learning_path_id: str,
+    ) -> dict[str, int]:
+        return self.postgres_client.count_user_learning_node_execution_attempts_by_node(
+            user_id=user_id,
+            learning_path_id=learning_path_id,
+        )
+
+    def update_user_learning_node_execution_attempt(
+        self,
+        *,
+        user_id: int,
+        attempt_id: str,
+        fields: dict[str, object],
+    ) -> UserLearningNodeExecutionAttempt | None:
+        return self.postgres_client.update_user_learning_node_execution_attempt(
+            user_id=user_id,
+            attempt_id=attempt_id,
+            fields=fields,
+        )
+
+    def create_content_asset(self, payload: dict[str, object]) -> ContentAsset:
+        return self.postgres_client.create_content_asset(payload)
+
+    def get_content_asset(self, *, asset_id: str) -> ContentAsset | None:
+        return self.postgres_client.get_content_asset(asset_id=asset_id)
+
+    def get_content_asset_by_storage_key(self, *, bucket_name: str, storage_key: str) -> ContentAsset | None:
+        return self.postgres_client.get_content_asset_by_storage_key(bucket_name=bucket_name, storage_key=storage_key)
+
+    def list_content_assets(
+        self,
+        *,
+        learning_path_id: str | None = None,
+        node_id: str | None = None,
+        attempt_id: str | None = None,
+        source_type: str | None = None,
+        scope_type: str | None = None,
+        owner_user_id: int | None = None,
+        asset_kinds: list[str] | None = None,
+        limit: int = 200,
+    ) -> list[ContentAsset]:
+        return self.postgres_client.list_content_assets(
+            learning_path_id=learning_path_id,
+            node_id=node_id,
+            attempt_id=attempt_id,
+            source_type=source_type,
+            scope_type=scope_type,
+            owner_user_id=owner_user_id,
+            asset_kinds=asset_kinds,
+            limit=limit,
+        )
+
+    def list_content_assets_by_ids(self, *, asset_ids: list[str]) -> list[ContentAsset]:
+        return self.postgres_client.list_content_assets_by_ids(asset_ids=asset_ids)
+
+    def update_content_asset(self, *, asset_id: str, fields: dict[str, object]) -> ContentAsset | None:
+        return self.postgres_client.update_content_asset(asset_id=asset_id, fields=fields)
+
     def get_diagnostic_definition(self, diagnostic_type: str) -> DiagnosticDefinition | None:
         return self.postgres_client.get_diagnostic_definition(diagnostic_type)
 
@@ -617,3 +871,17 @@ class ChatRepository:
 
     def create_explanation_feedback(self, payload: dict[str, object]) -> ExplanationFeedback:
         return self.postgres_client.create_explanation_feedback(payload)
+
+    def list_explanation_feedback(self, *, user_id: int, limit: int = 20) -> list[ExplanationFeedback]:
+        return self.postgres_client.list_explanation_feedback(user_id=user_id, limit=limit)
+
+    def get_user_learning_personalization_layers(self, *, user_id: int) -> UserLearningPersonalizationLayer | None:
+        return self.postgres_client.get_user_learning_personalization_layers(user_id=user_id)
+
+    def upsert_user_learning_personalization_layers(
+        self,
+        *,
+        user_id: int,
+        fields: dict[str, object],
+    ) -> UserLearningPersonalizationLayer:
+        return self.postgres_client.upsert_user_learning_personalization_layers(user_id=user_id, fields=fields)

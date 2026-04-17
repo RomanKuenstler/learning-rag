@@ -3,6 +3,7 @@ import type {
   AssistantMode,
   Chat,
   FilterTag,
+  LearningNodeSession,
   PersonalizationBaseStyle,
   PersonalizationLevel,
   PersonalizationUpdate,
@@ -25,6 +26,7 @@ function describeAssistantMode(mode: AssistantMode) {
 type PreferencesDialogProps = {
   initialTab?: "general" | "personalization" | "settings" | "filter" | "archive";
   archivedChats: Chat[];
+  archivedLearningNodeSessions: LearningNodeSession[];
   settingsDraft: SettingsUpdate | null;
   personalizationDraft: PersonalizationUpdate | null;
   availableModes: AssistantMode[];
@@ -42,8 +44,11 @@ type PreferencesDialogProps = {
   personalizationSuccess: string | null;
   onClose: () => void;
   onDownloadChat: (chatId: string) => void;
+  onDownloadLearningNodeSession: (sessionId: string) => void;
   onUnarchiveChat: (chatId: string) => void;
+  onUnarchiveLearningNodeSession: (sessionId: string) => void;
   onDeleteChat: (chatId: string) => void;
+  onDeleteLearningNodeSession: (sessionId: string) => void;
   onFieldChange: (patch: Partial<SettingsUpdate>) => void;
   onPersonalizationFieldChange: (patch: Partial<PersonalizationUpdate>) => void;
   onSaveSettings: () => void;
@@ -81,6 +86,7 @@ const TABS = [
 export function PreferencesDialog({
   initialTab = "general",
   archivedChats,
+  archivedLearningNodeSessions,
   settingsDraft,
   personalizationDraft,
   availableModes,
@@ -98,8 +104,11 @@ export function PreferencesDialog({
   personalizationSuccess,
   onClose,
   onDownloadChat,
+  onDownloadLearningNodeSession,
   onUnarchiveChat,
+  onUnarchiveLearningNodeSession,
   onDeleteChat,
+  onDeleteLearningNodeSession,
   onFieldChange,
   onPersonalizationFieldChange,
   onSaveSettings,
@@ -626,9 +635,8 @@ export function PreferencesDialog({
 
           {activeTab === "archive" ? (
             <div className="preferences-section">
-              {archivedChats.length === 0 ? (
-                <div className="preferences-placeholder">No archived chats yet.</div>
-              ) : (
+              <div className="archive-subhead">Chats</div>
+              {archivedChats.length === 0 ? <div className="preferences-placeholder">No archived chats yet.</div> : (
                 <div className="archive-list archive-table-wrapper">
                   {archivedChats.map((chat) => (
                     <div key={chat.id} className="archive-row archive-table-row">
@@ -644,6 +652,33 @@ export function PreferencesDialog({
                           Unarchive
                         </button>
                         <button className="danger-button" type="button" onClick={() => onDeleteChat(chat.id)}>
+                          Delete
+                        </button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+
+              <div className="archive-subhead">Learning Nodes</div>
+              {archivedLearningNodeSessions.length === 0 ? <div className="preferences-placeholder">No archived learning nodes yet.</div> : (
+                <div className="archive-list archive-table-wrapper">
+                  {archivedLearningNodeSessions.map((session) => (
+                    <div key={session.id} className="archive-row archive-table-row">
+                      <div className="archive-meta">
+                        <strong className="archive-chat-name">{session.node_title}</strong>
+                        <span className="archive-chat-date">
+                          {session.course_title} · Updated {new Date(session.updated_at).toLocaleString()}
+                        </span>
+                      </div>
+                      <div className="archive-actions archive-row-actions">
+                        <button className="secondary-button" type="button" onClick={() => onDownloadLearningNodeSession(session.id)}>
+                          Download
+                        </button>
+                        <button className="secondary-button" type="button" onClick={() => onUnarchiveLearningNodeSession(session.id)}>
+                          Unarchive
+                        </button>
+                        <button className="danger-button" type="button" onClick={() => onDeleteLearningNodeSession(session.id)}>
                           Delete
                         </button>
                       </div>

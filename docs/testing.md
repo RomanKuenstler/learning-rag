@@ -162,3 +162,144 @@ curl http://localhost:8000/api/health
 - If attachment context seems missing, inspect the retriever logs and confirm `ATTACHMENT_MAX_TOTAL_CHARS` is not overly restrictive.
 - If thinking mode fails, inspect retriever logs for the planning or draft debug entries and confirm the fallback simple response path was used.
 - If the Step 7 visuals look inconsistent, inspect the fixed composer width, sidebar padding, and modal variants first because they establish most of the reference rhythm.
+
+## Personalization Layer Tests
+
+New coverage was added for the learning personalization foundation:
+
+- `tests/test_personalization_layers_engine.py`
+
+Covered behaviors:
+
+- declared preference mapping into resolved tutor rules and custom flags
+- capability layer separation of competence vs confidence
+- targeted recompute behavior (live updates do not overwrite stable identity layer)
+- trigger-map sanity checks for reason -> group routing
+
+Run:
+
+- `pytest tests/test_personalization_layers_engine.py`
+
+## User Node Context Layer Tests
+
+New coverage for persistent per-user node-context generation:
+
+- `tests/test_node_context_engine.py`
+
+Covered behaviors:
+
+- start-node context generation
+- non-start-node prior dependency/context generation
+- prior completed-node aggregation into assumptions
+- node-relevant KSA linking and readiness shape output
+
+Recommended focused run:
+
+- `pytest tests/test_node_context_engine.py`
+
+## Node Execution Layer Tests
+
+Coverage for step-specific node execution behavior:
+
+- `tests/test_node_execution_service.py`
+
+Covered behaviors:
+
+- assessment_hook runtime package generation includes 8-16 topics and per-topic archetype rounds
+- quiz runtime package shape includes 12 MC/SC, 3 deep-dive rounds, and 2 free-text items
+- practice runtime package shape includes 3-5 mixed tasks
+- checkpoint runtime package shape includes 10 MC/SC, 3 free-text quiz items, 5 scenario items, and 4 deep-dive rounds
+- capstone runtime package shape includes 24 MC/SC, 8 free-text quiz items, 8 scenario items, and 8 deep-dive rounds
+- active-attempt resume behavior and `force_new_attempt` repeat behavior
+- unlock_gate structural requirement checks can auto-complete when satisfied
+- learning_unit runtime plan generation includes phased structure, niveau hypothesis, and mini-topic lesson briefs
+- review runtime generation includes bounded review scope, topic aggregation, and structured recap plan
+
+Recommended focused run:
+
+- `pytest tests/test_node_execution_service.py`
+
+Additional focused checks:
+
+- `pytest tests/test_node_context_engine.py`
+
+## Learning Node Session Shell Checks Covered
+
+- learning-node session API route coverage:
+  - list active
+  - list archived
+  - ensure/create-or-reactivate for user+node
+  - unlock_gate session creation rejection (`422`)
+  - mark-opened load behavior
+  - archive/unarchive
+  - soft-delete
+  - reset/download placeholders
+- frontend production build with:
+  - `Learning Nodes` sidebar section
+  - dedicated learning-node route renderer for `milestone`, `assessment_hook`, `quiz`, `practice`, `checkpoint`, `capstone`, `learning_unit`, `review`
+  - top metadata tags (type/chapter/branch/route/required)
+  - combined checkpoint/capstone section composition
+  - milestone celebratory page layout
+  - `learning_unit`/`review` multi-step lesson flow:
+    - start step
+    - top progress bar updates
+    - scrollable content area
+    - placeholder media rendering (image/video)
+    - fixed action footer (`Audio` disabled, `Explain again`, `Back`/`Next`)
+    - in-content like/dislike and sources popover
+    - technical-term tooltip style (orange dotted underline + hover tooltip)
+  - unlock_gate route guard and no-action behavior from course detail panel
+  - Preferences archive integration for archived learning-node sessions
+
+Focused run:
+
+```bash
+python3 -m pytest tests/test_learning_node_sessions_api.py -q
+cd webui && npm run build
+```
+
+Smoke validation (manual, API):
+
+1. Start a `learning_unit` node and verify package fields:
+   - `context_summary`
+   - `learner_niveau_hypothesis`
+   - `phase_flow`
+   - `mini_topic_lessons`
+   - `recap_plan`
+2. Start a `review` node and verify package fields:
+   - `review_scope_summary`
+   - `topic_aggregation`
+   - `content_aware_recap_summary`
+   - `recap_structure`
+   - `interaction_hooks`
+3. Open each node in `/learning/nodes/:sessionId` and verify UI flow:
+   - start step is shown before content
+   - `Next` enters content, `Back` hidden on start and first content step
+   - progress bar reflects current step index
+   - long content scrolls within the lesson card
+   - Sources button opens the same popover treatment used by assistant messages
+   - technical term styling shows dotted orange underline and hover tooltip
+
+## Course Editor Coverage
+
+New coverage added for course editor API wiring (`tests/test_step14_learning_api.py`):
+
+- `GET /api/learning-paths/{id}/editor`
+- `PUT /api/learning-paths/{id}/editor`
+- `GET /api/learning-paths/{id}/attachments`
+- `POST /api/learning-paths/{id}/attachments/upload`
+- `GET /api/learning-paths/{id}/attachments/resolve`
+
+What is validated:
+
+- edit payload loads and saves through the dedicated route
+- attachment upload/list endpoints are reachable and typed
+- filename resolution endpoint maps course + filename to attachment metadata
+
+Recommended run when `pytest` is available:
+
+```bash
+python3 -m pytest tests/test_step14_learning_api.py -q
+cd webui && npm run build
+python3 -m compileall -q services
+```
