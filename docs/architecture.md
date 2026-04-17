@@ -386,3 +386,38 @@ Prompt sources:
   - assistant-style sources popover reused from `MessageBubble`/`SourcesPanel`
 
 This keeps runtime-package rendering data-driven while remaining compatible with later real-content delivery and feedback integration.
+
+## Course Attachment Resolution Architecture
+
+Course editing now uses a JSON-first model with a dedicated course attachment domain.
+
+### Separation
+
+- storage layer: MinIO object keys
+- metadata layer: `content_assets` (Postgres)
+- authoring references in course JSON: `name.extension` only
+
+### Source typing
+
+Course editor uploads use:
+
+- `source_type = "course_attachment"`
+- `scope_type = "course"`
+
+This keeps course authoring attachments separate from:
+
+- seeded per-node runtime assets (`seeded_course_asset`)
+- learner submission artifacts (`learner_submission_artifact`)
+
+### MinIO key convention
+
+- `courses/<learning_path_id>/attachments/<asset_id>/<filename>`
+
+### Resolution path
+
+1. Course JSON contains a filename reference.
+2. Backend normalizes filename and scopes lookup to the course.
+3. Resolver maps `(learning_path_id, normalized filename)` to one attachment asset.
+4. Backend returns metadata + presigned URL for runtime/frontend renderers.
+
+Ambiguous or missing references are reported explicitly in editor diagnostics and missing references are blocked on save.

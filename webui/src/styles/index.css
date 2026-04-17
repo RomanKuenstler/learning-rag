@@ -6137,6 +6137,270 @@ button.send:hover:not(:disabled) {
   text-transform: none;
 }
 
+.course-editor-page .gpt-editor-layout {
+  grid-template-columns: minmax(0, 1fr);
+}
+
+.course-editor-layout {
+  height: calc(100vh - 6.9rem);
+}
+
+.course-editor-panel {
+  padding-right: 0;
+}
+
+.course-editor-section-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+}
+
+.course-editor-copy-button {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  min-height: 2rem;
+  padding: 0.35rem 0.65rem;
+}
+
+.course-editor-json-shell {
+  display: grid;
+  grid-template-columns: 3.2rem minmax(0, 1fr);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  overflow: hidden;
+  background: #fff;
+}
+
+.course-editor-line-numbers {
+  background: #f8fafc;
+  border-right: 1px solid var(--border-soft);
+  color: #64748b;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+  font-size: 0.82rem;
+  line-height: 1.45;
+  padding: 0.7rem 0.5rem;
+  max-height: 33.5rem;
+  overflow: hidden;
+  text-align: right;
+  user-select: none;
+}
+
+.course-editor-line-numbers span {
+  display: block;
+}
+
+.course-editor-code-wrap {
+  position: relative;
+  min-height: 26rem;
+}
+
+.course-editor-json-highlight,
+.course-editor-json-input {
+  position: absolute;
+  inset: 0;
+  margin: 0;
+  width: 100%;
+  height: 100%;
+  padding: 0.7rem 0.8rem;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+  font-size: 0.86rem;
+  line-height: 1.45;
+  white-space: pre;
+  overflow: auto;
+}
+
+.course-editor-json-highlight {
+  color: #4b5563;
+  background: #fff;
+  pointer-events: none;
+}
+
+.course-editor-json {
+  min-height: 26rem;
+}
+
+.course-editor-json-input {
+  color: transparent;
+  background: transparent;
+  caret-color: #0f172a;
+  border: none;
+  border-radius: 0;
+  resize: none;
+}
+
+.course-editor-json-input:focus {
+  outline: none;
+  box-shadow: inset 0 0 0 1px #cbd5e1;
+}
+
+.course-editor-token-key {
+  color: #2563eb;
+}
+
+.course-editor-token-value {
+  color: #4b5563;
+}
+
+.course-editor-token-brace {
+  color: #d97706;
+}
+
+.course-editor-token-bracket {
+  color: #7c3aed;
+}
+
+.course-editor-token-comma {
+  color: #16a34a;
+}
+
+.course-editor-token-file-ref {
+  color: #7c3aed;
+}
+
+.course-editor-lint {
+  margin: 0;
+  font-size: 0.82rem;
+  font-weight: 600;
+}
+
+.course-editor-lint.valid {
+  color: #166534;
+}
+
+.course-editor-lint.invalid {
+  color: #b91c1c;
+}
+
+.course-editor-attachment-table {
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  overflow: hidden;
+}
+
+.course-editor-attachment-head,
+.course-editor-attachment-row {
+  display: grid;
+  grid-template-columns: minmax(200px, 2fr) 0.8fr 0.7fr 0.7fr 1fr 0.6fr;
+  gap: 0.65rem;
+  align-items: center;
+  padding: 0.55rem 0.8rem;
+}
+
+.course-editor-attachment-head {
+  background: #f8fafc;
+  border-bottom: 1px solid var(--border-soft);
+  font-size: 0.76rem;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: #334155;
+  font-weight: 700;
+}
+
+.course-editor-attachment-body {
+  max-height: 14rem;
+  overflow: auto;
+}
+
+.course-editor-attachment-row {
+  font-size: 0.86rem;
+  border-bottom: 1px solid var(--border-soft);
+}
+
+.course-editor-attachment-row:last-child {
+  border-bottom: none;
+}
+
+.course-editor-attachment-file {
+  font-weight: 600;
+  word-break: break-word;
+}
+
+.course-editor-attachment-link {
+  color: #2563eb;
+  text-decoration: none;
+  font-weight: 600;
+}
+
+.course-editor-attachment-link:hover {
+  text-decoration: underline;
+}
+
+.course-editor-attachment-empty {
+  padding: 0.85rem;
+  font-size: 0.9rem;
+  color: var(--text-soft);
+}
+
+.course-editor-attachment-actions {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+}
+
+.course-editor-attachment-button {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+}
+
+.course-editor-hidden-input {
+  display: none;
+}
+
+.course-editor-ok {
+  margin: 0;
+  font-size: 0.92rem;
+  color: #166534;
+}
+
+.course-editor-issues {
+  display: grid;
+  gap: 0.5rem;
+}
+
+.course-editor-issue {
+  display: grid;
+  gap: 0.12rem;
+  padding: 0.5rem 0.65rem;
+  border: 1px solid #fecaca;
+  background: #fff1f2;
+  border-radius: 10px;
+  font-size: 0.85rem;
+  color: #9f1239;
+}
+
+.course-editor-issue small {
+  color: #be123c;
+}
+
+.course-editor-error-banner,
+.course-editor-success-banner {
+  padding: 0.7rem 0.9rem;
+  border-radius: 10px;
+  font-size: 0.88rem;
+  font-weight: 600;
+}
+
+.course-editor-error-banner {
+  border: 1px solid #fecaca;
+  background: #fff1f2;
+  color: #9f1239;
+}
+
+.course-editor-success-banner {
+  border: 1px solid #bbf7d0;
+  background: #f0fdf4;
+  color: #166534;
+}
+
+@media (max-width: 900px) {
+  .course-editor-json-shell {
+    grid-template-columns: 2.6rem minmax(0, 1fr);
+  }
+}
+
 @media (max-width: 900px) {
   .gpt-editor-page {
     height: auto;

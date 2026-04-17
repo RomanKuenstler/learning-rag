@@ -581,6 +581,28 @@
 - Added a library-page bottom switch to show or hide other users' files (default off), and ownership/global badges in the table rows.
 - Expanded tests and docs for ownership behavior, permission enforcement, retrieval defaults, and library visibility toggling.
 
+## 2026-04-17 20:30 UTC
+
+- Implemented full `Edit Course` flow from the Courses table action menu to a dedicated editor route (`/courses/:courseId/edit`).
+- Added a GPT-style course editor shell with `Back` and `Save`, an inline raw JSON editor, and a course attachment management section.
+- Added new backend course editor APIs:
+  - `GET /api/learning-paths/{id}/editor`
+  - `PUT /api/learning-paths/{id}/editor`
+  - `GET /api/learning-paths/{id}/attachments`
+  - `POST /api/learning-paths/{id}/attachments/upload`
+  - `GET /api/learning-paths/{id}/attachments/resolve`
+- Added JSON-first save validation for:
+  - strict JSON syntax
+  - `CourseFileParser` schema validation
+  - course ID consistency checks
+  - missing filename-based attachment reference checks
+- Added filename-based attachment diagnostics (`missing` / `ambiguous`) to support clean authoring without embedding storage keys or asset IDs.
+- Extended MinIO storage key strategy with a dedicated per-course attachment namespace:
+  - `courses/<course_id>/attachments/<asset_id>/<filename>`
+- Added course attachment resolution logic so runtime/frontend systems can map `name.extension` references to metadata + presigned URL.
+- Added API test coverage for the new course editor endpoints in `tests/test_step14_learning_api.py`.
+- Updated docs (`README.md`, `docs/courses.md`, `docs/frontend.md`, `docs/architecture.md`, `docs/testing.md`) for the new editor and attachment-resolution model.
+
 ## 2026-04-01 18:45 UTC
 
 - Implemented Step 12 user-owned GPTs with isolated personalization, retrieval settings, file and tag overrides, instructions, and assistant mode.

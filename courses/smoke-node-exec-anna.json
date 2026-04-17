@@ -125,7 +125,7 @@
     },
     {
       "id": "smoke-quiz",
-      "title": "Smoke Quiz",
+      "title": "Quiz",
       "description": "Validate foundational DevOps knowledge before moving forward.",
       "type": "quiz",
       "chapter_id": "ch-1",

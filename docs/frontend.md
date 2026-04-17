@@ -118,3 +118,32 @@ npm run dev
 ```
 
 `VITE_API_BASE_URL` defaults to `http://localhost:8000`.
+
+## Course Editor UI
+
+New route:
+
+- `/courses/:courseId/edit`
+
+Implemented page behavior:
+
+- GPT-style editor shell header (`Back`, `Save`)
+- attachment table above JSON editor (images/videos/downloadable files)
+- `Add Attachments` button with multi-file upload
+- inline raw JSON text editor (monospace + syntax pre-check)
+- attachment reference diagnostics section (`missing` / `ambiguous`)
+
+Courses table integration:
+
+- row menu `Edit` now navigates to `/courses/:courseId/edit`
+
+API calls used by the page:
+
+- `getCourseEditor(courseId)`
+- `saveCourseEditor(courseId, rawJson)`
+- `uploadCourseAttachments(courseId, files)`
+
+Notes:
+
+- the page is JSON-first by design (no visual node/tree authoring in this phase)
+- JSON should reference media by file name only; backend resolves the concrete MinIO path

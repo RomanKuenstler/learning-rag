@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import logging
+import mimetypes
 import re
 from datetime import datetime, timezone
 from concurrent.futures import ThreadPoolExecutor
@@ -56,6 +57,9 @@ from services.retriever.schemas.chat import (
     SystemServiceStatusRead,
 )
 from services.retriever.schemas.learning import (
+    CourseAttachmentReferenceIssueRead,
+    CourseEditorRead,
+    CourseEditorUpdateRequest,
     LearningNodeSessionDownloadRead,
     LearningNodeSessionListResponse,
     LearningNodeSessionRead,
@@ -1699,6 +1703,165 @@ class RetrieverAppService:
             template=self.course_file_parser.template_payload(),
         )
 
+    def get_course_editor(self, user: UserAccount, learning_path_id: str) -> CourseEditorRead | None:
+        path = self.chat_repository.get_learning_path(learning_path_id)
+        if path is None:
+            return None
+        self._ensure_learning_path_edit_allowed(user, path)
+        definition = self._course_definition_from_learning_path(path).model_copy(
+            update={
+                "id": path.id,
+                "scope": path.scope,
+                "owner_user_id": path.owner_user_id,
+                "title": path.title,
+                "description": path.description or "",
+                "subject": path.subject or "",
+                "difficulty_level": path.difficulty_level or "",
+                "estimated_duration_minutes": path.estimated_duration_minutes,
+                "status": path.status,
+                "allowed_file_ids": [item.file_id for item in self.chat_repository.list_learning_path_allowed_files(path.id)],
+                "allowed_tags": [item.tag for item in self.chat_repository.list_learning_path_allowed_tags(path.id)],
+            }
+        )
+        attachments = self._list_course_attachment_records(path.id)
+        issues = self._resolve_course_attachment_reference_issues(definition.model_dump(), attachments)
+        return CourseEditorRead(
+            learning_path_id=path.id,
+            title=path.title,
+            description=path.description or "",
+            scope=path.scope,
+            status=path.status,
+            can_edit=self._can_edit_learning_path(user, path),
+            raw_json=json.dumps(definition.model_dump(), indent=2),
+            attachments=[self._build_content_asset_read(item) for item in attachments],
+            attachment_reference_issues=issues,
+            created_at=path.created_at,
+            updated_at=path.updated_at,
+        )
+
+    def save_course_editor(
+        self,
+        user: UserAccount,
+        learning_path_id: str,
+        payload: CourseEditorUpdateRequest,
+    ) -> CourseEditorRead | None:
+        path = self.chat_repository.get_learning_path(learning_path_id)
+        if path is None:
+            return None
+        self._ensure_learning_path_edit_allowed(user, path)
+        try:
+            parsed_payload = json.loads(payload.raw_json)
+        except json.JSONDecodeError as error:
+            raise ValueError(f"Invalid JSON syntax: {error.msg} (line {error.lineno}, column {error.colno})") from error
+        if not isinstance(parsed_payload, dict):
+            raise ValueError("Course JSON must be a JSON object")
+        definition = self.course_file_parser.parse_payload(f"{learning_path_id}.json", parsed_payload)
+        if definition.id and definition.id != learning_path_id:
+            raise ValueError(f"Course id mismatch: expected '{learning_path_id}' but found '{definition.id}'")
+        self._validate_course_scope_for_user(user, definition.scope)
+        self._validate_embedded_course_ids(
+            definition,
+            file_name=f"{learning_path_id}.json",
+            target_learning_path_id=learning_path_id,
+        )
+        definition_for_save = definition.model_copy(
+            update={
+                "id": learning_path_id,
+                "owner_user_id": path.owner_user_id if definition.scope == "user" else None,
+            }
+        )
+        attachments = self._list_course_attachment_records(learning_path_id)
+        issues = self._resolve_course_attachment_reference_issues(definition_for_save.model_dump(), attachments)
+        missing_issues = [item for item in issues if item.issue == "missing"]
+        if missing_issues:
+            sample = ", ".join(item.file_name for item in missing_issues[:6])
+            raise ValueError(f"Course JSON references missing attachments: {sample}")
+        self._upsert_course_definition(
+            definition_for_save,
+            owner_user_id=path.owner_user_id,
+            enforce_owner=False,
+            target_learning_path_id=learning_path_id,
+        )
+        self._write_course_file_for_path(learning_path_id)
+        self._safe_invalidate_user_node_contexts_for_path(
+            learning_path_id=learning_path_id,
+            reason="course_editor_saved",
+        )
+        refreshed = self.get_course_editor(user, learning_path_id)
+        return refreshed
+
+    def list_course_attachments(self, user: UserAccount, learning_path_id: str) -> ContentAssetListResponse:
+        path = self.chat_repository.get_learning_path(learning_path_id)
+        if path is None:
+            raise ValueError("Learning path not found")
+        self._ensure_learning_path_edit_allowed(user, path)
+        records = self._list_course_attachment_records(learning_path_id)
+        return ContentAssetListResponse(assets=[self._build_content_asset_read(item) for item in records])
+
+    def upload_course_attachments(
+        self,
+        user: UserAccount,
+        learning_path_id: str,
+        uploads: list[UploadFilePayload],
+    ) -> ContentAssetListResponse:
+        path = self.chat_repository.get_learning_path(learning_path_id)
+        if path is None:
+            raise ValueError("Learning path not found")
+        self._ensure_learning_path_edit_allowed(user, path)
+        created: list[ContentAssetRead] = []
+        for upload in uploads:
+            safe_name = Path(upload.file_name).name or "attachment.bin"
+            content = upload.content
+            if not content:
+                continue
+            lowered = safe_name.lower()
+            guessed_mime = mimetypes.guess_type(safe_name)[0] or "application/octet-stream"
+            if lowered.endswith((".png", ".jpg", ".jpeg", ".gif", ".svg", ".webp")):
+                asset_kind = "image"
+            elif lowered.endswith((".mp4", ".webm", ".mov", ".mkv", ".avi")):
+                asset_kind = "video"
+            else:
+                asset_kind = "downloadable_file"
+            uploaded = self.content_asset_service.upload_bytes(
+                content=content,
+                file_name=safe_name,
+                asset_kind=asset_kind,
+                media_kind=asset_kind,
+                mime_type=guessed_mime,
+                source_type="course_attachment",
+                scope_type="course",
+                owner_user_id=path.owner_user_id,
+                learning_path_id=learning_path_id,
+                uploaded_by_user_id=user.id,
+                download_label=safe_name,
+                file_category="course_attachment",
+                reuse_existing=False,
+            )
+            created.append(self._build_content_asset_read(uploaded.asset))
+        return ContentAssetListResponse(assets=created)
+
+    def resolve_course_attachment(
+        self,
+        user: UserAccount,
+        learning_path_id: str,
+        file_name: str,
+    ) -> ContentAssetRead:
+        path = self.chat_repository.get_learning_path(learning_path_id)
+        if path is None or not self._can_view_learning_path(user, path):
+            raise PermissionError("You do not have permission to access this learning path")
+        normalized = self._normalize_attachment_file_name(file_name)
+        if not normalized:
+            raise ValueError("file_name is required")
+        matches = [item for item in self._list_course_attachment_records(learning_path_id) if self._normalize_attachment_file_name(item.normalized_filename or item.original_filename or "") == normalized]
+        if not matches:
+            raise ValueError(f"Attachment not found: {file_name}")
+        if len(matches) > 1:
+            raise ValueError(f"Attachment reference is ambiguous for '{file_name}'")
+        asset = matches[0]
+        if not self.content_asset_service.can_read_asset(user=user, learning_path=path, asset=asset):
+            raise PermissionError("You do not have permission to access this attachment")
+        return self._build_content_asset_read(asset)
+
     def create_learning_path(self, user: UserAccount, payload: LearningPathCreateRequest) -> LearningPathRead:
         self._ensure_learning_path_create_allowed(user, payload.scope)
         normalized_tags = self._normalize_tags(payload.allowed_tags)
@@ -3025,6 +3188,134 @@ class RetrieverAppService:
         if sort_key == "scope_user_first":
             return sorted(items, key=lambda item: (0 if item.scope == "user" else 1, item.title.lower()))
         return sorted(items, key=lambda item: item.updated_at, reverse=True)
+
+    def _list_course_attachment_records(self, learning_path_id: str):
+        return self.chat_repository.list_content_assets(
+            learning_path_id=learning_path_id,
+            source_type="course_attachment",
+            scope_type="course",
+            limit=2000,
+        )
+
+    def _normalize_attachment_file_name(self, value: str) -> str:
+        name = Path(str(value or "")).name.strip().lower()
+        return re.sub(r"\s+", "-", name)
+
+    def _collect_attachment_reference_names(self, payload: object) -> set[str]:
+        references: set[str] = set()
+        key_hints = {
+            "file",
+            "file_name",
+            "filename",
+            "download",
+            "downloads",
+            "attachment",
+            "attachments",
+            "image",
+            "images",
+            "video",
+            "videos",
+            "media",
+            "resource",
+            "resources",
+            "download_files",
+            "supporting_files",
+            "template_file",
+        }
+
+        def _looks_like_file_name(value: str) -> bool:
+            text = value.strip()
+            if not text or "/" in text or "\\" in text:
+                return False
+            return bool(re.fullmatch(r"[A-Za-z0-9._ -]+\.[A-Za-z0-9]{2,8}", text))
+
+        def _visit(value: object, parent_key: str | None = None) -> None:
+            if isinstance(value, dict):
+                for key, child in value.items():
+                    _visit(child, str(key))
+                return
+            if isinstance(value, list):
+                for child in value:
+                    _visit(child, parent_key)
+                return
+            if isinstance(value, str):
+                key = (parent_key or "").strip().lower()
+                if key in key_hints and _looks_like_file_name(value):
+                    references.add(self._normalize_attachment_file_name(value))
+
+        _visit(payload)
+        return references
+
+    def _resolve_course_attachment_reference_issues(
+        self,
+        payload: object,
+        attachments: list,
+    ) -> list[CourseAttachmentReferenceIssueRead]:
+        requested = self._collect_attachment_reference_names(payload)
+        if not requested:
+            return []
+        index: dict[str, int] = {}
+        for item in attachments:
+            key = self._normalize_attachment_file_name(item.normalized_filename or item.original_filename or "")
+            if not key:
+                continue
+            index[key] = index.get(key, 0) + 1
+        issues: list[CourseAttachmentReferenceIssueRead] = []
+        for file_name in sorted(requested):
+            match_count = index.get(file_name, 0)
+            if match_count == 0:
+                issues.append(
+                    CourseAttachmentReferenceIssueRead(
+                        file_name=file_name,
+                        issue="missing",
+                        details="No course attachment with this file name exists.",
+                    )
+                )
+            elif match_count > 1:
+                issues.append(
+                    CourseAttachmentReferenceIssueRead(
+                        file_name=file_name,
+                        issue="ambiguous",
+                        details=f"{match_count} attachments share this file name.",
+                    )
+                )
+        return issues
+
+    def _build_course_attachment_catalog_for_payload(
+        self,
+        *,
+        learning_path_id: str,
+        payload: object,
+    ) -> dict[str, dict[str, object]]:
+        requested = self._collect_attachment_reference_names(payload)
+        if not requested:
+            return {}
+        records = self._list_course_attachment_records(learning_path_id)
+        by_name: dict[str, list] = {}
+        for record in records:
+            key = self._normalize_attachment_file_name(record.normalized_filename or record.original_filename or "")
+            if not key:
+                continue
+            by_name.setdefault(key, []).append(record)
+        catalog: dict[str, dict[str, object]] = {}
+        for file_name in sorted(requested):
+            matches = by_name.get(file_name, [])
+            if len(matches) != 1:
+                continue
+            record = matches[0]
+            catalog[file_name] = {
+                "asset_id": record.id,
+                "file_name": record.normalized_filename or record.original_filename or file_name,
+                "asset_kind": record.asset_kind,
+                "media_kind": record.media_kind,
+                "mime_type": record.mime_type or "",
+                "download_label": record.download_label or "",
+                "url": self.content_asset_service.presigned_url(record),
+                "storage_key": record.storage_key,
+                "bucket_name": record.bucket_name,
+                "size_bytes": int(record.size_bytes or 0),
+            }
+        return catalog
 
     def _parse_course_scope_mapping(self, raw_value: str | None) -> dict[str, str]:
         if not raw_value:
@@ -4460,6 +4751,12 @@ class RetrieverAppService:
         asset_ids = self._collect_asset_ids_from_payload(package) + self._collect_asset_ids_from_payload(responses)
         if asset_ids:
             package["asset_catalog"] = self.content_asset_service.resolve_asset_catalog(asset_ids)
+        attachment_catalog = self._build_course_attachment_catalog_for_payload(
+            learning_path_id=record.learning_path_id,
+            payload=package,
+        )
+        if attachment_catalog:
+            package["course_attachment_catalog"] = attachment_catalog
         status = str(record.status or "")
         is_active = bool(status in {"in_progress", "generating"} and record.completed_at is None)
         is_resumable = bool(status == "in_progress" and record.completed_at is None)

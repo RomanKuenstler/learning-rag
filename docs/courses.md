@@ -239,3 +239,44 @@ Node start execution now includes structured-plan runtime generation for:
 - `review`: recap/remediation plan package over the bounded backward review window.
 
 These plans are persisted per attempt and designed for later delivery orchestration, questions, and feedback handling.
+
+## Edit Course Page (JSON + Attachments)
+
+The Courses table `Edit` action now opens a dedicated editor route:
+
+- `GET /courses/:courseId/edit` (frontend route)
+
+Editor layout follows the GPT editor shell pattern:
+
+- sticky header with `Back` and `Save`
+- attachment management section at the top
+- inline raw JSON editor below
+
+### Backend API
+
+- `GET /api/learning-paths/{learning_path_id}/editor`
+  - returns raw editable JSON (`raw_json`)
+  - returns course-scoped attachment list
+  - returns filename-reference issues (`missing` / `ambiguous`)
+- `PUT /api/learning-paths/{learning_path_id}/editor`
+  - validates JSON syntax
+  - validates course schema via `CourseFileParser`
+  - rejects mismatched course IDs
+  - blocks save if filename references point to missing attachments
+- `GET /api/learning-paths/{learning_path_id}/attachments`
+- `POST /api/learning-paths/{learning_path_id}/attachments/upload`
+- `GET /api/learning-paths/{learning_path_id}/attachments/resolve?file_name=...`
+
+### Attachment Storage Convention
+
+Course attachments are stored in MinIO with a per-course namespace:
+
+- `courses/<course_id>/attachments/<asset_id>/<name.extension>`
+
+JSON authors keep references human-readable (name only, no object path):
+
+- `diagram.png`
+- `overview.mp4`
+- `worksheet.pdf`
+
+Resolution is performed server-side using `(learning_path_id, normalized filename)` and exposed via the resolve endpoint and runtime catalogs.

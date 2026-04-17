@@ -662,6 +662,61 @@ export type CourseTemplateResponse = {
   template: Record<string, unknown>;
 };
 
+export type CourseAttachmentReferenceIssue = {
+  file_name: string;
+  issue: "missing" | "ambiguous";
+  details: string;
+};
+
+export type ContentAsset = {
+  asset_id: string;
+  asset_kind: string;
+  media_kind: string;
+  source_type: string;
+  scope_type: string;
+  learning_path_id: string | null;
+  node_id: string | null;
+  attempt_id: string | null;
+  bucket_name: string;
+  storage_key: string;
+  mime_type: string;
+  file_name: string;
+  file_extension: string;
+  size_bytes: number;
+  checksum_sha256: string;
+  download_label: string;
+  file_category: string;
+  caption: string;
+  description: string;
+  alt_text: string;
+  width: number | null;
+  height: number | null;
+  duration_seconds: number | null;
+  asset_status: string;
+  metadata: Record<string, unknown>;
+  url: string;
+  created_at: string;
+  updated_at: string;
+};
+
+export type ContentAssetListResponse = {
+  assets: ContentAsset[];
+};
+
+export type CourseEditorData = {
+  learning_path_id: string;
+  title: string;
+  description: string;
+  scope: LearningPathScope | string;
+  status: LearningPathStatus | string;
+  can_edit: boolean;
+  raw_json: string;
+  attachments: ContentAsset[];
+  attachment_reference_issues: CourseAttachmentReferenceIssue[];
+  created_at: string;
+  updated_at: string;
+};
+
 export type LearningPreferencePace = "slow" | "balanced" | "fast";
 export type LearningPreferenceDepth = "concise" | "balanced" | "detailed";
 export type LearningPreferenceExamplesTheory = "more_examples" | "balanced" | "more_theory";

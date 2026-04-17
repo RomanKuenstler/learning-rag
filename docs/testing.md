@@ -279,3 +279,27 @@ Smoke validation (manual, API):
    - long content scrolls within the lesson card
    - Sources button opens the same popover treatment used by assistant messages
    - technical term styling shows dotted orange underline and hover tooltip
+
+## Course Editor Coverage
+
+New coverage added for course editor API wiring (`tests/test_step14_learning_api.py`):
+
+- `GET /api/learning-paths/{id}/editor`
+- `PUT /api/learning-paths/{id}/editor`
+- `GET /api/learning-paths/{id}/attachments`
+- `POST /api/learning-paths/{id}/attachments/upload`
+- `GET /api/learning-paths/{id}/attachments/resolve`
+
+What is validated:
+
+- edit payload loads and saves through the dedicated route
+- attachment upload/list endpoints are reachable and typed
+- filename resolution endpoint maps course + filename to attachment metadata
+
+Recommended run when `pytest` is available:
+
+```bash
+python3 -m pytest tests/test_step14_learning_api.py -q
+cd webui && npm run build
+python3 -m compileall -q services
+```

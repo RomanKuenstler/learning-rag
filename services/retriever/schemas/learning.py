@@ -461,6 +461,30 @@ class ContentAssetUploadResponse(BaseModel):
     asset: ContentAssetRead
 
 
+class CourseAttachmentReferenceIssueRead(BaseModel):
+    file_name: str
+    issue: Literal["missing", "ambiguous"]
+    details: str = ""
+
+
+class CourseEditorRead(BaseModel):
+    learning_path_id: str
+    title: str
+    description: str = ""
+    scope: str
+    status: str
+    can_edit: bool = False
+    raw_json: str
+    attachments: list[ContentAssetRead] = Field(default_factory=list)
+    attachment_reference_issues: list[CourseAttachmentReferenceIssueRead] = Field(default_factory=list)
+    created_at: datetime
+    updated_at: datetime
+
+
+class CourseEditorUpdateRequest(BaseModel):
+    raw_json: str = Field(min_length=2)
+
+
 class LearningModuleCreateRequest(BaseModel):
     title: str = Field(min_length=1, max_length=255)
     description: str = Field(default="", max_length=12000)

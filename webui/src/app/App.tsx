@@ -17,6 +17,7 @@ import { LoginPage } from "../pages/LoginPage";
 import { LearningNodePage } from "../pages/LearningNodePage";
 import { PasswordChangePage } from "../pages/PasswordChangePage";
 import { GptEditorPage } from "../pages/GptEditorPage";
+import { CourseEditorPage } from "../pages/CourseEditorPage";
 
 type PreferencesTab = "general" | "personalization" | "settings" | "filter" | "archive";
 
@@ -68,6 +69,7 @@ function AppRoutes() {
   const [systemStatusError, setSystemStatusError] = useState<string | null>(null);
   const [systemStatus, setSystemStatus] = useState<Array<{ label: string; description: string; status: string; detail: string }>>([]);
   const isGptEditorRoute = location.pathname === "/gpts/new" || /^\/gpts\/[^/]+\/edit$/.test(location.pathname);
+  const isCourseEditorRoute = /^\/courses\/[^/]+\/edit$/.test(location.pathname);
 
   useEffect(() => {
     if (!app.isAuthenticated || app.requiresPasswordChange || app.bootstrapping || app.chats.length === 0) {
@@ -312,11 +314,34 @@ function AppRoutes() {
     </Routes>
   );
 
+  const courseEditorRoutes = (
+    <Routes>
+      <Route
+        path="/courses/:courseId/edit"
+        element={
+          <CourseEditorRoute
+            saving={app.learningSaving}
+            onLoadEditor={app.getCourseEditor}
+            onSaveEditor={app.saveCourseEditor}
+            onUploadAttachments={app.uploadCourseAttachments}
+          />
+        }
+      />
+      <Route path="*" element={<Navigate to="/courses" replace />} />
+    </Routes>
+  );
+
   if (isGptEditorRoute) {
     if (!app.canUseGpts) {
       return <Navigate to="/learning" replace />;
     }
     return gptEditorRoutes;
+  }
+  if (isCourseEditorRoute) {
+    if (!app.canAuthorLearningPaths) {
+      return <Navigate to="/courses" replace />;
+    }
+    return courseEditorRoutes;
   }
 
   return (
@@ -473,6 +498,9 @@ function AppRoutes() {
                       .then(() => app.loadCourses())
                       .then(() => undefined)
                   }
+                  onEditCourse={(courseId) => {
+                    navigate(`/courses/${encodeURIComponent(courseId)}/edit`);
+                  }}
                   onDeleteCourse={(courseId) =>
                     app
                       .deleteLearningPath(courseId)
@@ -1228,6 +1256,15 @@ function LearningNodeRoute({
 function GptEditorRoute(props: ComponentProps<typeof GptEditorPage>) {
   const params = useParams<{ gptId: string }>();
   return <GptEditorPage {...props} gptId={params.gptId} />;
+}
+
+function CourseEditorRoute(props: Omit<ComponentProps<typeof CourseEditorPage>, "courseId">) {
+  const params = useParams<{ courseId: string }>();
+  const courseId = params.courseId ?? "";
+  if (!courseId) {
+    return <Navigate to="/courses" replace />;
+  }
+  return <CourseEditorPage {...props} courseId={courseId} />;
 }
 
 function GptChatRoute({

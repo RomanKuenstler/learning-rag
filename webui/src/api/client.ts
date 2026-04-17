@@ -13,9 +13,12 @@ import type {
   ChatDownload,
   ChatUpdate,
   CourseImportResponse,
+  CourseEditorData,
   CourseListResponse,
   CourseSort,
   CourseTemplateResponse,
+  ContentAssetListResponse,
+  ContentAsset,
   CurrentUser,
   FilterFile,
   FilterFileResponse,
@@ -221,6 +224,33 @@ export const apiClient = {
   },
   getCourseTemplate() {
     return request<CourseTemplateResponse>("/api/courses/template");
+  },
+  getCourseEditor(pathId: string) {
+    return request<CourseEditorData>(`/api/learning-paths/${pathId}/editor`);
+  },
+  saveCourseEditor(pathId: string, rawJson: string) {
+    return request<CourseEditorData>(`/api/learning-paths/${pathId}/editor`, {
+      method: "PUT",
+      body: JSON.stringify({ raw_json: rawJson }),
+    });
+  },
+  listCourseAttachments(pathId: string) {
+    return request<ContentAssetListResponse>(`/api/learning-paths/${pathId}/attachments`);
+  },
+  uploadCourseAttachments(pathId: string, files: File[]) {
+    const formData = new FormData();
+    for (const file of files) {
+      formData.append("files", file);
+    }
+    return request<ContentAssetListResponse>(`/api/learning-paths/${pathId}/attachments/upload`, {
+      method: "POST",
+      body: formData,
+    });
+  },
+  resolveCourseAttachment(pathId: string, fileName: string) {
+    const query = new URLSearchParams();
+    query.set("file_name", fileName);
+    return request<ContentAsset>(`/api/learning-paths/${pathId}/attachments/resolve?${query.toString()}`);
   },
   importCourseFiles(files: File[], scopesByFile: Record<string, "global" | "user">) {
     const formData = new FormData();

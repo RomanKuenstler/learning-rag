@@ -51,6 +51,7 @@ This repository includes the learning foundation, declared learning profile laye
 - file-backed course definitions under `courses/` with startup validation + bootstrap sync
 - web UI sidebar navigation entries for Learning and Courses
 - future learning-chat foundation fields (`chat_type`, `learning_path_id`)
+- dedicated course editor route (`/courses/:courseId/edit`) with raw JSON editing and MinIO-backed course attachments
 
 Step B (declared preferences) remains separate from Step B.1 (diagnosed preferences and runtime signals).
 

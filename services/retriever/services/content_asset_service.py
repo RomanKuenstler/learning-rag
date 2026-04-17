@@ -134,11 +134,12 @@ class ContentAssetService:
                     return AssetUploadResult(asset=candidate, presigned_url=self.presigned_url(candidate))
 
         asset_id = str(uuid.uuid4())
-        storage_prefix = (
-            f"runtime/{owner_user_id or uploaded_by_user_id or 'user'}/{attempt_id or asset_id}"
-            if source_type in {"learner_submission_artifact", "runtime_submission_artifact"}
-            else f"courses/{learning_path_id or 'course'}/nodes/{node_id or 'node'}/assets/{asset_id}"
-        )
+        if source_type in {"learner_submission_artifact", "runtime_submission_artifact"}:
+            storage_prefix = f"runtime/{owner_user_id or uploaded_by_user_id or 'user'}/{attempt_id or asset_id}"
+        elif source_type == "course_attachment":
+            storage_prefix = f"courses/{learning_path_id or 'course'}/attachments/{asset_id}"
+        else:
+            storage_prefix = f"courses/{learning_path_id or 'course'}/nodes/{node_id or 'node'}/assets/{asset_id}"
         storage_key = f"{storage_prefix}/{normalized_name}"
 
         if self._client:

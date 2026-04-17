@@ -43,6 +43,7 @@ type CoursesPageProps = {
   onDownloadTemplate: () => Promise<unknown>;
   onStartContinue: (courseId: string, nodeId: string) => Promise<unknown> | unknown;
   onToggleArchived: (courseId: string, nextArchived: boolean) => Promise<unknown>;
+  onEditCourse: (courseId: string) => void;
   onDeleteCourse: (courseId: string) => Promise<unknown>;
 };
 
@@ -284,6 +285,7 @@ export function CoursesPage({
   onDownloadTemplate,
   onStartContinue,
   onToggleArchived,
+  onEditCourse,
   onDeleteCourse,
 }: CoursesPageProps) {
   const [searchParams] = useSearchParams();
@@ -717,7 +719,15 @@ export function CoursesPage({
                                 <Icon name="archive" />
                                 {course.status === "archived" ? "Unarchive" : "Archive"}
                               </button>
-                              <button className="chat-item-actions-option" type="button" onClick={() => setMenuCourseId(null)}>
+                              <button
+                                className="chat-item-actions-option"
+                                type="button"
+                                onClick={() => {
+                                  onEditCourse(course.id);
+                                  setMenuCourseId(null);
+                                  setMenuCoursePosition(null);
+                                }}
+                              >
                                 <Icon name="edit" />
                                 Edit
                               </button>

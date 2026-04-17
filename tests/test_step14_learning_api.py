@@ -79,6 +79,19 @@ class LearningApiStubService:
             "answers": {},
             "result": None,
         }
+        self._course_editor = {
+            "learning_path_id": "lp-1",
+            "title": "Docker Basics",
+            "description": "Intro path",
+            "scope": "global",
+            "status": "published",
+            "can_edit": True,
+            "raw_json": "{\n  \"id\": \"lp-1\",\n  \"title\": \"Docker Basics\",\n  \"nodes\": []\n}",
+            "attachments": [],
+            "attachment_reference_issues": [],
+            "created_at": "2026-04-04T00:00:00Z",
+            "updated_at": "2026-04-04T00:00:00Z",
+        }
 
     def create_chat(self, user: UserAccount):
         if user.role == "student":
@@ -151,6 +164,67 @@ class LearningApiStubService:
             "file_name": "path-template.json",
             "template": {"schema_version": 1, "id": "course-template", "title": "Template"},
         }
+
+    def get_course_editor(self, _user: UserAccount, learning_path_id: str):
+        if learning_path_id != "lp-1":
+            return None
+        return dict(self._course_editor)
+
+    def save_course_editor(self, _user: UserAccount, learning_path_id: str, payload):
+        if learning_path_id != "lp-1":
+            return None
+        self._course_editor["raw_json"] = payload.raw_json
+        self._course_editor["updated_at"] = "2026-04-04T00:05:00Z"
+        return dict(self._course_editor)
+
+    def list_course_attachments(self, _user: UserAccount, _learning_path_id: str):
+        return {"assets": list(self._course_editor["attachments"])}
+
+    def upload_course_attachments(self, _user: UserAccount, learning_path_id: str, uploads):
+        if learning_path_id != "lp-1":
+            raise ValueError("Learning path not found")
+        for upload in uploads:
+            self._course_editor["attachments"].append(
+                {
+                    "asset_id": f"asset-{len(self._course_editor['attachments']) + 1}",
+                    "asset_kind": "downloadable_file",
+                    "media_kind": "downloadable_file",
+                    "source_type": "course_attachment",
+                    "scope_type": "course",
+                    "learning_path_id": "lp-1",
+                    "node_id": None,
+                    "attempt_id": None,
+                    "bucket_name": "content-assets",
+                    "storage_key": f"courses/lp-1/attachments/{upload.file_name}",
+                    "mime_type": "application/octet-stream",
+                    "file_name": upload.file_name,
+                    "file_extension": ".txt",
+                    "size_bytes": len(upload.content),
+                    "checksum_sha256": "",
+                    "download_label": upload.file_name,
+                    "file_category": "course_attachment",
+                    "caption": "",
+                    "description": "",
+                    "alt_text": "",
+                    "width": None,
+                    "height": None,
+                    "duration_seconds": None,
+                    "asset_status": "ready",
+                    "metadata": {},
+                    "url": "http://example.com/file",
+                    "created_at": "2026-04-04T00:06:00Z",
+                    "updated_at": "2026-04-04T00:06:00Z",
+                }
+            )
+        return {"assets": list(self._course_editor["attachments"])}
+
+    def resolve_course_attachment(self, _user: UserAccount, learning_path_id: str, file_name: str):
+        if learning_path_id != "lp-1":
+            raise ValueError("Learning path not found")
+        for asset in self._course_editor["attachments"]:
+            if asset["file_name"] == file_name:
+                return asset
+        raise ValueError("Attachment not found")
 
     def get_ksa_profile(self, user: UserAccount):
         if user.role == "student":
@@ -442,6 +516,35 @@ def test_courses_routes_available() -> None:
     template_response = client.get("/api/courses/template")
     assert template_response.status_code == 200
     assert template_response.json()["file_name"] == "path-template.json"
+
+
+def test_course_editor_routes_available() -> None:
+    client = build_client(student=False)
+    get_response = client.get("/api/learning-paths/lp-1/editor")
+    assert get_response.status_code == 200
+    assert get_response.json()["learning_path_id"] == "lp-1"
+
+    save_response = client.put(
+        "/api/learning-paths/lp-1/editor",
+        json={"raw_json": "{\n  \"id\": \"lp-1\",\n  \"title\": \"Docker Basics\",\n  \"nodes\": []\n}"},
+    )
+    assert save_response.status_code == 200
+    assert "Docker Basics" in save_response.json()["raw_json"]
+
+    list_response = client.get("/api/learning-paths/lp-1/attachments")
+    assert list_response.status_code == 200
+    assert list_response.json()["assets"] == []
+
+    upload_response = client.post(
+        "/api/learning-paths/lp-1/attachments/upload",
+        files=[("files", ("worksheet.txt", b"hello", "text/plain"))],
+    )
+    assert upload_response.status_code == 200
+    assert len(upload_response.json()["assets"]) == 1
+
+    resolve_response = client.get("/api/learning-paths/lp-1/attachments/resolve?file_name=worksheet.txt")
+    assert resolve_response.status_code == 200
+    assert resolve_response.json()["file_name"] == "worksheet.txt"
 
 
 def test_ksa_profile_route_uses_student_default_values() -> None:

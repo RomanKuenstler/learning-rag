@@ -47,6 +47,8 @@ from services.retriever.schemas.chat import (
     SystemStatusResponse,
 )
 from services.retriever.schemas.learning import (
+    CourseEditorRead,
+    CourseEditorUpdateRequest,
     CourseImportResponse,
     CourseListResponse,
     CourseTemplateResponse,
@@ -719,6 +721,105 @@ def create_app() -> FastAPI:
         if record is None:
             raise HTTPException(status_code=404, detail="Learning path not found")
         return record
+
+    @app.get(
+        "/api/learning-paths/{learning_path_id}/editor",
+        response_model=CourseEditorRead,
+        responses={404: {"model": ErrorResponse}, 403: {"model": ErrorResponse}},
+    )
+    def get_course_editor(
+        learning_path_id: str,
+        auth: AuthContext = Depends(get_app_auth_context),
+        service: RetrieverAppService = Depends(get_retriever_service),
+    ) -> CourseEditorRead:
+        try:
+            record = service.get_course_editor(auth.user, learning_path_id)
+        except PermissionError as error:
+            raise HTTPException(status_code=403, detail=str(error)) from error
+        if record is None:
+            raise HTTPException(status_code=404, detail="Learning path not found")
+        return record
+
+    @app.put(
+        "/api/learning-paths/{learning_path_id}/editor",
+        response_model=CourseEditorRead,
+        responses={404: {"model": ErrorResponse}, 403: {"model": ErrorResponse}, 422: {"model": ErrorResponse}},
+    )
+    def save_course_editor(
+        learning_path_id: str,
+        payload: CourseEditorUpdateRequest,
+        auth: AuthContext = Depends(get_app_auth_context),
+        service: RetrieverAppService = Depends(get_retriever_service),
+    ) -> CourseEditorRead:
+        try:
+            updated = service.save_course_editor(auth.user, learning_path_id, payload)
+        except PermissionError as error:
+            raise HTTPException(status_code=403, detail=str(error)) from error
+        except ValueError as error:
+            raise HTTPException(status_code=422, detail=str(error)) from error
+        if updated is None:
+            raise HTTPException(status_code=404, detail="Learning path not found")
+        return updated
+
+    @app.get(
+        "/api/learning-paths/{learning_path_id}/attachments",
+        response_model=ContentAssetListResponse,
+        responses={404: {"model": ErrorResponse}, 403: {"model": ErrorResponse}, 422: {"model": ErrorResponse}},
+    )
+    def list_course_attachments(
+        learning_path_id: str,
+        auth: AuthContext = Depends(get_app_auth_context),
+        service: RetrieverAppService = Depends(get_retriever_service),
+    ) -> ContentAssetListResponse:
+        try:
+            return service.list_course_attachments(auth.user, learning_path_id)
+        except PermissionError as error:
+            raise HTTPException(status_code=403, detail=str(error)) from error
+        except ValueError as error:
+            detail = str(error)
+            status_code = 404 if "not found" in detail.lower() else 422
+            raise HTTPException(status_code=status_code, detail=detail) from error
+
+    @app.post(
+        "/api/learning-paths/{learning_path_id}/attachments/upload",
+        response_model=ContentAssetListResponse,
+        responses={404: {"model": ErrorResponse}, 403: {"model": ErrorResponse}, 422: {"model": ErrorResponse}},
+    )
+    async def upload_course_attachments(
+        learning_path_id: str,
+        files: list[UploadFile] = File(...),
+        auth: AuthContext = Depends(get_app_auth_context),
+        service: RetrieverAppService = Depends(get_retriever_service),
+    ) -> ContentAssetListResponse:
+        uploads = [UploadFilePayload(file_name=file.filename or "attachment.bin", content=await file.read()) for file in files]
+        try:
+            return service.upload_course_attachments(auth.user, learning_path_id, uploads)
+        except PermissionError as error:
+            raise HTTPException(status_code=403, detail=str(error)) from error
+        except ValueError as error:
+            detail = str(error)
+            status_code = 404 if "not found" in detail.lower() else 422
+            raise HTTPException(status_code=status_code, detail=detail) from error
+
+    @app.get(
+        "/api/learning-paths/{learning_path_id}/attachments/resolve",
+        response_model=ContentAssetRead,
+        responses={404: {"model": ErrorResponse}, 403: {"model": ErrorResponse}, 422: {"model": ErrorResponse}},
+    )
+    def resolve_course_attachment(
+        learning_path_id: str,
+        file_name: str = Query(..., min_length=1),
+        auth: AuthContext = Depends(get_app_auth_context),
+        service: RetrieverAppService = Depends(get_retriever_service),
+    ) -> ContentAssetRead:
+        try:
+            return service.resolve_course_attachment(auth.user, learning_path_id, file_name)
+        except PermissionError as error:
+            raise HTTPException(status_code=403, detail=str(error)) from error
+        except ValueError as error:
+            detail = str(error)
+            status_code = 404 if "not found" in detail.lower() else 422
+            raise HTTPException(status_code=status_code, detail=detail) from error
 
     @app.put(
         "/api/learning-paths/{learning_path_id}/nodes/{node_id}/progress",

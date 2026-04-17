@@ -1685,6 +1685,43 @@ export function useChatApp() {
     return await apiClient.getLearningPath(pathId);
   }
 
+  async function getCourseEditor(pathId: string) {
+    return await apiClient.getCourseEditor(pathId);
+  }
+
+  async function saveCourseEditor(pathId: string, rawJson: string) {
+    setLearningSaving(true);
+    setLearningError(null);
+    try {
+      const saved = await apiClient.saveCourseEditor(pathId, rawJson);
+      const refreshed = await apiClient.getLearningPath(pathId);
+      setLearningPaths((current) => current.map((entry) => (entry.id === pathId ? refreshed : entry)));
+      return saved;
+    } catch (error) {
+      setLearningError(error instanceof Error ? error.message : "Failed to save course JSON");
+      throw error;
+    } finally {
+      setLearningSaving(false);
+    }
+  }
+
+  async function listCourseAttachments(pathId: string) {
+    return await apiClient.listCourseAttachments(pathId);
+  }
+
+  async function uploadCourseAttachments(pathId: string, files: File[]) {
+    setLearningSaving(true);
+    setLearningError(null);
+    try {
+      return await apiClient.uploadCourseAttachments(pathId, files);
+    } catch (error) {
+      setLearningError(error instanceof Error ? error.message : "Failed to upload course attachments");
+      throw error;
+    } finally {
+      setLearningSaving(false);
+    }
+  }
+
   async function updateLearningNodeProgress(
     pathId: string,
     nodeId: string,
@@ -2377,6 +2414,10 @@ export function useChatApp() {
     submitExplanationFeedback,
     createLearningPath,
     getLearningPathDetails,
+    getCourseEditor,
+    saveCourseEditor,
+    listCourseAttachments,
+    uploadCourseAttachments,
     updateLearningNodeProgress,
     loadLearningNodeSessions,
     ensureLearningNodeSession,
