@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from services.common.models import (
+    ContentAsset,
     ChatMessage,
     ChatSession,
     DiagnosticDefinition,
@@ -731,6 +732,44 @@ class ChatRepository:
             attempt_id=attempt_id,
             fields=fields,
         )
+
+    def create_content_asset(self, payload: dict[str, object]) -> ContentAsset:
+        return self.postgres_client.create_content_asset(payload)
+
+    def get_content_asset(self, *, asset_id: str) -> ContentAsset | None:
+        return self.postgres_client.get_content_asset(asset_id=asset_id)
+
+    def get_content_asset_by_storage_key(self, *, bucket_name: str, storage_key: str) -> ContentAsset | None:
+        return self.postgres_client.get_content_asset_by_storage_key(bucket_name=bucket_name, storage_key=storage_key)
+
+    def list_content_assets(
+        self,
+        *,
+        learning_path_id: str | None = None,
+        node_id: str | None = None,
+        attempt_id: str | None = None,
+        source_type: str | None = None,
+        scope_type: str | None = None,
+        owner_user_id: int | None = None,
+        asset_kinds: list[str] | None = None,
+        limit: int = 200,
+    ) -> list[ContentAsset]:
+        return self.postgres_client.list_content_assets(
+            learning_path_id=learning_path_id,
+            node_id=node_id,
+            attempt_id=attempt_id,
+            source_type=source_type,
+            scope_type=scope_type,
+            owner_user_id=owner_user_id,
+            asset_kinds=asset_kinds,
+            limit=limit,
+        )
+
+    def list_content_assets_by_ids(self, *, asset_ids: list[str]) -> list[ContentAsset]:
+        return self.postgres_client.list_content_assets_by_ids(asset_ids=asset_ids)
+
+    def update_content_asset(self, *, asset_id: str, fields: dict[str, object]) -> ContentAsset | None:
+        return self.postgres_client.update_content_asset(asset_id=asset_id, fields=fields)
 
     def get_diagnostic_definition(self, diagnostic_type: str) -> DiagnosticDefinition | None:
         return self.postgres_client.get_diagnostic_definition(diagnostic_type)

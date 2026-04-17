@@ -422,6 +422,45 @@ class LearningNodeExecutionAttemptListResponse(BaseModel):
     attempts: list[LearningNodeExecutionAttemptRead] = Field(default_factory=list)
 
 
+class ContentAssetRead(BaseModel):
+    asset_id: str
+    asset_kind: str
+    media_kind: str
+    source_type: str
+    scope_type: str
+    learning_path_id: str | None = None
+    node_id: str | None = None
+    attempt_id: str | None = None
+    bucket_name: str
+    storage_key: str
+    mime_type: str = ""
+    file_name: str = ""
+    file_extension: str = ""
+    size_bytes: int = 0
+    checksum_sha256: str = ""
+    download_label: str = ""
+    file_category: str = ""
+    caption: str = ""
+    description: str = ""
+    alt_text: str = ""
+    width: int | None = None
+    height: int | None = None
+    duration_seconds: float | None = None
+    asset_status: str = "ready"
+    metadata: dict[str, object] = Field(default_factory=dict)
+    url: str = ""
+    created_at: datetime
+    updated_at: datetime
+
+
+class ContentAssetListResponse(BaseModel):
+    assets: list[ContentAssetRead] = Field(default_factory=list)
+
+
+class ContentAssetUploadResponse(BaseModel):
+    asset: ContentAssetRead
+
+
 class LearningModuleCreateRequest(BaseModel):
     title: str = Field(min_length=1, max_length=255)
     description: str = Field(default="", max_length=12000)

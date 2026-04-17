@@ -43,6 +43,8 @@ type LessonFlowStep = {
   mediaKind: "none" | "image" | "video";
   videoDescription?: string;
   downloadFiles: DownloadableFile[];
+  imageUrl?: string;
+  videoUrl?: string;
 };
 type DownloadableFile = {
   fileName: string;
@@ -95,6 +97,7 @@ function normalizeDownloadableFiles(
   fallbackPrefix: string,
   fallbackContent: string,
   includeFallback = false,
+  assetCatalog?: Record<string, Record<string, unknown>>,
 ): DownloadableFile[] {
   const keys = [
     "download_files",
@@ -107,6 +110,34 @@ function normalizeDownloadableFiles(
     "materials",
   ];
   const raw = keys.flatMap((key) => asArray(source[key]));
+  const assetRefs = asRecord(source.asset_refs);
+  const rawAssetDownloads = [
+    ...asArray(assetRefs.downloads),
+    ...asArray(source.download_assets),
+  ];
+  const fromAssets = rawAssetDownloads
+    .map((entry) => asRecord(entry))
+    .map((record) => {
+      const assetId = asText(record.asset_id);
+      const catalogEntry = assetCatalog ? asRecord(assetCatalog[assetId]) : {};
+      const fileName = asText(
+        record.file_name || record.filename || catalogEntry.file_name || catalogEntry.filename,
+        "",
+      );
+      if (!assetId || !fileName) {
+        return null;
+      }
+      const href = asText(record.url || record.download_url || catalogEntry.url || catalogEntry.download_url);
+      if (!href) {
+        return null;
+      }
+      return {
+        fileName,
+        href,
+        sizeLabel: asText(catalogEntry.size_label || record.size_label || catalogEntry.size_bytes || record.size_bytes, "File"),
+      };
+    })
+    .filter(Boolean) as Array<{ fileName: string; href: string; sizeLabel: string }>;
   const mapped = raw
     .map((entry, index) => {
       if (typeof entry === "string") {
@@ -135,8 +166,9 @@ function normalizeDownloadableFiles(
     })
     .filter((item) => item.fileName);
 
-  const withFallback = mapped.length > 0
-    ? mapped
+  const merged = [...fromAssets, ...mapped];
+  const withFallback = merged.length > 0
+    ? merged
     : includeFallback
       ? [
         {
@@ -370,6 +402,7 @@ function MultipleChoiceQuestion({
   multiAnswers,
   setSingleAnswers,
   setMultiAnswers,
+  assetCatalog,
   showHeading = true,
 }: {
   question: Record<string, unknown>;
@@ -378,6 +411,7 @@ function MultipleChoiceQuestion({
   multiAnswers: MultiAnswerMap;
   setSingleAnswers: Dispatch<SetStateAction<AnswerMap>>;
   setMultiAnswers: Dispatch<SetStateAction<MultiAnswerMap>>;
+  assetCatalog?: Record<string, Record<string, unknown>>;
   showHeading?: boolean;
 }) {
   const questionId = normalizeQuestionId(question.id, "mc", index);
@@ -385,8 +419,8 @@ function MultipleChoiceQuestion({
   const isMultiple = questionType === "multiple" || questionType === "multi";
   const options = asArray(question.options).map((item) => asText(item)).filter(Boolean);
   const downloadFiles = useMemo(
-    () => normalizeDownloadableFiles(question, `question-${index + 1}-resources`, "Reference files for this question step.", false),
-    [index, question],
+    () => normalizeDownloadableFiles(question, `question-${index + 1}-resources`, "Reference files for this question step.", false, assetCatalog),
+    [assetCatalog, index, question],
   );
 
   return (
@@ -442,6 +476,7 @@ function FreeTextQuestion({
   answerKeyPrefix,
   uploads,
   setUploads,
+  assetCatalog,
   showHeading = true,
 }: {
   question: Record<string, unknown>;
@@ -451,13 +486,14 @@ function FreeTextQuestion({
   answerKeyPrefix: string;
   uploads: UploadMap;
   setUploads: Dispatch<SetStateAction<UploadMap>>;
+  assetCatalog?: Record<string, Record<string, unknown>>;
   showHeading?: boolean;
 }) {
   const questionId = normalizeQuestionId(question.id, answerKeyPrefix, index);
   const uploadFiles = uploads[questionId] ?? [];
   const downloadFiles = useMemo(
-    () => normalizeDownloadableFiles(question, `prompt-${index + 1}-resources`, "Starter reference files for this prompt."),
-    [index, question],
+    () => normalizeDownloadableFiles(question, `prompt-${index + 1}-resources`, "Starter reference files for this prompt.", false, assetCatalog),
+    [assetCatalog, index, question],
   );
 
   return (
@@ -548,6 +584,7 @@ function PracticeTask({
   setTextAnswers,
   uploads,
   setUploads,
+  assetCatalog,
 }: {
   task: Record<string, unknown>;
   index: number;
@@ -555,12 +592,13 @@ function PracticeTask({
   setTextAnswers: Dispatch<SetStateAction<AnswerMap>>;
   uploads: UploadMap;
   setUploads: Dispatch<SetStateAction<UploadMap>>;
+  assetCatalog?: Record<string, Record<string, unknown>>;
 }) {
   const taskId = normalizeQuestionId(task.id, "task", index);
   const uploadFiles = uploads[taskId] ?? [];
   const downloadFiles = useMemo(
-    () => normalizeDownloadableFiles(task, `practice-${index + 1}-resources`, "Practice materials and starter assets."),
-    [index, task],
+    () => normalizeDownloadableFiles(task, `practice-${index + 1}-resources`, "Practice materials and starter assets.", false, assetCatalog),
+    [assetCatalog, index, task],
   );
 
   return (
@@ -752,6 +790,7 @@ export function LearningNodePage({
   }, [attempt?.completed_at, attempt?.result, node?.type]);
 
   const packageData = asRecord(attempt?.package);
+  const assetCatalog = asRecord(packageData.asset_catalog);
   const milestoneRelevantNodes = useMemo(() => {
     const packageNodes = asArray(packageData.completed_relevant_nodes).map((item) => asRecord(item));
     if (packageNodes.length > 0) {
@@ -833,19 +872,29 @@ export function LearningNodePage({
     if (node.type === "learning_unit") {
       return asArray(packageData.mini_topic_lessons).map((item, index) => {
         const step = asRecord(item);
+        const refs = asRecord(step.asset_refs);
+        const imageAsset = asRecord(asArray(refs.images)[0]);
+        const videoAsset = asRecord(asArray(refs.videos)[0]);
+        const imageUrl = asText(asRecord(assetCatalog[asText(imageAsset.asset_id)]).url);
+        const videoUrl = asText(asRecord(assetCatalog[asText(videoAsset.asset_id)]).url);
+        const explicitMediaKind: "none" | "image" | "video" = videoUrl ? "video" : imageUrl ? "image" : "none";
         return {
           id: asText(step.step_id, `lesson-${index + 1}`),
           title: asText(step.mini_topic_title || step.title, `Mini lesson ${index + 1}`),
           summary: asText(step.intro_brief || step.teaching_brief, "This lesson introduces a focused concept for this learning node."),
           goal: asText(step.lesson_goal, "Understand and apply the mini topic in practical context."),
           topics: asArray(step.expected_difficulty_points).map((value) => asText(value)).filter(Boolean).slice(0, 4),
-          mediaKind: detectMediaKind(step, index, node.type, courseTitle),
+          mediaKind: explicitMediaKind !== "none" ? explicitMediaKind : detectMediaKind(step, index, node.type, courseTitle),
           videoDescription: "Watch this short clip before continuing to the next step.",
           downloadFiles: normalizeDownloadableFiles(
             step,
             `lesson-step-${index + 1}-resources`,
             `Learning unit support files for step "${asText(step.mini_topic_title || step.title, `Step ${index + 1}`)}".`,
+            false,
+            assetCatalog as Record<string, Record<string, unknown>>,
           ),
+          imageUrl,
+          videoUrl,
         };
       });
     }
@@ -856,24 +905,34 @@ export function LearningNodePage({
         : asArray(packageData.mini_topic_lessons);
       return miniRecaps.map((item, index) => {
         const step = asRecord(item);
+        const refs = asRecord(step.asset_refs);
+        const imageAsset = asRecord(asArray(refs.images)[0]);
+        const videoAsset = asRecord(asArray(refs.videos)[0]);
+        const imageUrl = asText(asRecord(assetCatalog[asText(imageAsset.asset_id)]).url);
+        const videoUrl = asText(asRecord(assetCatalog[asText(videoAsset.asset_id)]).url);
+        const explicitMediaKind: "none" | "image" | "video" = videoUrl ? "video" : imageUrl ? "image" : "none";
         return {
           id: asText(step.step_id, `recap-${index + 1}`),
           title: asText(step.title || step.mini_topic_title, `Review step ${index + 1}`),
           summary: asText(step.brief || step.intro_brief, "This review step reinforces important concepts from previous nodes."),
           goal: asText(step.goal || step.lesson_goal, "Consolidate understanding and prepare for upcoming checkpoints."),
           topics: asArray(step.focus_topics).map((value) => asText(value)).filter(Boolean).slice(0, 4),
-          mediaKind: detectMediaKind(step, index, node.type, courseTitle),
+          mediaKind: explicitMediaKind !== "none" ? explicitMediaKind : detectMediaKind(step, index, node.type, courseTitle),
           videoDescription: "Recap video: review this short summary before moving on.",
           downloadFiles: normalizeDownloadableFiles(
             step,
             `review-step-${index + 1}-resources`,
             `Review support files for step "${asText(step.title || step.mini_topic_title, `Review ${index + 1}`)}".`,
+            false,
+            assetCatalog as Record<string, Record<string, unknown>>,
           ),
+          imageUrl,
+          videoUrl,
         };
       });
     }
     return [] as LessonFlowStep[];
-  }, [attempt, learningPath?.title, node, packageData.mini_topic_lessons, packageData.recap_structure]);
+  }, [assetCatalog, attempt, learningPath?.title, node, packageData.mini_topic_lessons, packageData.recap_structure]);
   const lessonStartTopics = useMemo(() => {
     return (asArray(packageData.important_topics).map((item) => asText(item)).filter(Boolean).slice(0, 8));
   }, [packageData.important_topics]);
@@ -1453,7 +1512,7 @@ export function LearningNodePage({
                             <Icon name="transcript" />
                           </button>
                           <video controls preload="metadata">
-                            <source src={DUMMY_VIDEO_URL} type="video/mp4" />
+                            <source src={lessonCurrentStep?.videoUrl || DUMMY_VIDEO_URL} type="video/mp4" />
                           </video>
                         </div>
                         {lessonTranscriptOpen ? (
@@ -1488,7 +1547,7 @@ export function LearningNodePage({
                         ) : null}
                         {lessonCurrentStep?.mediaKind === "image" ? (
                           <figure className="learning-node-media-block">
-                            <img src={DUMMY_DEVOPS_IMAGE} alt="Dummy lesson diagram preview" />
+                            <img src={lessonCurrentStep?.imageUrl || DUMMY_DEVOPS_IMAGE} alt="Dummy lesson diagram preview" />
                             <figcaption>Dummy media block: example visual placeholder for this generated lesson step.</figcaption>
                           </figure>
                         ) : null}
@@ -1558,6 +1617,7 @@ export function LearningNodePage({
                       multiAnswers={multiAnswers}
                       setSingleAnswers={setSingleAnswers}
                       setMultiAnswers={setMultiAnswers}
+                      assetCatalog={assetCatalog as Record<string, Record<string, unknown>>}
                       showHeading={node?.type !== "quiz"}
                     />
                   ) : null}
@@ -1571,6 +1631,7 @@ export function LearningNodePage({
                       answerKeyPrefix={currentGuidedItem.prefix}
                       uploads={uploads}
                       setUploads={setUploads}
+                      assetCatalog={assetCatalog as Record<string, Record<string, unknown>>}
                       showHeading={node?.type !== "quiz"}
                     />
                   ) : null}
@@ -1583,6 +1644,7 @@ export function LearningNodePage({
                       setTextAnswers={setTextAnswers}
                       uploads={uploads}
                       setUploads={setUploads}
+                      assetCatalog={assetCatalog as Record<string, Record<string, unknown>>}
                     />
                   ) : null}
                   {currentGuidedItem?.kind === "drill" ? (

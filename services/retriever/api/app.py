@@ -60,6 +60,9 @@ from services.retriever.schemas.learning import (
     LearningNodeExecutionCompleteResponse,
     LearningNodeExecutionStartResponse,
     LearningNodeExecutionSubmitRequest,
+    ContentAssetRead,
+    ContentAssetListResponse,
+    ContentAssetUploadResponse,
     LearningNodeProgressUpdateRequest,
     LearningLessonCreateRequest,
     LearningLessonRead,
@@ -901,6 +904,78 @@ def create_app() -> FastAPI:
         if record is None:
             raise HTTPException(status_code=404, detail="Execution attempt not found")
         return record
+
+    @app.get(
+        "/api/learning-paths/{learning_path_id}/nodes/{node_id}/assets",
+        response_model=ContentAssetListResponse,
+        responses={403: {"model": ErrorResponse}, 404: {"model": ErrorResponse}},
+    )
+    def list_learning_node_assets(
+        learning_path_id: str,
+        node_id: str,
+        auth: AuthContext = Depends(get_app_auth_context),
+        service: RetrieverAppService = Depends(get_retriever_service),
+    ) -> ContentAssetListResponse:
+        try:
+            return service.list_learning_node_assets(auth.user, learning_path_id, node_id)
+        except PermissionError as error:
+            raise HTTPException(status_code=403, detail=str(error)) from error
+
+    @app.post(
+        "/api/learning-paths/{learning_path_id}/nodes/{node_id}/assets/upload",
+        response_model=ContentAssetUploadResponse,
+        responses={403: {"model": ErrorResponse}, 404: {"model": ErrorResponse}, 422: {"model": ErrorResponse}},
+    )
+    async def upload_learning_node_asset(
+        learning_path_id: str,
+        node_id: str,
+        file: UploadFile = File(...),
+        asset_kind: str = Form(default="downloadable_file"),
+        media_kind: str | None = Form(default=None),
+        download_label: str | None = Form(default=None),
+        caption: str | None = Form(default=None),
+        description: str | None = Form(default=None),
+        alt_text: str | None = Form(default=None),
+        file_category: str | None = Form(default=None),
+        auth: AuthContext = Depends(get_app_auth_context),
+        service: RetrieverAppService = Depends(get_retriever_service),
+    ) -> ContentAssetUploadResponse:
+        try:
+            return service.upload_learning_node_asset(
+                auth.user,
+                learning_path_id,
+                node_id,
+                file_name=file.filename or "asset.bin",
+                content=await file.read(),
+                asset_kind=asset_kind,
+                media_kind=media_kind,
+                download_label=download_label,
+                caption=caption,
+                description=description,
+                alt_text=alt_text,
+                file_category=file_category,
+            )
+        except PermissionError as error:
+            raise HTTPException(status_code=403, detail=str(error)) from error
+        except ValueError as error:
+            raise HTTPException(status_code=422, detail=str(error)) from error
+
+    @app.get(
+        "/api/assets/{asset_id}",
+        response_model=ContentAssetRead,
+        responses={403: {"model": ErrorResponse}, 404: {"model": ErrorResponse}},
+    )
+    def get_content_asset(
+        asset_id: str,
+        auth: AuthContext = Depends(get_app_auth_context),
+        service: RetrieverAppService = Depends(get_retriever_service),
+    ) -> ContentAssetRead:
+        try:
+            return service.get_content_asset(auth.user, asset_id)
+        except PermissionError as error:
+            raise HTTPException(status_code=403, detail=str(error)) from error
+        except ValueError as error:
+            raise HTTPException(status_code=404, detail=str(error)) from error
 
     @app.patch("/api/learning-paths/{learning_path_id}", response_model=LearningPathRead, responses={404: {"model": ErrorResponse}, 403: {"model": ErrorResponse}})
     def update_learning_path(

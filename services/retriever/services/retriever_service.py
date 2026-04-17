@@ -64,6 +64,9 @@ from services.retriever.schemas.learning import (
     LearningNodeExecutionCompleteResponse,
     LearningNodeExecutionStartResponse,
     LearningNodeExecutionSubmitRequest,
+    ContentAssetRead,
+    ContentAssetListResponse,
+    ContentAssetUploadResponse,
     LearningNodeContextListResponse,
     LearningNodeContextRead,
     LearningNodeProgressUpdateRequest,
@@ -175,6 +178,7 @@ from services.retriever.services.ksa_drills import (
 )
 from services.retriever.services.node_context import LearningNodeContextEngine
 from services.retriever.services.node_execution import LearningNodeExecutionService
+from services.retriever.services.content_asset_service import ContentAssetService
 from services.retriever.services.personalization_layers import GROUP_COLUMNS, GROUP_ORDER, LearningPersonalizationLayerEngine
 
 RUNTIME_SETTING_KEYS = {
@@ -319,6 +323,7 @@ class RetrieverDependencies:
     llm_client: LlmClient
     library_manager: LibraryManager
     attachment_client: AttachmentProcessingClient
+    content_asset_service: ContentAssetService
     settings: Settings
     auth_manager: AuthManager | None = None
 
@@ -332,6 +337,7 @@ class RetrieverAppService:
         self.llm_client = deps.llm_client
         self.library_manager = deps.library_manager
         self.attachment_client = deps.attachment_client
+        self.content_asset_service = deps.content_asset_service
         self.auth_manager = deps.auth_manager
         self.settings = deps.settings
         self.personalization_layer_engine = LearningPersonalizationLayerEngine(
@@ -344,6 +350,7 @@ class RetrieverAppService:
             self.chat_repository,
             llm_invoke=self.llm_client.invoke,
             prompts_dir=self.prompt_builder.prompts_dir,
+            asset_service=self.content_asset_service,
         )
         self.course_file_parser = CourseFileParser()
         self._ksa_validation_executor = ThreadPoolExecutor(max_workers=2, thread_name_prefix="ksa-validate")
@@ -2029,21 +2036,34 @@ class RetrieverAppService:
         processed = self.attachment_client.process_files(validated)
         if not processed:
             raise ValueError("Uploaded files could not be processed")
-        storage_dir = self.data_dir / "uploads" / user.username / "node-execution" / attempt_id
-        storage_dir.mkdir(parents=True, exist_ok=True)
 
         uploaded_artifacts: list[dict[str, object]] = []
         for idx, (safe_name, content) in enumerate(validated):
-            target_name = f"{datetime.now(timezone.utc).strftime('%Y%m%dT%H%M%S%f')}-{idx}-{safe_name}"
-            target_path = storage_dir / target_name
-            target_path.write_bytes(content)
-            relative_path = str(target_path.relative_to(self.data_dir))
             processed_item = processed[idx] if idx < len(processed) else {}
+            uploaded_asset = self.content_asset_service.upload_bytes(
+                content=content,
+                file_name=safe_name,
+                asset_kind="downloadable_file",
+                media_kind="downloadable_file",
+                source_type="learner_submission_artifact",
+                scope_type="user_attempt",
+                owner_user_id=user.id,
+                learning_path_id=learning_path_id,
+                node_id=node_id,
+                uploaded_by_user_id=user.id,
+                attempt_id=attempt_id,
+                file_category="submission",
+                caption="Learner uploaded submission artifact",
+                description=f"Submission upload for node {node_id}",
+                reuse_existing=False,
+            )
             uploaded_artifacts.append(
                 {
                     "task_id": (task_id or "").strip() or None,
+                    "asset_id": uploaded_asset.asset.id,
                     "file_name": safe_name,
-                    "stored_relative_path": relative_path,
+                    "stored_relative_path": uploaded_asset.asset.storage_key,
+                    "bucket_name": uploaded_asset.asset.bucket_name,
                     "size_bytes": len(content),
                     "type": str(processed_item.get("type") or ""),
                     "extraction_method": str(processed_item.get("extraction_method") or ""),
@@ -2102,6 +2122,78 @@ class RetrieverAppService:
             node_completed=result.node_completed,
             node_status=result.node_status,
         )
+
+    def list_learning_node_assets(
+        self,
+        user: UserAccount,
+        learning_path_id: str,
+        node_id: str,
+    ) -> ContentAssetListResponse:
+        path = self.chat_repository.get_learning_path(learning_path_id)
+        if path is None or not self._can_view_learning_path(user, path):
+            raise PermissionError("You do not have permission to view this learning path")
+        assets = self.chat_repository.list_content_assets(
+            learning_path_id=learning_path_id,
+            node_id=node_id,
+            limit=500,
+        )
+        visible = [item for item in assets if self.content_asset_service.can_read_asset(user=user, learning_path=path, asset=item)]
+        return ContentAssetListResponse(assets=[self._build_content_asset_read(item) for item in visible])
+
+    def upload_learning_node_asset(
+        self,
+        user: UserAccount,
+        learning_path_id: str,
+        node_id: str,
+        *,
+        file_name: str,
+        content: bytes,
+        asset_kind: str,
+        media_kind: str | None = None,
+        download_label: str | None = None,
+        caption: str | None = None,
+        description: str | None = None,
+        alt_text: str | None = None,
+        file_category: str | None = None,
+    ) -> ContentAssetUploadResponse:
+        path = self.chat_repository.get_learning_path(learning_path_id)
+        if path is None:
+            raise ValueError("Learning path not found")
+        self._ensure_learning_path_edit_allowed(user, path)
+        definition = self._course_definition_from_learning_path(path)
+        node = next((item for item in definition.nodes if item.id == node_id), None)
+        if node is None:
+            raise ValueError("Node not found in learning path")
+        uploaded = self.content_asset_service.upload_bytes(
+            content=content,
+            file_name=file_name,
+            asset_kind=asset_kind,
+            media_kind=media_kind or asset_kind,
+            source_type="seeded_course_asset",
+            scope_type="course",
+            owner_user_id=path.owner_user_id,
+            learning_path_id=learning_path_id,
+            node_id=node_id,
+            chapter_id=node.chapter_id,
+            branch_id=node.branch_id,
+            uploaded_by_user_id=user.id,
+            download_label=download_label,
+            caption=caption,
+            description=description,
+            alt_text=alt_text,
+            file_category=file_category,
+            reuse_existing=False,
+        )
+        return ContentAssetUploadResponse(asset=self._build_content_asset_read(uploaded.asset))
+
+    def get_content_asset(self, user: UserAccount, asset_id: str) -> ContentAssetRead:
+        asset = self.chat_repository.get_content_asset(asset_id=asset_id)
+        if asset is None:
+            raise ValueError("Asset not found")
+        path = self.chat_repository.get_learning_path(asset.learning_path_id) if asset.learning_path_id else None
+        if not self.content_asset_service.can_read_asset(user=user, learning_path=path, asset=asset):
+            raise PermissionError("You do not have permission to access this asset")
+        return self._build_content_asset_read(asset)
 
     def update_learning_node_progress(
         self,
@@ -4346,10 +4438,28 @@ class RetrieverAppService:
             },
         }
 
+    def _collect_asset_ids_from_payload(self, value: object) -> list[str]:
+        ids: list[str] = []
+        if isinstance(value, dict):
+            asset_id = str(value.get("asset_id") or "").strip()
+            if asset_id:
+                ids.append(asset_id)
+            for child in value.values():
+                ids.extend(self._collect_asset_ids_from_payload(child))
+            return ids
+        if isinstance(value, list):
+            for child in value:
+                ids.extend(self._collect_asset_ids_from_payload(child))
+            return ids
+        return ids
+
     def _build_learning_node_execution_attempt_read(self, record) -> LearningNodeExecutionAttemptRead:
         package = dict(record.package_json or {})
         responses = dict(record.responses_json or {})
         result = dict(record.result_json or {})
+        asset_ids = self._collect_asset_ids_from_payload(package) + self._collect_asset_ids_from_payload(responses)
+        if asset_ids:
+            package["asset_catalog"] = self.content_asset_service.resolve_asset_catalog(asset_ids)
         status = str(record.status or "")
         is_active = bool(status in {"in_progress", "generating"} and record.completed_at is None)
         is_resumable = bool(status == "in_progress" and record.completed_at is None)
@@ -4372,6 +4482,38 @@ class RetrieverAppService:
             package_sections_progress=self._build_learning_node_execution_attempt_sections_progress(package, responses),
             started_at=record.started_at,
             completed_at=record.completed_at,
+            created_at=record.created_at,
+            updated_at=record.updated_at,
+        )
+
+    def _build_content_asset_read(self, record) -> ContentAssetRead:
+        return ContentAssetRead(
+            asset_id=record.id,
+            asset_kind=record.asset_kind,
+            media_kind=record.media_kind,
+            source_type=record.source_type,
+            scope_type=record.scope_type,
+            learning_path_id=record.learning_path_id,
+            node_id=record.node_id,
+            attempt_id=record.attempt_id,
+            bucket_name=record.bucket_name,
+            storage_key=record.storage_key,
+            mime_type=record.mime_type or "",
+            file_name=record.normalized_filename or record.original_filename or "",
+            file_extension=record.file_extension or "",
+            size_bytes=int(record.size_bytes or 0),
+            checksum_sha256=record.checksum_sha256 or "",
+            download_label=record.download_label or "",
+            file_category=record.file_category or "",
+            caption=record.caption or "",
+            description=record.description or "",
+            alt_text=record.alt_text or "",
+            width=record.width,
+            height=record.height,
+            duration_seconds=record.duration_seconds,
+            asset_status=record.asset_status or "ready",
+            metadata=dict(record.metadata_json or {}),
+            url=self.content_asset_service.presigned_url(record),
             created_at=record.created_at,
             updated_at=record.updated_at,
         )
@@ -4760,6 +4902,7 @@ def build_retriever_app_service(
         ),
         library_manager=LibraryManager(data_dir=data_dir, processor=library_processor, settings=settings),
         attachment_client=AttachmentProcessingClient(settings.embedder_service_url),
+        content_asset_service=ContentAssetService(chat_repository, settings),
         auth_manager=auth_manager,
         settings=settings,
     )

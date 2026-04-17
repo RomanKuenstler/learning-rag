@@ -2,10 +2,11 @@ from __future__ import annotations
 
 import json
 import re
+import textwrap
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any, Callable
+from typing import Any, Callable, Protocol
 
 from services.common.models import LearningPath, UserAccount
 from services.retriever.repositories.chat_repository import ChatRepository
@@ -18,6 +19,70 @@ QUIZ_BOUNDARY_NODE_TYPES = {"quiz", "practice", "checkpoint", "milestone", "unlo
 CHECKPOINT_BOUNDARY_NODE_TYPES = {"checkpoint", "unlock_gate", "milestone"}
 REVIEW_BOUNDARY_NODE_TYPES = {"review", "checkpoint", "unlock_gate", "milestone"}
 ATTEMPT_ACTIVE_STATUS = {"in_progress", "generating"}
+
+
+class AssetServiceProtocol(Protocol):
+    def upload_bytes(
+        self,
+        *,
+        content: bytes,
+        file_name: str,
+        asset_kind: str,
+        source_type: str,
+        scope_type: str,
+        owner_user_id: int | None = None,
+        learning_path_id: str | None = None,
+        node_id: str | None = None,
+        chapter_id: str | None = None,
+        branch_id: str | None = None,
+        uploaded_by_user_id: int | None = None,
+        attempt_id: str | None = None,
+        download_label: str | None = None,
+        caption: str | None = None,
+        description: str | None = None,
+        alt_text: str | None = None,
+        file_category: str | None = None,
+        metadata: dict[str, object] | None = None,
+        mime_type: str | None = None,
+        asset_status: str = "ready",
+        media_kind: str | None = None,
+        duration_seconds: float | None = None,
+        is_optional: bool = True,
+        is_required: bool = False,
+        reuse_existing: bool = True,
+    ) -> Any:
+        ...
+
+    def upload_from_url(
+        self,
+        *,
+        source_url: str,
+        file_name: str,
+        asset_kind: str,
+        source_type: str,
+        scope_type: str,
+        owner_user_id: int | None = None,
+        learning_path_id: str | None = None,
+        node_id: str | None = None,
+        chapter_id: str | None = None,
+        branch_id: str | None = None,
+        uploaded_by_user_id: int | None = None,
+        attempt_id: str | None = None,
+        download_label: str | None = None,
+        caption: str | None = None,
+        description: str | None = None,
+        alt_text: str | None = None,
+        file_category: str | None = None,
+        metadata: dict[str, object] | None = None,
+        mime_type: str | None = None,
+        asset_status: str = "ready",
+        media_kind: str | None = None,
+        duration_seconds: float | None = None,
+        is_optional: bool = True,
+        is_required: bool = False,
+        reuse_existing: bool = True,
+    ) -> Any:
+        ...
 
 
 @dataclass(slots=True)
@@ -79,10 +144,119 @@ class LearningNodeExecutionService:
         *,
         llm_invoke: Callable[[list[tuple[str, str]]], str],
         prompts_dir: Path | None = None,
+        asset_service: AssetServiceProtocol | None = None,
     ) -> None:
         self.repository = repository
         self.llm_invoke = llm_invoke
         self.prompts_dir = prompts_dir
+        self.asset_service = asset_service
+
+    def _seed_asset(
+        self,
+        *,
+        user: UserAccount,
+        learning_path: LearningPath,
+        node: CourseNodeDefinition,
+        file_name: str,
+        content: bytes,
+        asset_kind: str,
+        media_kind: str,
+        caption: str,
+        description: str,
+        alt_text: str = "",
+        download_label: str = "",
+        file_category: str = "",
+        metadata: dict[str, object] | None = None,
+        mime_type: str | None = None,
+        duration_seconds: float | None = None,
+    ) -> dict[str, Any]:
+        if self.asset_service is None:
+            return {}
+        result = self.asset_service.upload_bytes(
+            content=content,
+            file_name=file_name,
+            asset_kind=asset_kind,
+            media_kind=media_kind,
+            source_type="seeded_course_asset",
+            scope_type="course",
+            owner_user_id=learning_path.owner_user_id,
+            learning_path_id=learning_path.id,
+            node_id=node.id,
+            chapter_id=node.chapter_id,
+            branch_id=node.branch_id,
+            uploaded_by_user_id=user.id,
+            caption=caption,
+            description=description,
+            alt_text=alt_text,
+            download_label=download_label,
+            file_category=file_category,
+            metadata=metadata or {},
+            mime_type=mime_type,
+            duration_seconds=duration_seconds,
+            reuse_existing=True,
+        )
+        asset = getattr(result, "asset", None)
+        if asset is None:
+            return {}
+        return {
+            "asset_id": asset.id,
+            "asset_kind": asset.asset_kind,
+            "media_kind": asset.media_kind,
+            "file_name": asset.normalized_filename or asset.original_filename,
+            "download_label": asset.download_label or asset.normalized_filename or asset.original_filename,
+            "caption": asset.caption or "",
+            "description": asset.description or "",
+        }
+
+    def _seed_asset_from_url(
+        self,
+        *,
+        user: UserAccount,
+        learning_path: LearningPath,
+        node: CourseNodeDefinition,
+        source_url: str,
+        file_name: str,
+        asset_kind: str,
+        media_kind: str,
+        caption: str,
+        description: str,
+        duration_seconds: float | None = None,
+    ) -> dict[str, Any]:
+        if self.asset_service is None:
+            return {}
+        try:
+            result = self.asset_service.upload_from_url(
+                source_url=source_url,
+                file_name=file_name,
+                asset_kind=asset_kind,
+                media_kind=media_kind,
+                source_type="seeded_course_asset",
+                scope_type="course",
+                owner_user_id=learning_path.owner_user_id,
+                learning_path_id=learning_path.id,
+                node_id=node.id,
+                chapter_id=node.chapter_id,
+                branch_id=node.branch_id,
+                uploaded_by_user_id=user.id,
+                caption=caption,
+                description=description,
+                duration_seconds=duration_seconds,
+                reuse_existing=True,
+            )
+            asset = getattr(result, "asset", None)
+            if asset is None:
+                return {}
+            return {
+                "asset_id": asset.id,
+                "asset_kind": asset.asset_kind,
+                "media_kind": asset.media_kind,
+                "file_name": asset.normalized_filename or asset.original_filename,
+                "download_label": asset.download_label or asset.normalized_filename or asset.original_filename,
+                "caption": asset.caption or "",
+                "description": asset.description or "",
+            }
+        except Exception:
+            return {}
 
     def _load_prompt(self, file_name: str, fallback: str) -> str:
         if self.prompts_dir is not None:
@@ -1595,6 +1769,115 @@ class LearningNodeExecutionService:
             "pass_threshold": float(node.metadata.get("pass_threshold") or 0.7),
         }
 
+    def _seed_learning_step_assets(
+        self,
+        *,
+        user: UserAccount,
+        learning_path: LearningPath,
+        node: CourseNodeDefinition,
+        step_label: str,
+        include_image: bool = False,
+        include_video: bool = False,
+        include_download: bool = False,
+    ) -> dict[str, list[dict[str, Any]]]:
+        refs = {"images": [], "videos": [], "downloads": []}
+        if include_image:
+            svg_payload = textwrap.dedent(
+                f"""
+                <svg xmlns="http://www.w3.org/2000/svg" width="1280" height="720" viewBox="0 0 1280 720">
+                  <defs>
+                    <linearGradient id="g" x1="0" y1="0" x2="1" y2="1">
+                      <stop offset="0%" stop-color="#fff7ed"/>
+                      <stop offset="100%" stop-color="#ffedd5"/>
+                    </linearGradient>
+                  </defs>
+                  <rect width="1280" height="720" fill="url(#g)"/>
+                  <rect x="120" y="140" width="1040" height="440" rx="24" fill="none" stroke="#f97316" stroke-width="6"/>
+                  <text x="180" y="285" font-size="58" font-family="Arial, sans-serif" fill="#0f172a" font-weight="700">{step_label}</text>
+                  <text x="180" y="350" font-size="34" font-family="Arial, sans-serif" fill="#334155">Runtime image asset from MinIO</text>
+                </svg>
+                """
+            ).strip()
+            image_ref = self._seed_asset(
+                user=user,
+                learning_path=learning_path,
+                node=node,
+                file_name=f"{node.id}-{step_label.lower().replace(' ', '-')}.svg",
+                content=svg_payload.encode("utf-8"),
+                asset_kind="image",
+                media_kind="image",
+                caption=f"{step_label} diagram",
+                description="Generated diagram placeholder stored in MinIO.",
+                alt_text=f"{step_label} image",
+                file_category="lesson_media",
+                mime_type="image/svg+xml",
+            )
+            if image_ref:
+                refs["images"].append(image_ref)
+        if include_video:
+            video_ref = self._seed_asset_from_url(
+                user=user,
+                learning_path=learning_path,
+                node=node,
+                source_url="https://interactive-examples.mdn.mozilla.net/media/cc0-videos/flower.mp4",
+                file_name=f"{node.id}-sample-video.mp4",
+                asset_kind="video",
+                media_kind="video",
+                caption=f"{step_label} walkthrough",
+                description="Sample runtime video asset stored in MinIO.",
+                duration_seconds=5.0,
+            )
+            if video_ref:
+                refs["videos"].append(video_ref)
+        if include_download:
+            handout = self._seed_asset(
+                user=user,
+                learning_path=learning_path,
+                node=node,
+                file_name=f"{node.id}-{step_label.lower().replace(' ', '-')}-worksheet.md",
+                content=(
+                    f"# {step_label} Worksheet\n\n"
+                    f"- Node: {node.title}\n"
+                    f"- Course: {learning_path.title}\n\n"
+                    "Use this worksheet to capture key findings, notes, and solution drafts.\n"
+                ).encode("utf-8"),
+                asset_kind="downloadable_file",
+                media_kind="downloadable_file",
+                caption=f"{step_label} worksheet",
+                description="Downloadable worksheet for this step.",
+                download_label=f"{step_label} worksheet",
+                file_category="worksheet",
+                mime_type="text/markdown",
+            )
+            if handout:
+                refs["downloads"].append(handout)
+        return refs
+
+    def _attach_asset_refs_to_tasks(
+        self,
+        *,
+        user: UserAccount,
+        learning_path: LearningPath,
+        node: CourseNodeDefinition,
+        tasks: list[dict[str, Any]],
+        include_downloads: bool,
+    ) -> list[dict[str, Any]]:
+        normalized: list[dict[str, Any]] = []
+        for idx, task in enumerate(tasks):
+            task_copy = dict(task)
+            if include_downloads and idx < 2:
+                step_assets = self._seed_learning_step_assets(
+                    user=user,
+                    learning_path=learning_path,
+                    node=node,
+                    step_label=f"Practice Task {idx + 1}",
+                    include_download=True,
+                )
+                task_copy["asset_refs"] = step_assets
+                task_copy["download_files"] = list(step_assets.get("downloads") or [])
+            normalized.append(task_copy)
+        return normalized
+
     def _build_practice_package(
         self,
         *,
@@ -1673,6 +1956,14 @@ class LearningNodeExecutionService:
                 }
             )
 
+        normalized = self._attach_asset_refs_to_tasks(
+            user=user,
+            learning_path=learning_path,
+            node=node,
+            tasks=normalized,
+            include_downloads=True,
+        )
+
         return {
             "node_type": "practice",
             "difficulty_profile": difficulty_profile,
@@ -1743,6 +2034,13 @@ class LearningNodeExecutionService:
             count=5,
             prefix="checkpoint-scenario",
             stem="You are in a realistic situation involving",
+        )
+        scenario_questions = self._attach_asset_refs_to_tasks(
+            user=user,
+            learning_path=learning_path,
+            node=node,
+            tasks=scenario_questions,
+            include_downloads=True,
         )
         drill_topics = self._fill_drill_topics(drill_topics=drill_topics, topics=topics, count=4, subject=learning_path.subject)
 
@@ -1823,6 +2121,13 @@ class LearningNodeExecutionService:
             count=8,
             prefix="capstone-scenario",
             stem="Solve a realistic cross-functional challenge involving",
+        )
+        scenario_questions = self._attach_asset_refs_to_tasks(
+            user=user,
+            learning_path=learning_path,
+            node=node,
+            tasks=scenario_questions,
+            include_downloads=True,
         )
         drill_topics = self._fill_drill_topics(drill_topics=drill_topics, topics=topics, count=8, subject=learning_path.subject)
 
@@ -1985,6 +2290,23 @@ class LearningNodeExecutionService:
             "supports_recap_feedback_rating": True,
             "supports_reclarification_requests": True,
         }
+        recap_steps_raw = [dict(item) for item in list(recap_plan.get("recap_steps") or []) if isinstance(item, dict)]
+        recap_steps_with_assets: list[dict[str, Any]] = []
+        for idx, step in enumerate(recap_steps_raw):
+            step_copy = dict(step)
+            step_assets = self._seed_learning_step_assets(
+                user=user,
+                learning_path=learning_path,
+                node=node,
+                step_label=f"Review Step {idx + 1}",
+                include_image=idx == 0,
+                include_video=False,
+                include_download=node.id == "node-smoke-review" and idx < 2,
+            )
+            step_copy["asset_refs"] = step_assets
+            step_copy["download_files"] = list(step_assets.get("downloads") or [])
+            recap_steps_with_assets.append(step_copy)
+
         return {
             "node_type": "review",
             "difficulty_profile": difficulty_profile,
@@ -2005,7 +2327,7 @@ class LearningNodeExecutionService:
                     "title": "Review Introduction",
                     "brief": "Set review scope and expected outcomes.",
                 },
-                "mini_recaps": [dict(item) for item in list(recap_plan.get("recap_steps") or []) if isinstance(item, dict)],
+                "mini_recaps": recap_steps_with_assets,
                 "summary": {
                     "key_takeaways": list(recap_plan.get("key_takeaways") or []),
                     "likely_questions": list(recap_plan.get("likely_questions") or []),
@@ -2228,6 +2550,22 @@ class LearningNodeExecutionService:
                 )
             lesson_plan["lesson_steps"] = lesson_steps
 
+        lesson_steps_with_assets: list[dict[str, Any]] = []
+        for idx, step in enumerate(lesson_steps):
+            step_copy = dict(step)
+            step_assets = self._seed_learning_step_assets(
+                user=user,
+                learning_path=learning_path,
+                node=node,
+                step_label=f"Lesson Step {idx + 1}",
+                include_image=idx == 0,
+                include_video=node.id == "node-linux" and idx == 1,
+                include_download=node.id == "node-linux" and idx < 2,
+            )
+            step_copy["asset_refs"] = step_assets
+            step_copy["download_files"] = list(step_assets.get("downloads") or [])
+            lesson_steps_with_assets.append(step_copy)
+
         context_summary = {
             "course_summary": {
                 "course_id": learning_path.id,
@@ -2285,7 +2623,7 @@ class LearningNodeExecutionService:
             },
             "phase_5_mini_topic_lessons": {
                 "title": "Mini-topic lessons",
-                "lessons": lesson_steps,
+                "lessons": lesson_steps_with_assets,
             },
             "phase_6_node_recap": {
                 "title": "Node recap",
@@ -2314,7 +2652,7 @@ class LearningNodeExecutionService:
                 "prompt_why_it_matters": "Why does this topic matter in real usage?",
             },
             "node_structure_preview": dict(lesson_plan.get("node_structure_preview") or {}),
-            "mini_topic_lessons": lesson_steps,
+            "mini_topic_lessons": lesson_steps_with_assets,
             "recap_plan": dict(lesson_plan.get("recap_plan") or {}),
             "interaction_hooks": interaction_hooks,
             "phase_flow": phase_flow,

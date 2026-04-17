@@ -464,6 +464,50 @@ class UserLearningNodeExecutionAttempt(Base):
     )
 
 
+class ContentAsset(Base):
+    __tablename__ = "content_assets"
+
+    id: Mapped[str] = mapped_column(String(128), primary_key=True, default=lambda: str(uuid.uuid4()))
+    asset_kind: Mapped[str] = mapped_column(String(32), nullable=False, default="downloadable_file", index=True)
+    media_kind: Mapped[str] = mapped_column(String(32), nullable=False, default="", index=True)
+    bucket_name: Mapped[str] = mapped_column(String(128), nullable=False, default="")
+    storage_key: Mapped[str] = mapped_column(String(1024), nullable=False, unique=True)
+    mime_type: Mapped[str] = mapped_column(String(255), nullable=False, default="")
+    original_filename: Mapped[str] = mapped_column(String(512), nullable=False, default="")
+    normalized_filename: Mapped[str] = mapped_column(String(512), nullable=False, default="", index=True)
+    file_extension: Mapped[str] = mapped_column(String(32), nullable=False, default="")
+    size_bytes: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    checksum_sha256: Mapped[str] = mapped_column(String(64), nullable=False, default="", index=True)
+    source_type: Mapped[str] = mapped_column(String(64), nullable=False, default="seeded_course_asset", index=True)
+    scope_type: Mapped[str] = mapped_column(String(32), nullable=False, default="course", index=True)
+    owner_user_id: Mapped[int | None] = mapped_column(ForeignKey("users.id", ondelete="SET NULL"), nullable=True, index=True)
+    learning_path_id: Mapped[str | None] = mapped_column(ForeignKey("learning_paths.id", ondelete="SET NULL"), nullable=True, index=True)
+    node_id: Mapped[str | None] = mapped_column(String(128), nullable=True, index=True)
+    chapter_id: Mapped[str | None] = mapped_column(String(128), nullable=True)
+    branch_id: Mapped[str | None] = mapped_column(String(128), nullable=True)
+    uploaded_by_user_id: Mapped[int | None] = mapped_column(ForeignKey("users.id", ondelete="SET NULL"), nullable=True, index=True)
+    attempt_id: Mapped[str | None] = mapped_column(String(128), nullable=True, index=True)
+    asset_status: Mapped[str] = mapped_column(String(32), nullable=False, default="ready", index=True)
+    alt_text: Mapped[str] = mapped_column(Text, nullable=False, default="")
+    caption: Mapped[str] = mapped_column(Text, nullable=False, default="")
+    description: Mapped[str] = mapped_column(Text, nullable=False, default="")
+    download_label: Mapped[str] = mapped_column(String(255), nullable=False, default="")
+    file_category: Mapped[str] = mapped_column(String(64), nullable=False, default="")
+    is_optional: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
+    is_required: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
+    width: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    height: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    duration_seconds: Mapped[float | None] = mapped_column(Float, nullable=True)
+    poster_asset_id: Mapped[str | None] = mapped_column(ForeignKey("content_assets.id", ondelete="SET NULL"), nullable=True)
+    transcript_asset_id: Mapped[str | None] = mapped_column(ForeignKey("content_assets.id", ondelete="SET NULL"), nullable=True)
+    thumbnail_asset_id: Mapped[str | None] = mapped_column(ForeignKey("content_assets.id", ondelete="SET NULL"), nullable=True)
+    metadata_json: Mapped[dict] = mapped_column(JSON, default=dict)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, server_default=func.now())
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, server_default=func.now(), onupdate=func.now()
+    )
+
+
 class UserLearningPreference(Base):
     __tablename__ = "user_learning_preferences"
     __table_args__ = (UniqueConstraint("user_id", name="uq_user_learning_preferences_user"),)

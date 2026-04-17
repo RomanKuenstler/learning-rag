@@ -12,6 +12,7 @@ from sqlalchemy import create_engine
 
 from services.common.migrations import run_migrations
 from services.common.models import (
+    ContentAsset,
     ChatMessage,
     ChatFileSetting,
     ChatSession,
@@ -2213,6 +2214,75 @@ class PostgresClient:
                     UserLearningNodeExecutionAttempt.user_id == user_id,
                 )
             )
+            if record is None:
+                return None
+            for key, value in fields.items():
+                setattr(record, key, value)
+            record.updated_at = datetime.now(timezone.utc)
+            session.flush()
+            session.refresh(record)
+            return record
+
+    def create_content_asset(self, payload: dict[str, object]) -> ContentAsset:
+        with self.session() as session:
+            record = ContentAsset(**payload)
+            session.add(record)
+            session.flush()
+            session.refresh(record)
+            return record
+
+    def get_content_asset(self, *, asset_id: str) -> ContentAsset | None:
+        with self.session() as session:
+            return session.scalar(select(ContentAsset).where(ContentAsset.id == asset_id))
+
+    def get_content_asset_by_storage_key(self, *, bucket_name: str, storage_key: str) -> ContentAsset | None:
+        with self.session() as session:
+            return session.scalar(
+                select(ContentAsset).where(ContentAsset.bucket_name == bucket_name, ContentAsset.storage_key == storage_key)
+            )
+
+    def list_content_assets(
+        self,
+        *,
+        learning_path_id: str | None = None,
+        node_id: str | None = None,
+        attempt_id: str | None = None,
+        source_type: str | None = None,
+        scope_type: str | None = None,
+        owner_user_id: int | None = None,
+        asset_kinds: list[str] | None = None,
+        limit: int = 200,
+    ) -> list[ContentAsset]:
+        with self.session() as session:
+            stmt = select(ContentAsset)
+            if learning_path_id is not None:
+                stmt = stmt.where(ContentAsset.learning_path_id == learning_path_id)
+            if node_id is not None:
+                stmt = stmt.where(ContentAsset.node_id == node_id)
+            if attempt_id is not None:
+                stmt = stmt.where(ContentAsset.attempt_id == attempt_id)
+            if source_type is not None:
+                stmt = stmt.where(ContentAsset.source_type == source_type)
+            if scope_type is not None:
+                stmt = stmt.where(ContentAsset.scope_type == scope_type)
+            if owner_user_id is not None:
+                stmt = stmt.where(ContentAsset.owner_user_id == owner_user_id)
+            if asset_kinds:
+                stmt = stmt.where(ContentAsset.asset_kind.in_(asset_kinds))
+            rows = session.scalars(stmt.order_by(ContentAsset.updated_at.desc()).limit(limit))
+            return list(rows)
+
+    def list_content_assets_by_ids(self, *, asset_ids: list[str]) -> list[ContentAsset]:
+        deduped = [asset_id for asset_id in dict.fromkeys(asset_ids) if asset_id]
+        if not deduped:
+            return []
+        with self.session() as session:
+            rows = session.scalars(select(ContentAsset).where(ContentAsset.id.in_(deduped)))
+            return list(rows)
+
+    def update_content_asset(self, *, asset_id: str, fields: dict[str, object]) -> ContentAsset | None:
+        with self.session() as session:
+            record = session.scalar(select(ContentAsset).where(ContentAsset.id == asset_id))
             if record is None:
                 return None
             for key, value in fields.items():
